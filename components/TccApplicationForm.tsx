@@ -1,0 +1,281 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { applyForTccAction } from '@/actions/tcc';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Select } from './ui/Select';
+import { toast } from '@/store/toast';
+import {
+  FileText,
+  AlertCircle,
+  FlaskConical,
+  Scale,
+  Calendar,
+  CheckCircle,
+  ArrowRight,
+  Info
+} from 'lucide-react';
+
+interface Substance {
+  id: string;
+  chemical_name: string;
+  cas_number: string;
+  ec_number: string | null;
+  tonnage_band: string | null;
+  validity_date: string | null;
+  available_quantity: number;
+}
+
+interface TccApplicationFormProps {
+  authorizedSubstances: Substance[];
+}
+
+export default function TccApplicationForm({ authorizedSubstances }: TccApplicationFormProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const [chemicalId, setChemicalId] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [kkdikRegNo, setKkdikRegNo] = useState('');
+  const [exportDate, setExportDate] = useState('');
+
+  // Selected chemical info for preview
+  const selectedSubstance = authorizedSubstances.find((s) => s.id === chemicalId);
+
+  const handleApply = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!chemicalId) {
+      toast.error('Please select an authorized chemical substance.');
+      return;
+    }
+
+    if (!quantity || Number(quantity) <= 0) {
+      toast.error('Please specify a positive quantity in metric tons (MT).');
+      return;
+    }
+
+    if (selectedSubstance && Number(quantity) > selectedSubstance.available_quantity) {
+      toast.error(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
+      return;
+    }
+
+    if (!kkdikRegNo.trim()) {
+      toast.error('KKDIK registration number is required.');
+      return;
+    }
+
+    if (!exportDate) {
+      toast.error('Expected export date is required.');
+      return;
+    }
+
+    // Verify expiry date of chemical substance
+    if (selectedSubstance?.validity_date) {
+      const expiry = new Date(selectedSubstance.validity_date);
+      const shipment = new Date(exportDate);
+      if (shipment > expiry) {
+        toast.error(`The expected export date exceeds the substance validity date (${expiry.toLocaleDateString()}).`);
+        return;
+      }
+    }
+
+    startTransition(async () => {
+      const payload = new FormData();
+      payload.append('chemical_id', chemicalId);
+      payload.append('quantity_mt', quantity);
+      payload.append('kkdik_reg_no', kkdikRegNo);
+      payload.append('export_date', exportDate);
+
+      const res = await applyForTccAction(null, payload);
+      if (res.success) {
+        toast.success(res.message || 'TCC compliance application submitted.');
+        router.push('/client');
+      } else {
+        toast.error(res.error || 'Failed to submit application.');
+      }
+    });
+  };
+
+  // Calculate dynamic quota preview
+  const initialQuota = selectedSubstance ? Number(selectedSubstance.available_quantity) : 0;
+  const requestedAmt = Number(quantity) || 0;
+  const finalQuota = Math.max(0, initialQuota - requestedAmt);
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-8 animate-slide-in">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Tonnage Compliance Declaration</h1>
+        <p className="text-sm text-slate-500 font-medium">
+          Apply for an official TCC permit. Declare substance specifications, registration numbers, and shipment timelines.
+        </p>
+      </div>
+
+      <div className="grid gap-8 grid-cols-1 md:grid-cols-5">
+        {/* Form panel */}
+        <div className="md:col-span-3">
+          <Card className="border-slate-100 shadow-xs">
+            <CardHeader>
+              <div className="flex items-center gap-2 text-primary">
+                <FileText className="h-5 w-5" />
+                <CardTitle>Application Form</CardTitle>
+              </div>
+              <CardDescription>Enter correct regulatory and chemical data.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleApply} className="space-y-4">
+                {/* Substance Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+                    Chemical Substance
+                  </label>
+                  <Select
+                    value={chemicalId}
+                    onChange={(e) => setChemicalId(e.target.value)}
+                    options={[
+                      { value: '', label: 'Select authorized substance...' },
+                      ...authorizedSubstances.map((s) => ({
+                        value: s.id,
+                        label: `${s.chemical_name} (CAS: ${s.cas_number})`,
+                      })),
+                    ]}
+                    required
+                  />
+                </div>
+
+                {/* Tonnage Quantity */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+                    Export Tonnage (Metric Tons - MT)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 25.50"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* KKDIK Registration Number */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+                    KKDIK Registration Number
+                  </label>
+                  <Input
+                    placeholder="e.g. 05-2114885232-44-0000"
+                    value={kkdikRegNo}
+                    onChange={(e) => setKkdikRegNo(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* Export date */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+                    Expected Export Shipment Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={exportDate}
+                    onChange={(e) => setExportDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push('/client')}
+                    disabled={isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" isLoading={isPending} disabled={isPending}>
+                    Submit Application <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Dynamic preview sidebar */}
+        <div className="md:col-span-2 space-y-6">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Info className="h-4 w-4 text-slate-400" /> Tonnage Quota Calculator
+          </h3>
+
+          <Card className="border-slate-100 bg-slate-50/50">
+            <CardContent className="p-5 space-y-6 text-sm">
+              {selectedSubstance ? (
+                <>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Selected Chemical</span>
+                    <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                      <FlaskConical className="h-4 w-4 text-emerald-600 shrink-0" />
+                      {selectedSubstance.chemical_name}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 border-y border-slate-100 py-3">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">CAS Number</span>
+                      <span className="font-mono text-slate-700 font-bold text-xs">{selectedSubstance.cas_number}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">EC Number</span>
+                      <span className="font-mono text-slate-700 font-bold text-xs">{selectedSubstance.ec_number || 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quota Simulation</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between font-medium">
+                        <span className="text-slate-500">Current Available:</span>
+                        <span className="font-bold text-slate-800">{initialQuota} MT</span>
+                      </div>
+                      <div className="flex justify-between font-medium text-rose-600">
+                        <span className="flex items-center gap-1">
+                          <Scale className="h-3.5 w-3.5" /> Requested:
+                        </span>
+                        <span className="font-bold">- {requestedAmt} MT</span>
+                      </div>
+                      <div className="border-t border-dashed border-slate-200 my-2" />
+                      <div className="flex justify-between font-bold text-primary">
+                        <span>Projected Balance:</span>
+                        <span>{finalQuota} MT</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
+                    <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div>
+                      <p>Validity Period Verified</p>
+                      <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">
+                        This substance is authorized for export compliance until {selectedSubstance.validity_date ? new Date(selectedSubstance.validity_date).toLocaleDateString() : 'N/A'}.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-slate-400 font-semibold text-xs flex flex-col items-center justify-center gap-2">
+                  <AlertCircle className="h-8 w-8 text-slate-300" />
+                  Select an authorized chemical substance to view the dynamic quota deduction simulation.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

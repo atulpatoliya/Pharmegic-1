@@ -1,0 +1,91 @@
+# Pharmegic Healthcare Portal — Setup Guide
+
+This document describes the steps required to configure and run the Pharmegic Healthcare Portal locally and prepare it for production.
+
+---
+
+## 1. Database & Supabase Configuration
+
+### Execute Schema SQL
+1. Open your project in the **Supabase Dashboard**.
+2. Navigate to the **SQL Editor** tab.
+3. Open the file [database.sql](file:///d:/Atul/Learning/Pharmegic/database.sql) in your editor, copy its contents, paste them into the Supabase SQL Editor, and click **Run**.
+4. This script will create:
+   - All custom types and enums (`user_role`, `client_status`, `chemical_status`, `tcc_status`, `certificate_status`).
+   - The required database tables (`clients`, `users`, `client_contacts`, `chemicals`, `tcc_applications`, `certificates`, `notifications`, `audit_logs`, `templates`, `client_chemicals`).
+   - The automated PostgreSQL sync trigger linking `auth.users` to `public.users`.
+   - The performance indexes and Row Level Security (RLS) policies.
+   - The default branding template and initial chemical inventory for testing.
+
+### Configure Private Storage Bucket
+1. In the Supabase Dashboard, go to the **Storage** tab.
+2. Create a new bucket called **`certificates`**.
+3. Set the bucket to **Public** (or configure a custom policy allowing public read access, as certificates need to be downloadable by clients and verified by public custom officers through QR links).
+4. Update the bucket name in your environment file if necessary.
+
+---
+
+## 2. Environment Variables configuration
+
+Create a `.env.local` file in the root directory and define the following variables:
+
+```ini
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+SUPABASE_SERVICE_ROLE=your-service-role-key
+
+# Portal Public App URL (used for QR verification links and auth redirects)
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# SMTP Email Configuration
+SMTP_HOST=smtp.mailtrap.io
+SMTP_PORT=587
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM="Pharmegic Compliance Portal <noreply@pharmegic.com>"
+```
+
+> [!NOTE]
+> If the SMTP credentials are not specified, the Nodemailer client will fallback to printing the email invitation link directly to the console during development.
+
+---
+
+## 3. Bootstrapping the Initial MASTER_ADMIN
+
+To log in as the first administrator, you must create a Supabase Auth user with the `MASTER_ADMIN` role metadata. You can do this by executing the following PostgreSQL command in the Supabase SQL editor:
+
+```sql
+-- 1. Create a user via Supabase Auth Dashboard or sign up form, then run this to elevate their role:
+UPDATE auth.users
+SET raw_user_meta_data = jsonb_build_object('role', 'MASTER_ADMIN')
+WHERE email = 'admin@pharmegic.com';
+```
+
+Alternatively, you can sign up a user using the Supabase client-side API inside a scratch script, passing the role metadata:
+```typescript
+const { data, error } = await supabase.auth.signUp({
+  email: 'admin@pharmegic.com',
+  password: 'securepassword123',
+  options: {
+    data: {
+      role: 'MASTER_ADMIN'
+    }
+  }
+});
+```
+
+---
+
+## 4. Running the Application locally
+
+1. Install project dependencies:
+   ```bash
+   npm install
+   ```
+2. Run the local Next.js development server:
+   ```bash
+   npm run dev
+   ```
+3. Open your browser and navigate to `http://localhost:3000`.
+4. Log in using your registered credentials.
