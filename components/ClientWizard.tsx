@@ -29,6 +29,7 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
     company_name: '',
     legal_name: '',
     registration_number: '',
+    uuid_number: '',
     email: '',
     owner_name: '',
     phone: '',
@@ -117,7 +118,11 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
       if (!res.success) {
         toast.error(res.error || 'Failed to create client.');
       } else {
-        toast.success(res.message || 'Client created and notified!');
+        if (res.inviteLink) {
+          toast.success(`${res.message} Invite Link: ${res.inviteLink}`, 10000);
+        } else {
+          toast.success(res.message || 'Client created and notified!');
+        }
         onSuccess();
       }
     });
@@ -126,8 +131,8 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
   return (
     <div className="space-y-6">
       {/* Wizard Step Indicator */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-wrap gap-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold ${
             step === 1 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'
           }`}>1</span>
@@ -218,26 +223,16 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
             onChange={(e) => setProfile({ ...profile, postal_code: e.target.value })}
           />
           <Input
+            label="UUID Number"
+            placeholder="Auto-generated if left blank"
+            value={profile.uuid_number}
+            onChange={(e) => setProfile({ ...profile, uuid_number: e.target.value })}
+          />
+          <Input
             label="Country"
             placeholder="Turkey"
             value={profile.country}
             onChange={(e) => setProfile({ ...profile, country: e.target.value })}
-          />
-          <Input
-            label="Primary Owner / Representative"
-            placeholder="Atul Kumar"
-            value={profile.owner_name}
-            onChange={(e) => setProfile({ ...profile, owner_name: e.target.value })}
-          />
-          <Select
-            label="Entity Status"
-            value={profile.status}
-            onChange={(e) => setProfile({ ...profile, status: e.target.value as any })}
-            options={[
-              { value: 'active', label: 'Active (Fully Compliant)' },
-              { value: 'pending', label: 'Pending (Under Review)' },
-              { value: 'inactive', label: 'Inactive (Revoked/Suspended)' },
-            ]}
           />
         </div>
       )}

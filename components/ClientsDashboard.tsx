@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { updateClientAction, deleteClientAction } from '@/actions/clients';
+import { updateClientAction, deleteClientAction, checkClientActivationStatus, resendClientInviteAction } from '@/actions/clients';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -39,6 +39,7 @@ interface Client {
   company_name: string;
   legal_name: string;
   registration_number: string;
+  uuid_number: string | null;
   email: string;
   owner_name: string;
   phone: string | null;
@@ -81,6 +82,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
     company_name: '',
     legal_name: '',
     registration_number: '',
+    uuid_number: '',
     email: '',
     owner_name: '',
     phone: '',
@@ -95,6 +97,8 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   });
   const [editChemicalIds, setEditChemicalIds] = useState<string[]>([]);
   const [loadingEditData, setLoadingEditData] = useState(false);
+  const [showResendInvite, setShowResendInvite] = useState(false);
+  const [isResendingInvite, setIsResendingInvite] = useState(false);
 
   // Update local clients when initialClients change
   useEffect(() => {
@@ -121,6 +125,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
       company_name: client.company_name || '',
       legal_name: client.legal_name || '',
       registration_number: client.registration_number || '',
+      uuid_number: client.uuid_number || '',
       email: client.email || '',
       owner_name: client.owner_name || '',
       phone: client.phone || '',
@@ -133,10 +138,12 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
       postal_code: client.postal_code || '',
       status: client.status,
     });
+    setShowResendInvite(false); // Reset
     setIsEditOpen(true);
     setLoadingEditData(true);
 
     try {
+      // 1. Fetch authorized chemicals
       const { data, error } = await supabase
         .from('client_chemicals')
         .select('chemical_id')
@@ -144,10 +151,40 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
 
       if (error) throw error;
       setEditChemicalIds(data.map((item) => item.chemical_id));
+
+      // 2. Check auth/activation status
+      const statusRes = await checkClientActivationStatus(client.email);
+      if (statusRes.success && statusRes.needsActivation) {
+        setShowResendInvite(true);
+      }
     } catch (err: any) {
-      toast.error('Failed to load authorized chemicals: ' + err.message);
+      toast.error('Failed to load edit data: ' + err.message);
     } finally {
       setLoadingEditData(false);
+    }
+  };
+
+  const handleResendInvite = async () => {
+    if (!selectedClient) return;
+    setIsResendingInvite(true);
+    try {
+      const res = await resendClientInviteAction(selectedClient.email);
+      if (res.success) {
+        if (res.inviteLink) {
+          toast.success(`${res.message} Invite Link: ${res.inviteLink}`, 10000);
+        } else {
+          toast.success(res.message || 'Invitation email successfully resent.');
+        }
+        if (res.inviteLink) {
+          console.log('[DEBUG DEVELOPER INVITATION LINK]:', res.inviteLink);
+        }
+      } else {
+        toast.error(res.error || 'Failed to resend invitation.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'An error occurred.');
+    } finally {
+      setIsResendingInvite(false);
     }
   };
 
@@ -400,7 +437,6 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
                 value={editProfile.email}
                 onChange={(e) => setEditProfile({ ...editProfile, email: e.target.value })}
                 required
-                disabled // Don't allow changing email since it's the auth username
               />
               <Input
                 label="CC Email (comma-separated)"
@@ -445,19 +481,10 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
                 onChange={(e) => setEditProfile({ ...editProfile, country: e.target.value })}
               />
               <Input
-                label="Primary Owner / Representative"
-                value={editProfile.owner_name}
-                onChange={(e) => setEditProfile({ ...editProfile, owner_name: e.target.value })}
-              />
-              <Select
-                label="Status"
-                value={editProfile.status}
-                onChange={(e) => setEditProfile({ ...editProfile, status: e.target.value as any })}
-                options={[
-                  { value: 'active', label: 'Active (Fully Compliant)' },
-                  { value: 'pending', label: 'Pending (Under Review)' },
-                  { value: 'inactive', label: 'Inactive (Suspended)' },
-                ]}
+                label="UUID Number"
+                placeholder="Auto-generated if left blank"
+                value={editProfile.uuid_number}
+                onChange={(e) => setEditProfile({ ...editProfile, uuid_number: e.target.value })}
               />
             </div>
 
@@ -501,18 +528,35 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
             )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsEditOpen(false)}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={isPending} disabled={isPending || loadingEditData}>
-              Save Client Profile
-            </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t border-slate-100 w-full">
+            <div>
+              {showResendInvite && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResendInvite}
+                  isLoading={isResendingInvite}
+                  disabled={isPending || isResendingInvite}
+                  className="text-amber-600 border-amber-200 hover:bg-amber-50 cursor-pointer"
+                >
+                  Resend Password Generation Mail
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditOpen(false)}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" isLoading={isPending} disabled={isPending || loadingEditData}>
+                Save Client Profile
+              </Button>
+            </div>
           </div>
         </form>
       </Dialog>

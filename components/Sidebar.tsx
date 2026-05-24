@@ -13,6 +13,7 @@ import {
   Award,
   X,
   Shield,
+  Settings,
 } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -34,8 +35,8 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/clients', label: 'Clients', icon: Users },
     { href: '/admin/chemicals', label: 'Chemical Inventory', icon: Database },
-    { href: '/admin/templates', label: 'Document Templates', icon: FileText },
     { href: '/admin/approvals', label: 'TCC Approvals', icon: CheckSquare },
+    { href: '/admin/settings', label: 'Settings', icon: Settings },
   ];
 
   const clientLinks = [

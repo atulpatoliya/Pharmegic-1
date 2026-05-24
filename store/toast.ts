@@ -38,8 +38,8 @@ export const useToastStore = create<ToastState>((set) => ({
 }));
 
 export const toast = {
-  success: (msg: string) => useToastStore.getState().addToast(msg, 'success'),
-  error: (msg: string) => useToastStore.getState().addToast(msg, 'error'),
-  warning: (msg: string) => useToastStore.getState().addToast(msg, 'warning'),
-  info: (msg: string) => useToastStore.getState().addToast(msg, 'info'),
+  success: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'success', duration),
+  error: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'error', duration),
+  warning: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'warning', duration),
+  info: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'info', duration),
 };

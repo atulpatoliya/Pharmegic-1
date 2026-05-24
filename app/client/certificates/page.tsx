@@ -24,7 +24,7 @@ export default async function CertificatesPage() {
   // Fetch certificates for the logged-in client
   const { data: certificates } = await supabase
     .from('certificates')
-    .select('*, tcc_applications (quantity_mt, chemicals (chemical_name, cas_number))')
+    .select('*, tcc_applications:tcc_applications!certificates_tcc_application_id_fkey (quantity_mt, chemicals (chemical_name, cas_number))')
     .eq('client_id', clientId)
     .order('issued_at', { ascending: false });
 

@@ -43,6 +43,7 @@ export const clientStep1Schema = z.object({
   company_name: z.string().min(2, { message: 'Company name is required' }),
   legal_name: z.string().optional().or(z.literal('')),
   registration_number: z.string().min(2, { message: 'Registration number is required' }),
+  uuid_number: z.string().optional().or(z.literal('')),
   email: z.string().email({ message: 'Invalid company email' }),
   owner_name: z.string().optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),

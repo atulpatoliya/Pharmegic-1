@@ -22,7 +22,7 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
     .select(`
       *,
       clients (company_name, legal_name),
-      tcc_applications (
+      tcc_applications:tcc_applications!certificates_tcc_application_id_fkey (
         quantity_mt,
         kkdik_reg_no,
         export_date,

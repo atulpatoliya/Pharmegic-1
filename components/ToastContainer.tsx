@@ -43,7 +43,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
 
   return (
     <div
-      className={`flex items-start gap-3 p-4 rounded-md shadow-md border border-slate-100 transition-all duration-300 animate-slide-in ${bgStyles[type]}`}
+      className={`flex items-start gap-3 p-4 rounded-md shadow-md border border-slate-100 transition-all duration-4300 animate-slide-in ${bgStyles[type]}`}
       role="alert"
     >
       {iconMap[type]}

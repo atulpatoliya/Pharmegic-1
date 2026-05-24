@@ -83,6 +83,7 @@ export interface ClientWizardInput {
     company_name: string;
     legal_name?: string;
     registration_number: string;
+    uuid_number?: string;
     email: string;
     owner_name?: string;
     phone?: string;
@@ -112,6 +113,7 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
       company_name: input.profile.company_name,
       legal_name: input.profile.legal_name || input.profile.company_name,
       registration_number: input.profile.registration_number,
+      uuid_number: input.profile.uuid_number || null,
       email: input.profile.email,
       owner_name: input.profile.owner_name || 'Company Representative',
       phone: input.profile.phone || null,
@@ -288,7 +290,7 @@ export async function getTccApplications(supabase: SupabaseClient, statusFilter 
     *,
     clients (company_name, email),
     chemicals (chemical_name, cas_number, ec_number, validity_date, available_quantity),
-    certificates (*)
+    certificates!certificates_tcc_application_id_fkey (*)
   `);
 
   if (statusFilter && statusFilter !== 'all') {
@@ -367,7 +369,7 @@ export async function getClientDashboardStats(supabase: SupabaseClient, clientId
     supabase.from('client_chemicals').select('*', { count: 'exact', head: true }).eq('client_id', clientId),
     supabase.from('tcc_applications').select('quantity_mt').eq('client_id', clientId).eq('status', 'approved'),
     supabase.from('client_chemicals').select('chemical_id, chemicals (*)').eq('client_id', clientId),
-    supabase.from('certificates').select('*, tcc_applications (quantity_mt, chemicals (chemical_name, cas_number))').eq('client_id', clientId).order('issued_at', { ascending: false }).limit(10),
+    supabase.from('certificates').select('*, tcc_applications:tcc_applications!certificates_tcc_application_id_fkey (quantity_mt, chemicals (chemical_name, cas_number))').eq('client_id', clientId).order('issued_at', { ascending: false }).limit(10),
     supabase.from('users').select('id').eq('client_id', clientId).limit(1)
   ]);
 
