@@ -26,23 +26,22 @@ export default async function ClientLayout({
   const clientId = user.user_metadata?.client_id;
   let companyName = 'Partner Client';
 
-  if (clientId) {
-    const { data: client } = await supabase
-      .from('clients')
-      .select('company_name')
-      .eq('id', clientId)
-      .single();
-    if (client) {
-      companyName = client.company_name;
-    }
-  }
+  // Fetch client details and notifications count in parallel
+  const [clientRes, notificationsRes] = await Promise.all([
+    clientId
+      ? supabase.from('clients').select('company_name').eq('id', clientId).single()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('read', false)
+  ]);
 
-  // Count unread notifications
-  const { count: notificationCount } = await supabase
-    .from('notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('read', false);
+  if (clientRes.data) {
+    companyName = clientRes.data.company_name;
+  }
+  const notificationCount = notificationsRes.count;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50">

@@ -4,45 +4,39 @@ import { SupabaseClient } from '@supabase/supabase-js';
 // ADMIN DASHBOARD SERVICES
 // ============================================================================
 export async function getAdminDashboardStats(supabase: SupabaseClient) {
-  // Total Clients
-  const { count: totalClients } = await supabase
-    .from('clients')
-    .select('*', { count: 'exact', head: true });
-
-  // Active Certificates
-  const { count: activeCertificates } = await supabase
-    .from('certificates')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'active');
-
-  // Pending TCC Applications
-  const { count: pendingTcc } = await supabase
-    .from('tcc_applications')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'pending');
-
-  // Exported Quantity (Sum of exported quantities on chemicals)
-  const { data: chemicals } = await supabase
-    .from('chemicals')
-    .select('exported_quantity');
-  const totalExported = (chemicals || []).reduce((sum, chem) => sum + Number(chem.exported_quantity), 0);
-
-  // Renewal Alerts (Active certificates expiring within 30 days)
   const thirtyDaysLater = new Date();
   thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-  const { count: renewalAlerts } = await supabase
-    .from('certificates')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'active')
-    .lte('expires_at', thirtyDaysLater.toISOString())
-    .gte('expires_at', new Date().toISOString());
 
-  // Monthly Export Activity (Aggregation of approved applications)
-  const { data: approvedApps } = await supabase
-    .from('tcc_applications')
-    .select('quantity_mt, created_at')
-    .eq('status', 'approved')
-    .order('created_at', { ascending: true });
+  // Run all 6 independent queries in parallel
+  const [
+    clientsRes,
+    certificatesRes,
+    pendingTccRes,
+    chemicalsRes,
+    renewalAlertsRes,
+    approvedAppsRes
+  ] = await Promise.all([
+    supabase.from('clients').select('*', { count: 'exact', head: true }),
+    supabase.from('certificates').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('tcc_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('chemicals').select('exported_quantity'),
+    supabase.from('certificates').select('*', { count: 'exact', head: true })
+      .eq('status', 'active')
+      .lte('expires_at', thirtyDaysLater.toISOString())
+      .gte('expires_at', new Date().toISOString()),
+    supabase.from('tcc_applications').select('quantity_mt, created_at')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: true })
+  ]);
+
+  const totalClients = clientsRes.count;
+  const activeCertificates = certificatesRes.count;
+  const pendingTcc = pendingTccRes.count;
+  const chemicals = chemicalsRes.data;
+  const renewalAlerts = renewalAlertsRes.count;
+  const approvedApps = approvedAppsRes.data;
+
+  const totalExported = (chemicals || []).reduce((sum, chem) => sum + Number(chem.exported_quantity), 0);
 
   // Group by month
   const monthlyActivityMap: Record<string, number> = {};
@@ -87,12 +81,16 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
 export interface ClientWizardInput {
   profile: {
     company_name: string;
-    legal_name: string;
+    legal_name?: string;
+    registration_number: string;
     email: string;
-    owner_name: string;
+    owner_name?: string;
     phone?: string;
+    cc_emails?: string;
+    cc_phones?: string;
     address?: string;
     city?: string;
+    state?: string;
     country?: string;
     postal_code?: string;
     status: 'active' | 'inactive' | 'pending';
@@ -112,12 +110,16 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
     .from('clients')
     .insert({
       company_name: input.profile.company_name,
-      legal_name: input.profile.legal_name,
+      legal_name: input.profile.legal_name || input.profile.company_name,
+      registration_number: input.profile.registration_number,
       email: input.profile.email,
-      owner_name: input.profile.owner_name,
+      owner_name: input.profile.owner_name || 'Company Representative',
       phone: input.profile.phone || null,
+      cc_emails: input.profile.cc_emails || null,
+      cc_phones: input.profile.cc_phones || null,
       address: input.profile.address || null,
       city: input.profile.city || null,
+      state: input.profile.state || null,
       country: input.profile.country || null,
       postal_code: input.profile.postal_code || null,
       status: input.profile.status,
@@ -354,46 +356,30 @@ export async function processTccApplication(
 // CLIENT DASHBOARD SERVICES
 // ============================================================================
 export async function getClientDashboardStats(supabase: SupabaseClient, clientId: string) {
-  // 1. Total Authorized Substances
-  const { count: activePermissions } = await supabase
-    .from('client_chemicals')
-    .select('*', { count: 'exact', head: true })
-    .eq('client_id', clientId);
+  // Run all independent queries in parallel
+  const [
+    activePermsRes,
+    approvedAppsRes,
+    mappingsRes,
+    certificatesRes,
+    userProfileRes
+  ] = await Promise.all([
+    supabase.from('client_chemicals').select('*', { count: 'exact', head: true }).eq('client_id', clientId),
+    supabase.from('tcc_applications').select('quantity_mt').eq('client_id', clientId).eq('status', 'approved'),
+    supabase.from('client_chemicals').select('chemical_id, chemicals (*)').eq('client_id', clientId),
+    supabase.from('certificates').select('*, tcc_applications (quantity_mt, chemicals (chemical_name, cas_number))').eq('client_id', clientId).order('issued_at', { ascending: false }).limit(10),
+    supabase.from('users').select('id').eq('client_id', clientId).limit(1)
+  ]);
 
-  // 2. Sum Exported Quantities
-  const { data: approvedApps } = await supabase
-    .from('tcc_applications')
-    .select('quantity_mt')
-    .eq('client_id', clientId)
-    .eq('status', 'approved');
+  const activePermissions = activePermsRes.count;
+  const approvedApps = approvedAppsRes.data;
+  const mappings = mappingsRes.data;
+  const certificates = certificatesRes.data;
+  const userProfile = userProfileRes.data;
 
   const totalExported = (approvedApps || []).reduce((sum, app) => sum + Number(app.quantity_mt), 0);
-
-  // 3. Quota metrics per authorized chemical
-  const { data: mappings } = await supabase
-    .from('client_chemicals')
-    .select('chemical_id, chemicals (*)')
-    .eq('client_id', clientId);
-
   const authorizedSubstances = (mappings || []).map((m: any) => m.chemicals);
-
-  // Remaining Quota (overall sum of available quantities of authorized chemicals)
   const remainingQuota = authorizedSubstances.reduce((sum: number, chem: any) => sum + Number(chem?.available_quantity || 0), 0);
-
-  // Recent Certificate History
-  const { data: certificates } = await supabase
-    .from('certificates')
-    .select('*, tcc_applications (quantity_mt, chemicals (chemical_name, cas_number))')
-    .eq('client_id', clientId)
-    .order('issued_at', { ascending: false })
-    .limit(10);
-
-  // Notifications
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('id')
-    .eq('client_id', clientId)
-    .limit(1);
 
   let notifications: any[] = [];
   if (userProfile && userProfile.length > 0) {

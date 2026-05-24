@@ -41,12 +41,16 @@ export const contactSchema = z.object({
 
 export const clientStep1Schema = z.object({
   company_name: z.string().min(2, { message: 'Company name is required' }),
-  legal_name: z.string().min(2, { message: 'Legal name is required' }),
+  legal_name: z.string().optional().or(z.literal('')),
+  registration_number: z.string().min(2, { message: 'Registration number is required' }),
   email: z.string().email({ message: 'Invalid company email' }),
-  owner_name: z.string().min(2, { message: 'Owner name is required' }),
+  owner_name: z.string().optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),
+  cc_emails: z.string().optional().or(z.literal('')),
+  cc_phones: z.string().optional().or(z.literal('')),
   address: z.string().optional().or(z.literal('')),
   city: z.string().optional().or(z.literal('')),
+  state: z.string().optional().or(z.literal('')),
   country: z.string().optional().or(z.literal('')),
   postal_code: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive', 'pending']).default('pending'),

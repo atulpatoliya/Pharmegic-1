@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface DialogProps {
   isOpen: boolean;
@@ -12,6 +13,14 @@ interface DialogProps {
 }
 
 export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
+  const [mounted, setMounted] = useState(false);
+
+  // Set mounted state
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
   // Lock body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -25,17 +34,18 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
   }, [isOpen]);
 
   if (!isOpen) return null;
+  if (!mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-300"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-300"
         onClick={onClose}
       />
 
       {/* Dialog Content */}
-      <div className="relative w-full max-w-lg rounded-lg border border-slate-100 bg-white p-6 shadow-xl transition-all duration-300 animate-slide-in max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-lg border border-slate-100 bg-white p-6 shadow-xl transition-all duration-300 animate-slide-in max-h-[90vh] overflow-y-auto z-10">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-800">{title}</h2>
@@ -51,6 +61,7 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
         {/* Body */}
         <div className="py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

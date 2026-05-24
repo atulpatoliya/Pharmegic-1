@@ -38,11 +38,15 @@ interface Client {
   id: string;
   company_name: string;
   legal_name: string;
+  registration_number: string;
   email: string;
   owner_name: string;
   phone: string | null;
+  cc_emails: string | null;
+  cc_phones: string | null;
   address: string | null;
   city: string | null;
+  state: string | null;
   country: string | null;
   postal_code: string | null;
   status: 'active' | 'inactive' | 'pending';
@@ -76,11 +80,15 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   const [editProfile, setEditProfile] = useState({
     company_name: '',
     legal_name: '',
+    registration_number: '',
     email: '',
     owner_name: '',
     phone: '',
+    cc_emails: '',
+    cc_phones: '',
     address: '',
     city: '',
+    state: '',
     country: 'Turkey',
     postal_code: '',
     status: 'active' as 'active' | 'inactive' | 'pending',
@@ -112,11 +120,15 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
     setEditProfile({
       company_name: client.company_name || '',
       legal_name: client.legal_name || '',
+      registration_number: client.registration_number || '',
       email: client.email || '',
       owner_name: client.owner_name || '',
       phone: client.phone || '',
+      cc_emails: client.cc_emails || '',
+      cc_phones: client.cc_phones || '',
       address: client.address || '',
       city: client.city || '',
+      state: client.state || '',
       country: client.country || 'Turkey',
       postal_code: client.postal_code || '',
       status: client.status,
@@ -377,43 +389,37 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
                 required
               />
               <Input
-                label="Legal Entity Name"
-                value={editProfile.legal_name}
-                onChange={(e) => setEditProfile({ ...editProfile, legal_name: e.target.value })}
+                label="Registration Number"
+                value={editProfile.registration_number}
+                onChange={(e) => setEditProfile({ ...editProfile, registration_number: e.target.value })}
                 required
               />
               <Input
                 type="email"
-                label="Corporate Email"
+                label="Primary Email"
                 value={editProfile.email}
                 onChange={(e) => setEditProfile({ ...editProfile, email: e.target.value })}
                 required
                 disabled // Don't allow changing email since it's the auth username
               />
               <Input
-                label="Primary Owner / Representative"
-                value={editProfile.owner_name}
-                onChange={(e) => setEditProfile({ ...editProfile, owner_name: e.target.value })}
-                required
+                label="CC Email (comma-separated)"
+                value={editProfile.cc_emails}
+                onChange={(e) => setEditProfile({ ...editProfile, cc_emails: e.target.value })}
               />
               <Input
-                label="Phone Number"
+                label="Primary Phone Number"
                 value={editProfile.phone}
                 onChange={(e) => setEditProfile({ ...editProfile, phone: e.target.value })}
               />
-              <Select
-                label="Status"
-                value={editProfile.status}
-                onChange={(e) => setEditProfile({ ...editProfile, status: e.target.value as any })}
-                options={[
-                  { value: 'active', label: 'Active (Fully Compliant)' },
-                  { value: 'pending', label: 'Pending (Under Review)' },
-                  { value: 'inactive', label: 'Inactive (Suspended)' },
-                ]}
+              <Input
+                label="CC Phone Number"
+                value={editProfile.cc_phones}
+                onChange={(e) => setEditProfile({ ...editProfile, cc_phones: e.target.value })}
               />
               <div className="md:col-span-2">
                 <Input
-                  label="Address"
+                  label="Company Address"
                   value={editProfile.address}
                   onChange={(e) => setEditProfile({ ...editProfile, address: e.target.value })}
                 />
@@ -424,9 +430,34 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
                 onChange={(e) => setEditProfile({ ...editProfile, city: e.target.value })}
               />
               <Input
+                label="State"
+                value={editProfile.state}
+                onChange={(e) => setEditProfile({ ...editProfile, state: e.target.value })}
+              />
+              <Input
                 label="Postal Code"
                 value={editProfile.postal_code}
                 onChange={(e) => setEditProfile({ ...editProfile, postal_code: e.target.value })}
+              />
+              <Input
+                label="Country"
+                value={editProfile.country}
+                onChange={(e) => setEditProfile({ ...editProfile, country: e.target.value })}
+              />
+              <Input
+                label="Primary Owner / Representative"
+                value={editProfile.owner_name}
+                onChange={(e) => setEditProfile({ ...editProfile, owner_name: e.target.value })}
+              />
+              <Select
+                label="Status"
+                value={editProfile.status}
+                onChange={(e) => setEditProfile({ ...editProfile, status: e.target.value as any })}
+                options={[
+                  { value: 'active', label: 'Active (Fully Compliant)' },
+                  { value: 'pending', label: 'Pending (Under Review)' },
+                  { value: 'inactive', label: 'Inactive (Suspended)' },
+                ]}
               />
             </div>
 

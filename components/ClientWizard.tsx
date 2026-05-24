@@ -28,11 +28,15 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
   const [profile, setProfile] = useState({
     company_name: '',
     legal_name: '',
+    registration_number: '',
     email: '',
     owner_name: '',
     phone: '',
+    cc_emails: '',
+    cc_phones: '',
     address: '',
     city: '',
+    state: '',
     country: 'Turkey',
     postal_code: '',
     status: 'active' as 'active' | 'inactive' | 'pending',
@@ -53,9 +57,8 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
   // Validation functions
   const validateStep1 = () => {
     if (!profile.company_name) return 'Company name is required';
-    if (!profile.legal_name) return 'Legal entity name is required';
-    if (!profile.email) return 'Corporate email is required';
-    if (!profile.owner_name) return 'Primary owner name is required';
+    if (!profile.registration_number) return 'Registration number is required';
+    if (!profile.email) return 'Primary corporate email is required';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) return 'Invalid email format';
     return null;
   };
@@ -156,46 +159,41 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
             required
           />
           <Input
-            label="Legal Entity Name"
-            placeholder="Pharmegic Turkey Tic. A.Ş."
-            value={profile.legal_name}
-            onChange={(e) => setProfile({ ...profile, legal_name: e.target.value })}
+            label="Registration Number"
+            placeholder="REG-123456"
+            value={profile.registration_number}
+            onChange={(e) => setProfile({ ...profile, registration_number: e.target.value })}
             required
           />
           <Input
             type="email"
-            label="Corporate Email Address"
-            placeholder="admin@pharmegic.com"
+            label="Primary Email Address"
+            placeholder="primary@company.com"
             value={profile.email}
             onChange={(e) => setProfile({ ...profile, email: e.target.value })}
             required
           />
           <Input
-            label="Primary Owner / Representative"
-            placeholder="Atul Kumar"
-            value={profile.owner_name}
-            onChange={(e) => setProfile({ ...profile, owner_name: e.target.value })}
-            required
+            label="CC Email (comma-separated)"
+            placeholder="cc1@company.com, cc2@company.com"
+            value={profile.cc_emails}
+            onChange={(e) => setProfile({ ...profile, cc_emails: e.target.value })}
           />
           <Input
-            label="Corporate Phone"
+            label="Primary Phone Number"
             placeholder="+90 212 555 1234"
             value={profile.phone}
             onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
           />
-          <Select
-            label="Entity Status"
-            value={profile.status}
-            onChange={(e) => setProfile({ ...profile, status: e.target.value as any })}
-            options={[
-              { value: 'active', label: 'Active (Fully Compliant)' },
-              { value: 'pending', label: 'Pending (Under Review)' },
-              { value: 'inactive', label: 'Inactive (Revoked/Suspended)' },
-            ]}
+          <Input
+            label="CC Phone Number"
+            placeholder="+90 212 555 5678, +90 212 555 9012"
+            value={profile.cc_phones}
+            onChange={(e) => setProfile({ ...profile, cc_phones: e.target.value })}
           />
           <div className="md:col-span-2">
             <Input
-              label="Address"
+              label="Company Address"
               placeholder="100 Compliance Boulevard, Suite 50"
               value={profile.address}
               onChange={(e) => setProfile({ ...profile, address: e.target.value })}
@@ -208,10 +206,38 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
             onChange={(e) => setProfile({ ...profile, city: e.target.value })}
           />
           <Input
+            label="State"
+            placeholder="Marmara"
+            value={profile.state}
+            onChange={(e) => setProfile({ ...profile, state: e.target.value })}
+          />
+          <Input
             label="Postal Code"
             placeholder="34000"
             value={profile.postal_code}
             onChange={(e) => setProfile({ ...profile, postal_code: e.target.value })}
+          />
+          <Input
+            label="Country"
+            placeholder="Turkey"
+            value={profile.country}
+            onChange={(e) => setProfile({ ...profile, country: e.target.value })}
+          />
+          <Input
+            label="Primary Owner / Representative"
+            placeholder="Atul Kumar"
+            value={profile.owner_name}
+            onChange={(e) => setProfile({ ...profile, owner_name: e.target.value })}
+          />
+          <Select
+            label="Entity Status"
+            value={profile.status}
+            onChange={(e) => setProfile({ ...profile, status: e.target.value as any })}
+            options={[
+              { value: 'active', label: 'Active (Fully Compliant)' },
+              { value: 'pending', label: 'Pending (Under Review)' },
+              { value: 'inactive', label: 'Inactive (Revoked/Suspended)' },
+            ]}
           />
         </div>
       )}
@@ -349,7 +375,7 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
             isLoading={isPending}
             disabled={isPending}
           >
-            Create Compliance Account <Save className="ml-1.5 h-4 w-4" />
+            Send email to client to generate password <Save className="ml-1.5 h-4 w-4" />
           </Button>
         )}
       </div>

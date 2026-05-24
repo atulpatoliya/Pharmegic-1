@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
     -- Location
     address TEXT,
     city TEXT,
+    state TEXT,
     postal_code TEXT,
     country TEXT,
     
@@ -74,10 +75,12 @@ CREATE TABLE IF NOT EXISTS public.clients (
     email TEXT UNIQUE NOT NULL,
     email2 TEXT,
     email3 TEXT,
+    cc_emails TEXT,
     phone TEXT,
     phone1 TEXT,
     phone2 TEXT,
     phone3 TEXT,
+    cc_phones TEXT,
     owner_name TEXT,
     contact_person TEXT,
     
