@@ -36,6 +36,7 @@ interface TccApplicationFormProps {
 export default function TccApplicationForm({ authorizedSubstances }: TccApplicationFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const [chemicalId, setChemicalId] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -47,28 +48,34 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
     if (!chemicalId) {
+      setError('Please select an authorized chemical substance.');
       toast.error('Please select an authorized chemical substance.');
       return;
     }
 
     if (!quantity || Number(quantity) <= 0) {
+      setError('Please specify a positive quantity in metric tons (MT).');
       toast.error('Please specify a positive quantity in metric tons (MT).');
       return;
     }
 
     if (selectedSubstance && Number(quantity) > selectedSubstance.available_quantity) {
+      setError(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
       toast.error(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
       return;
     }
 
     if (!kkdikRegNo.trim()) {
+      setError('KKDIK registration number is required.');
       toast.error('KKDIK registration number is required.');
       return;
     }
 
     if (!exportDate) {
+      setError('Expected export date is required.');
       toast.error('Expected export date is required.');
       return;
     }
@@ -78,6 +85,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       const expiry = new Date(selectedSubstance.validity_date);
       const shipment = new Date(exportDate);
       if (shipment > expiry) {
+        setError(`The expected export date exceeds the substance validity date (${expiry.toLocaleDateString()}).`);
         toast.error(`The expected export date exceeds the substance validity date (${expiry.toLocaleDateString()}).`);
         return;
       }
@@ -95,6 +103,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
         toast.success(res.message || 'TCC compliance application submitted.');
         router.push('/client');
       } else {
+        setError(res.error || 'Failed to submit application.');
         toast.error(res.error || 'Failed to submit application.');
       }
     });
@@ -187,6 +196,16 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                     required
                   />
                 </div>
+
+                {error && (
+                  <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5 w-full my-4">
+                    <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+                    <div className="flex-1 text-left">
+                      <h4 className="font-bold mb-1">Application Error</h4>
+                      <p className="text-xs leading-relaxed font-medium">{error}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                   <Button

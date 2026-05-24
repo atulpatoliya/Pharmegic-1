@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { toast } from '@/store/toast';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Save, User, Shield, Briefcase } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ArrowRight, Save, User, Shield, Briefcase, AlertCircle } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
 interface ChemicalOption {
@@ -23,6 +23,7 @@ interface ClientWizardProps {
 export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientWizardProps) {
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   // Wizard State
   const [profile, setProfile] = useState({
@@ -107,6 +108,7 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
 
   // Submit Handler
   const handleSubmit = async () => {
+    setError(null);
     const payload = {
       profile,
       contacts,
@@ -116,6 +118,7 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
     startTransition(async () => {
       const res = await createClientAction(null, payload);
       if (!res.success) {
+        setError(res.error || 'Failed to create client.');
         toast.error(res.error || 'Failed to create client.');
       } else {
         if (res.inviteLink) {
@@ -344,6 +347,16 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5">
+          <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h4 className="font-bold mb-1">Onboarding Error</h4>
+            <p className="text-xs leading-relaxed font-medium">{error}</p>
           </div>
         </div>
       )}

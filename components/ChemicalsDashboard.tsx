@@ -67,6 +67,7 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
     available_quantity: '0',
     status: 'active' as 'active' | 'inactive',
   });
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     setChemicals(initialChemicals);
@@ -84,6 +85,7 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
   });
 
   const handleOpenCreate = () => {
+    setFormError(null);
     setFormData({
       chemical_name: '',
       cas_number: '',
@@ -98,9 +100,11 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
 
   const handleCreateChemical = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     // Check basic validations locally before hitting server
     if (!/^\d{2,7}-\d{2}-\d$/.test(formData.cas_number)) {
+      setFormError('Invalid CAS number format (must match e.g. 110-80-5).');
       toast.error('Invalid CAS number format (must match e.g. 110-80-5).');
       return;
     }
@@ -121,12 +125,14 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
         setIsCreateOpen(false);
         router.refresh();
       } else {
+        setFormError(res.error || 'Failed to create chemical.');
         toast.error(res.error || 'Failed to create chemical.');
       }
     });
   };
 
   const handleOpenEdit = (chem: Chemical) => {
+    setFormError(null);
     setSelectedChemical(chem);
     setFormData({
       chemical_name: chem.chemical_name,
@@ -143,6 +149,14 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
   const handleUpdateChemical = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedChemical) return;
+    setFormError(null);
+
+    // Check basic validations locally before hitting server
+    if (!/^\d{2,7}-\d{2}-\d$/.test(formData.cas_number)) {
+      setFormError('Invalid CAS number format (must match e.g. 110-80-5).');
+      toast.error('Invalid CAS number format (must match e.g. 110-80-5).');
+      return;
+    }
 
     startTransition(async () => {
       const res = await updateChemicalAction(selectedChemical.id, {
@@ -160,6 +174,7 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
         setIsEditOpen(false);
         router.refresh();
       } else {
+        setFormError(res.error || 'Failed to update chemical.');
         toast.error(res.error || 'Failed to update chemical.');
       }
     });
@@ -399,6 +414,16 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
             />
           </div>
 
+          {formError && (
+            <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5 w-full my-4">
+              <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="flex-1 text-left">
+                <h4 className="font-bold mb-1">Registration Error</h4>
+                <p className="text-xs leading-relaxed font-medium">{formError}</p>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <Button
               type="button"
@@ -476,6 +501,16 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
               ]}
             />
           </div>
+
+          {formError && (
+            <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5 w-full my-4">
+              <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="flex-1 text-left">
+                <h4 className="font-bold mb-1">Substance Update Error</h4>
+                <p className="text-xs leading-relaxed font-medium">{formError}</p>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <Button

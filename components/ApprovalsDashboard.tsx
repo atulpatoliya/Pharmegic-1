@@ -20,7 +20,8 @@ import {
   Building,
   FlaskConical,
   MessageSquare,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
 
 interface Application {
@@ -68,6 +69,7 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [actionType, setActionType] = useState<'approved' | 'rejected' | 'modification_requested'>('approved');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     setApplications(initialApplications);
@@ -90,13 +92,16 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
     setSelectedApp(app);
     setActionType(type);
     setRejectionReason('');
+    setActionError(null);
     setIsActionOpen(true);
   };
 
   const handleProcessAction = () => {
     if (!selectedApp) return;
+    setActionError(null);
 
     if (actionType !== 'approved' && !rejectionReason.trim()) {
+      setActionError('A reason explanation is required for rejection/modification requests.');
       toast.error('A reason explanation is required for rejection/modification requests.');
       return;
     }
@@ -108,6 +113,7 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
         setIsActionOpen(false);
         router.refresh();
       } else {
+        setActionError(res.error || 'Failed to process application action.');
         toast.error(res.error || 'Failed to process application action.');
       }
     });
@@ -374,6 +380,16 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
                 required
               />
             </>
+          )}
+
+          {actionError && (
+            <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5 w-full my-4">
+              <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="flex-1 text-left">
+                <h4 className="font-bold mb-1">Decision Error</h4>
+                <p className="text-xs leading-relaxed font-medium">{actionError}</p>
+              </div>
+            </div>
           )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

@@ -23,6 +23,27 @@ export default async function AdminLayout({
     redirect('/login?error=Unauthorized');
   }
 
+  // Self-healing database user profile:
+  // If the admin deleted all data in public.users but their auth.users account still exists,
+  // we automatically re-insert them into the public.users database table to restore RLS policies access.
+  const { data: dbProfile } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!dbProfile) {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const adminSupabase = createAdminClient();
+    await adminSupabase
+      .from('users')
+      .insert({
+        id: user.id,
+        email: user.email,
+        role: role,
+      });
+  }
+
   // Count pending notifications (or general mock notification count if not configured)
   const { count: notificationCount } = await supabase
     .from('notifications')

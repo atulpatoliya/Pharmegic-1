@@ -30,6 +30,9 @@ export async function login(prevState: any, formData: FormData) {
     };
   }
 
+  const authRole = data.user.user_metadata?.role || 'CLIENT';
+  let role = authRole;
+
   // Get user profile from public users table to ensure user session is synced
   const { data: profile, error: profileError } = await supabase
     .from('users')
@@ -37,7 +40,24 @@ export async function login(prevState: any, formData: FormData) {
     .eq('id', data.user.id)
     .single();
 
-  const role = profile?.role || 'CLIENT';
+  if (profileError || !profile) {
+    // Self-healing: insert the profile using admin client (bypasses RLS since row is missing)
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const adminSupabase = createAdminClient();
+    const { error: insertError } = await adminSupabase
+      .from('users')
+      .insert({
+        id: data.user.id,
+        email: data.user.email,
+        role: authRole,
+      });
+
+    if (insertError) {
+      console.error('[AUTH PROFILE RECREATION ERROR]:', insertError);
+    }
+  } else {
+    role = profile.role;
+  }
 
   // Force session sync in user metadata if not already there
   if (data.user.user_metadata?.role !== role) {

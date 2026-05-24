@@ -25,7 +25,8 @@ import {
   Calendar,
   X,
   Plus,
-  Briefcase
+  Briefcase,
+  AlertCircle
 } from 'lucide-react';
 
 interface ChemicalOption {
@@ -99,6 +100,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   const [loadingEditData, setLoadingEditData] = useState(false);
   const [showResendInvite, setShowResendInvite] = useState(false);
   const [isResendingInvite, setIsResendingInvite] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Update local clients when initialClients change
   useEffect(() => {
@@ -121,6 +123,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   // Open Edit Modal & load active data
   const handleOpenEdit = async (client: Client) => {
     setSelectedClient(client);
+    setEditError(null);
     setEditProfile({
       company_name: client.company_name || '',
       legal_name: client.legal_name || '',
@@ -191,6 +194,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClient) return;
+    setEditError(null);
 
     startTransition(async () => {
       const res = await updateClientAction(selectedClient.id, editProfile, editChemicalIds);
@@ -199,6 +203,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
         setIsEditOpen(false);
         router.refresh();
       } else {
+        setEditError(res.error || 'Failed to update client.');
         toast.error(res.error || 'Failed to update client.');
       }
     });
@@ -527,6 +532,16 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
               </div>
             )}
           </div>
+
+          {editError && (
+            <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5 w-full">
+              <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-bold mb-1">Update Error</h4>
+                <p className="text-xs leading-relaxed font-medium">{editError}</p>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t border-slate-100 w-full">
             <div>
