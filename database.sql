@@ -4,6 +4,30 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ============================================================================
+-- DROP EXISTING TABLES AND TYPES TO ENSURE CLEAN INSTALLATION
+-- ============================================================================
+DROP TRIGGER IF EXISTS on_auth_user_changed ON auth.users;
+
+DROP TABLE IF EXISTS public.templates CASCADE;
+DROP TABLE IF EXISTS public.audit_logs CASCADE;
+DROP TABLE IF EXISTS public.notifications CASCADE;
+DROP TABLE IF EXISTS public.certificates CASCADE;
+DROP TABLE IF EXISTS public.tcc_applications CASCADE;
+DROP TABLE IF EXISTS public.client_chemicals CASCADE;
+DROP TABLE IF EXISTS public.client_permissions CASCADE;
+DROP TABLE IF EXISTS public.chemicals CASCADE;
+DROP TABLE IF EXISTS public.client_contacts CASCADE;
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP TABLE IF EXISTS public.clients CASCADE;
+DROP TABLE IF EXISTS public.admin_settings CASCADE;
+
+DROP TYPE IF EXISTS public.user_role CASCADE;
+DROP TYPE IF EXISTS public.client_status CASCADE;
+DROP TYPE IF EXISTS public.chemical_status CASCADE;
+DROP TYPE IF EXISTS public.tcc_status CASCADE;
+DROP TYPE IF EXISTS public.certificate_status CASCADE;
+
 -- Create Enums
 CREATE TYPE public.user_role AS ENUM ('MASTER_ADMIN', 'CLIENT', 'STAFF');
 CREATE TYPE public.client_status AS ENUM ('active', 'inactive', 'pending');
@@ -16,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,
     full_name TEXT DEFAULT 'Admin User',
     mobile_number TEXT DEFAULT '',
-    email TEXT DEFAULT 'master@pharmegic.com',
+    email TEXT DEFAULT 'directoratulpatoliya@gmail.com',
     cc_emails TEXT DEFAULT '',
     bcc_emails TEXT DEFAULT '',
     timezone TEXT DEFAULT 'UTC',
@@ -521,7 +545,7 @@ CREATE POLICY "Clients can view their authorized chemicals" ON public.client_che
 
 -- Seed Default Settings
 INSERT INTO public.admin_settings (id, full_name, email)
-VALUES (1, 'Admin User', 'master@pharmegic.com')
+VALUES (1, 'Admin User', 'directoratulpatoliya@gmail.com')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default Branding Template

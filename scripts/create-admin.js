@@ -10,8 +10,8 @@ async function main() {
     process.exit(1);
   }
 
-  const email = process.argv[2] || 'admin@pharmegic.com';
-  const password = process.argv[3] || 'AdminPassword123!';
+  const email = process.argv[2] || 'directoratulpatoliya@gmail.com';
+  const password = process.argv[3] || 'Admin@1234';
 
   console.log(`Creating MASTER_ADMIN user with email: ${email}...`);
 

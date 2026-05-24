@@ -39,7 +39,7 @@ export default async function AdminLayout({
       <div className="flex flex-col flex-1 h-full overflow-hidden">
         {/* Header toolbar */}
         <TopNavbar
-          userEmail={user.email || 'admin@pharmegic.com'}
+          userEmail={user.email || 'directoratulpatoliya@gmail.com'}
           role={role}
           notificationCount={notificationCount || 0}
         />
