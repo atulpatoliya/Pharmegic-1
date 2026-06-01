@@ -25,11 +25,13 @@ export async function createClientAction(prevState: unknown, data: unknown) {
   }
 
   try {
+    // Use the service role client for DB writes so admin RLS does not block creation.
+    const adminSupabase = createAdminClient();
+
     // 1. Create client organization, contacts and mapping in DB
-    const client = await createClientWizard(userSupabase, parsed.data);
+    const client = await createClientWizard(adminSupabase, parsed.data);
 
     // 2. Create Supabase Auth user with admin permissions and provided password
-    const adminSupabase = createAdminClient();
     const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
       email: parsed.data.profile.email,
       password: parsed.data.profile.password,
@@ -41,7 +43,7 @@ export async function createClientAction(prevState: unknown, data: unknown) {
     });
 
     if (authError || !authUser.user) {
-      await userSupabase.from('clients').delete().eq('id', client.id);
+      await adminSupabase.from('clients').delete().eq('id', client.id);
       console.error('[AUTH USER CREATE ERROR]:', authError || 'Missing auth user');
       return {
         success: false,
@@ -49,7 +51,7 @@ export async function createClientAction(prevState: unknown, data: unknown) {
       };
     }
 
-    await userSupabase
+    await adminSupabase
       .from('clients')
       .update({ auth_user_id: authUser.user.id })
       .eq('id', client.id);
