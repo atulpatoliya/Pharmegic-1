@@ -84,7 +84,10 @@ export interface ClientWizardInput {
     legal_name?: string;
     registration_number: string;
     uuid_number?: string;
+    primary_contact_first_name: string;
+    primary_contact_last_name: string;
     email: string;
+    password?: string;
     owner_name?: string;
     phone?: string;
     cc_emails?: string;
@@ -97,7 +100,8 @@ export interface ClientWizardInput {
     status: 'active' | 'inactive' | 'pending';
   };
   contacts: {
-    person_name: string;
+    first_name: string;
+    last_name: string;
     email: string;
     phone?: string;
     role?: string;
@@ -114,6 +118,9 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
       legal_name: input.profile.legal_name || input.profile.company_name,
       registration_number: input.profile.registration_number,
       uuid_number: input.profile.uuid_number || null,
+      primary_contact_first_name: input.profile.primary_contact_first_name,
+      primary_contact_last_name: input.profile.primary_contact_last_name,
+      contact_person: `${input.profile.primary_contact_first_name} ${input.profile.primary_contact_last_name}`,
       email: input.profile.email,
       owner_name: input.profile.owner_name || 'Company Representative',
       phone: input.profile.phone || null,
@@ -135,7 +142,7 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
   if (input.contacts.length > 0) {
     const contactsData = input.contacts.map((c) => ({
       client_id: client.id,
-      person_name: c.person_name,
+      person_name: `${c.first_name} ${c.last_name}`,
       email: c.email,
       phone: c.phone || null,
       role: c.role || null,
@@ -259,7 +266,7 @@ export async function getChemicals(supabase: SupabaseClient, search = '', status
   return data || [];
 }
 
-export async function createChemical(supabase: SupabaseClient, data: any) {
+export async function createChemical(supabase: SupabaseClient, data: Record<string, unknown>) {
   const { data: chem, error } = await supabase
     .from('chemicals')
     .insert(data)
@@ -270,7 +277,7 @@ export async function createChemical(supabase: SupabaseClient, data: any) {
   return chem;
 }
 
-export async function updateChemical(supabase: SupabaseClient, id: string, data: any) {
+export async function updateChemical(supabase: SupabaseClient, id: string, data: Record<string, unknown>) {
   const { error } = await supabase.from('chemicals').update(data).eq('id', id);
   if (error) throw error;
   return { success: true };
@@ -380,10 +387,13 @@ export async function getClientDashboardStats(supabase: SupabaseClient, clientId
   const userProfile = userProfileRes.data;
 
   const totalExported = (approvedApps || []).reduce((sum, app) => sum + Number(app.quantity_mt), 0);
-  const authorizedSubstances = (mappings || []).map((m: any) => m.chemicals);
-  const remainingQuota = authorizedSubstances.reduce((sum: number, chem: any) => sum + Number(chem?.available_quantity || 0), 0);
+  const authorizedSubstances = (mappings || []).map((m: { chemicals: Record<string, unknown> }) => m.chemicals);
+  const remainingQuota = authorizedSubstances.reduce((sum: number, chem: Record<string, unknown>) => {
+    const available = typeof chem.available_quantity === 'number' ? chem.available_quantity : 0;
+    return sum + Number(available || 0);
+  }, 0);
 
-  let notifications: any[] = [];
+  let notifications: Record<string, unknown>[] = [];
   if (userProfile && userProfile.length > 0) {
     const { data: notifs } = await supabase
       .from('notifications')
@@ -420,7 +430,7 @@ export async function getActiveTemplate(supabase: SupabaseClient) {
   return data;
 }
 
-export async function updateTemplate(supabase: SupabaseClient, id: string, data: any) {
+export async function updateTemplate(supabase: SupabaseClient, id: string, data: Record<string, unknown>) {
   const { error } = await supabase
     .from('templates')
     .update(data)

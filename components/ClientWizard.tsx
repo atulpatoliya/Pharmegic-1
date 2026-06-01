@@ -3,35 +3,28 @@
 import { createClientAction } from '@/actions/clients';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { Select } from './ui/Select';
 import { toast } from '@/store/toast';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Save, User, Shield, Briefcase, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Save, User, AlertCircle } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
-interface ChemicalOption {
-  id: string;
-  chemical_name: string;
-  cas_number: string;
-}
-
 interface ClientWizardProps {
-  chemicals: ChemicalOption[];
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientWizardProps) {
-  const [step, setStep] = useState(1);
+export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Wizard State
   const [profile, setProfile] = useState({
     company_name: '',
     legal_name: '',
     registration_number: '',
     uuid_number: '',
+    primary_contact_first_name: '',
+    primary_contact_last_name: '',
     email: '',
+    password: '',
     owner_name: '',
     phone: '',
     cc_emails: '',
@@ -45,119 +38,95 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
   });
 
   const [contacts, setContacts] = useState<
-    { person_name: string; email: string; phone: string; role: string }[]
+    { first_name: string; last_name: string; email: string; phone: string; role: string }[]
   >([]);
+
+  const [showPassword, setShowPassword] = useState(false);
+
   const [tempContact, setTempContact] = useState({
-    person_name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     role: '',
   });
 
-  const [authorizedChemicalIds, setAuthorizedChemicalIds] = useState<string[]>([]);
-
-  // Validation functions
-  const validateStep1 = () => {
+  const validateForm = () => {
     if (!profile.company_name) return 'Company name is required';
     if (!profile.registration_number) return 'Registration number is required';
-    if (!profile.email) return 'Primary corporate email is required';
+    if (!profile.primary_contact_first_name) return 'Primary contact first name is required';
+    if (!profile.primary_contact_last_name) return 'Primary contact last name is required';
+    if (!profile.email) return 'Primary contact email is required';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) return 'Invalid email format';
+    if (!profile.password || profile.password.length < 6) return 'Password must be at least 6 characters';
+    if (!profile.phone) return 'Primary contact mobile number is required';
     return null;
   };
 
-  const handleNext = () => {
-    if (step === 1) {
-      const err = validateStep1();
-      if (err) {
-        toast.error(err);
-        return;
-      }
-    }
-    setStep((s) => s + 1);
-  };
-
-  const handleBack = () => {
-    setStep((s) => s - 1);
-  };
-
-  // Contacts Handlers
   const addContact = () => {
-    if (!tempContact.person_name || !tempContact.email) {
-      toast.error('Name and email are required for adding a contact.');
+    if (!tempContact.first_name || !tempContact.last_name || !tempContact.email) {
+      toast.error('First name, last name and email are required for adding a contact.');
       return;
     }
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tempContact.email)) {
       toast.error('Invalid contact email format.');
       return;
     }
+
     setContacts([...contacts, tempContact]);
-    setTempContact({ person_name: '', email: '', phone: '', role: '' });
-    toast.success('Contact officer added to list.');
+    setTempContact({ first_name: '', last_name: '', email: '', phone: '', role: '' });
+    toast.success('Secondary contact added to list.');
   };
 
   const removeContact = (index: number) => {
     setContacts(contacts.filter((_, i) => i !== index));
   };
 
-  // Chemical Checkbox Handler
-  const toggleChemical = (id: string) => {
-    setAuthorizedChemicalIds((ids) =>
-      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
-    );
-  };
-
-  // Submit Handler
   const handleSubmit = async () => {
     setError(null);
+    const validationError = validateForm();
+    if (validationError) {
+      toast.error(validationError);
+      setError(validationError);
+      return;
+    }
+
     const payload = {
       profile,
       contacts,
-      authorizedChemicalIds,
+      authorizedChemicalIds: [],
     };
 
     startTransition(async () => {
       const res = await createClientAction(null, payload);
       if (!res.success) {
-        setError(res.error || 'Failed to create client.');
-        toast.error(res.error || 'Failed to create client.');
-      } else {
-        if (res.inviteLink) {
-          toast.success(`${res.message} Invite Link: ${res.inviteLink}`, 10000);
-        } else {
-          toast.success(res.message || 'Client created and notified!');
-        }
-        onSuccess();
+        const message = res.error || 'Failed to create client.';
+        setError(message);
+        toast.error(message);
+        return;
       }
+
+      toast.success(res.message || 'Client created and login credentials set successfully.');
+      onSuccess();
     });
   };
 
   return (
-    <div className="space-y-6">
-      {/* Wizard Step Indicator */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-wrap gap-y-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold ${
-            step === 1 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'
-          }`}>1</span>
-          <span className="text-xs font-semibold text-slate-700">Company Profile</span>
-          <div className="w-8 h-[2px] bg-slate-200" />
-
-          <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold ${
-            step === 2 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'
-          }`}>2</span>
-          <span className="text-xs font-semibold text-slate-700">Contacts</span>
-          <div className="w-8 h-[2px] bg-slate-200" />
-
-          <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold ${
-            step === 3 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'
-          }`}>3</span>
-          <span className="text-xs font-semibold text-slate-700">Authorizations</span>
-        </div>
-        <span className="text-xs font-semibold text-slate-400">Step {step} of 3</span>
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">New Client Contact Form</h2>
+        <p className="text-sm text-slate-500">Create the client profile, assign contacts, and set an initial password in one page.</p>
       </div>
 
-      {/* STEP 1: COMPANY PROFILE */}
-      {step === 1 && (
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Company Details</h3>
+            <p className="text-xs text-slate-500">Basic client organization information.</p>
+          </div>
+        </div>
+
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
           <Input
             label="Company Name"
@@ -167,6 +136,12 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
             required
           />
           <Input
+            label="Legal Name"
+            placeholder="Pharmegic Pharmaceuticals Ltd."
+            value={profile.legal_name}
+            onChange={(e) => setProfile({ ...profile, legal_name: e.target.value })}
+          />
+          <Input
             label="Registration Number"
             placeholder="REG-123456"
             value={profile.registration_number}
@@ -174,34 +149,181 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
             required
           />
           <Input
+            label="UUID Number"
+            placeholder="Auto-generated if left blank"
+            value={profile.uuid_number}
+            onChange={(e) => setProfile({ ...profile, uuid_number: e.target.value })}
+          />
+          <Input
+            label="Owner / Company Representative"
+            placeholder="Ahmet Yilmaz"
+            value={profile.owner_name}
+            onChange={(e) => setProfile({ ...profile, owner_name: e.target.value })}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Primary Person</h3>
+            <p className="text-xs text-slate-500">Primary contact details for the client account.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          <Input
+            label="First Name"
+            placeholder="Jane"
+            value={profile.primary_contact_first_name}
+            onChange={(e) => setProfile({ ...profile, primary_contact_first_name: e.target.value })}
+            required
+          />
+          <Input
+            label="Last Name"
+            placeholder="Doe"
+            value={profile.primary_contact_last_name}
+            onChange={(e) => setProfile({ ...profile, primary_contact_last_name: e.target.value })}
+            required
+          />
+          <Input
             type="email"
-            label="Primary Email Address"
-            placeholder="primary@company.com"
+            label="Email Address"
+            placeholder="jane@company.com"
             value={profile.email}
             onChange={(e) => setProfile({ ...profile, email: e.target.value })}
             required
           />
           <Input
-            label="CC Email (comma-separated)"
-            placeholder="cc1@company.com, cc2@company.com"
-            value={profile.cc_emails}
-            onChange={(e) => setProfile({ ...profile, cc_emails: e.target.value })}
-          />
-          <Input
-            label="Primary Phone Number"
-            placeholder="+90 212 555 1234"
+            label="Mobile Number"
+            placeholder="+90 532 123 4567"
             value={profile.phone}
             onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+            required
+          />
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Login Credential</h3>
+            <p className="text-xs text-slate-500">Set the client's initial authentication details.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          <div className="w-full flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Create a temporary password"
+                value={profile.password}
+                onChange={(e) => setProfile({ ...profile, password: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-white px-3 pr-10 py-2 text-sm ring-offset-background placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Secondary Person Contact</h3>
+            <p className="text-xs text-slate-500">Optional secondary contacts for the client account.</p>
+          </div>
+        </div>
+
+        <div className="mt-6 p-4 rounded-3xl bg-slate-50 border border-slate-100 grid gap-4 grid-cols-1 md:grid-cols-2">
+          <h4 className="md:col-span-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+            Add Secondary Contact Officer
+          </h4>
+          <Input
+            label="First Name"
+            placeholder="John"
+            value={tempContact.first_name}
+            onChange={(e) => setTempContact({ ...tempContact, first_name: e.target.value })}
           />
           <Input
-            label="CC Phone Number"
-            placeholder="+90 212 555 5678, +90 212 555 9012"
-            value={profile.cc_phones}
-            onChange={(e) => setProfile({ ...profile, cc_phones: e.target.value })}
+            label="Last Name"
+            placeholder="Smith"
+            value={tempContact.last_name}
+            onChange={(e) => setTempContact({ ...tempContact, last_name: e.target.value })}
           />
+          <Input
+            type="email"
+            label="Email"
+            placeholder="john@company.com"
+            value={tempContact.email}
+            onChange={(e) => setTempContact({ ...tempContact, email: e.target.value })}
+          />
+          <Input
+            label="Mobile Number"
+            placeholder="+90 532 123 4567"
+            value={tempContact.phone}
+            onChange={(e) => setTempContact({ ...tempContact, phone: e.target.value })}
+          />
+          <Input
+            label="Position / Role"
+            placeholder="Compliance Manager"
+            value={tempContact.role}
+            onChange={(e) => setTempContact({ ...tempContact, role: e.target.value })}
+          />
+          <div className="md:col-span-2 flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={addContact}>
+              <Plus className="h-4 w-4 mr-1.5" /> Add Contact
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Saved Secondary Contacts ({contacts.length})</h4>
+          {contacts.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-400">
+              No secondary contact officers added yet.
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-slate-100 bg-white divide-y divide-slate-100 overflow-hidden">
+              {contacts.map((contact, idx) => (
+                <div key={idx} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="font-semibold text-slate-900">{contact.first_name} {contact.last_name}</div>
+                    <div className="text-sm text-slate-500">{contact.email} {contact.role ? `• ${contact.role}` : ''}</div>
+                    {contact.phone ? <div className="text-sm text-slate-500">{contact.phone}</div> : null}
+                  </div>
+                  <Button type="button" variant="ghost" onClick={() => removeContact(idx)}>
+                    <Trash2 className="h-4 w-4" /> Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Address Details</h3>
+            <p className="text-xs text-slate-500">Client billing / office address information.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
           <div className="md:col-span-2">
             <Input
-              label="Company Address"
+              label="Address"
               placeholder="100 Compliance Boulevard, Suite 50"
               value={profile.address}
               onChange={(e) => setProfile({ ...profile, address: e.target.value })}
@@ -226,133 +348,17 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
             onChange={(e) => setProfile({ ...profile, postal_code: e.target.value })}
           />
           <Input
-            label="UUID Number"
-            placeholder="Auto-generated if left blank"
-            value={profile.uuid_number}
-            onChange={(e) => setProfile({ ...profile, uuid_number: e.target.value })}
-          />
-          <Input
             label="Country"
             placeholder="Turkey"
             value={profile.country}
             onChange={(e) => setProfile({ ...profile, country: e.target.value })}
           />
         </div>
-      )}
+      </section>
 
-      {/* STEP 2: CONTACT DETAILS */}
-      {step === 2 && (
-        <div className="space-y-6">
-          <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 grid gap-4 grid-cols-1 md:grid-cols-2">
-            <h3 className="md:col-span-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Add Officer / Contact Person
-            </h3>
-            <Input
-              label="Full Name"
-              placeholder="Jane Doe"
-              value={tempContact.person_name}
-              onChange={(e) => setTempContact({ ...tempContact, person_name: e.target.value })}
-            />
-            <Input
-              type="email"
-              label="Direct Email"
-              placeholder="jane@company.com"
-              value={tempContact.email}
-              onChange={(e) => setTempContact({ ...tempContact, email: e.target.value })}
-            />
-            <Input
-              label="Phone Number"
-              placeholder="+90 532 123 4567"
-              value={tempContact.phone}
-              onChange={(e) => setTempContact({ ...tempContact, phone: e.target.value })}
-            />
-            <Input
-              label="Position / Role"
-              placeholder="Compliance Manager"
-              value={tempContact.role}
-              onChange={(e) => setTempContact({ ...tempContact, role: e.target.value })}
-            />
-            <div className="md:col-span-2 flex justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={addContact}>
-                <Plus className="h-4 w-4 mr-1.5" /> Save Contact Officer
-              </Button>
-            </div>
-          </div>
-
-          {/* Contact List */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Assigned Contact Officers ({contacts.length})
-            </h4>
-            {contacts.length === 0 ? (
-              <div className="text-center py-6 border border-dashed border-slate-200 rounded-lg text-xs text-slate-400 font-medium">
-                No secondary contact officers mapped yet.
-              </div>
-            ) : (
-              <div className="border border-slate-100 rounded-lg divide-y divide-slate-100 overflow-hidden bg-white">
-                {contacts.map((c, idx) => (
-                  <div key={idx} className="flex justify-between items-center p-3 hover:bg-slate-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                        <User className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-slate-800">{c.person_name}</div>
-                        <div className="text-xs text-slate-500">
-                          {c.email} {c.role ? `• ${c.role}` : ''}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeContact(idx)}
-                      className="p-1 rounded-md text-rose-500 hover:bg-rose-50 cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 3: SUBSTANCE AUTHORIZATION */}
-      {step === 3 && (
-        <div className="space-y-4">
-          <div className="text-sm text-slate-500 font-medium">
-            Select the specific chemical substances this client is authorized to apply for and export:
-          </div>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-2 max-h-[350px] overflow-y-auto pr-1">
-            {chemicals.map((chem) => (
-              <div
-                key={chem.id}
-                onClick={() => toggleChemical(chem.id)}
-                className={`p-4 rounded-xl border flex items-start gap-3 cursor-pointer select-none transition-all ${
-                  authorizedChemicalIds.includes(chem.id)
-                    ? 'border-primary bg-emerald-50/30'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={authorizedChemicalIds.includes(chem.id)}
-                  onChange={() => {}}
-                  className="mt-1 h-4 w-4 rounded-sm border-slate-300 text-primary focus:ring-primary cursor-pointer"
-                />
-                <div className="flex-1 space-y-0.5">
-                  <div className="text-sm font-bold text-slate-800">{chem.chemical_name}</div>
-                  <div className="text-xs text-slate-400 font-medium">CAS No: {chem.cas_number}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5">
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-3xl text-sm font-semibold flex items-start gap-2.5">
           <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
           <div className="flex-1">
             <h4 className="font-bold mb-1">Onboarding Error</h4>
@@ -361,31 +367,13 @@ export default function ClientWizard({ chemicals, onSuccess, onCancel }: ClientW
         </div>
       )}
 
-      {/* Navigation Buttons */}
-      <div className="flex justify-between pt-6 border-t border-slate-100">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={step === 1 ? onCancel : handleBack}
-          disabled={isPending}
-        >
-          {step === 1 ? 'Cancel' : 'Previous'}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>
+          Cancel
         </Button>
-
-        {step < 3 ? (
-          <Button type="button" onClick={handleNext}>
-            Next Step <ArrowRight className="ml-1.5 h-4 w-4" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            onClick={handleSubmit}
-            isLoading={isPending}
-            disabled={isPending}
-          >
-            Send email to client to generate password <Save className="ml-1.5 h-4 w-4" />
-          </Button>
-        )}
+        <Button type="button" onClick={handleSubmit} isLoading={isPending} disabled={isPending}>
+          Create Client and Set Password <Save className="ml-2 h-4 w-4" />
+        </Button>
       </div>
     </div>
   );

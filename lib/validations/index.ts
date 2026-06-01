@@ -33,7 +33,8 @@ export const chemicalSchema = z.object({
 
 // CLIENT SCHEMAS
 export const contactSchema = z.object({
-  person_name: z.string().min(2, { message: 'Contact name is required' }),
+  first_name: z.string().min(2, { message: 'Contact first name is required' }),
+  last_name: z.string().min(2, { message: 'Contact last name is required' }),
   email: z.string().email({ message: 'Invalid email' }),
   phone: z.string().optional().or(z.literal('')),
   role: z.string().optional().or(z.literal('')),
@@ -44,7 +45,10 @@ export const clientStep1Schema = z.object({
   legal_name: z.string().optional().or(z.literal('')),
   registration_number: z.string().min(2, { message: 'Registration number is required' }),
   uuid_number: z.string().optional().or(z.literal('')),
-  email: z.string().email({ message: 'Invalid company email' }),
+  primary_contact_first_name: z.string().min(2, { message: 'Primary contact first name is required' }),
+  primary_contact_last_name: z.string().min(2, { message: 'Primary contact last name is required' }),
+  email: z.string().email({ message: 'Invalid primary contact email' }),
+  password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
   owner_name: z.string().optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),
   cc_emails: z.string().optional().or(z.literal('')),

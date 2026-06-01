@@ -3,12 +3,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClientWizard, updateClient, deleteClient } from '@/services/db';
-import { sendEmail } from '@/services/email';
-import { getInvitationEmail } from '@/emails/templates';
 import { clientWizardSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
-export async function createClientAction(prevState: any, data: any) {
+export async function createClientAction(prevState: unknown, data: unknown) {
   // Validate input
   const parsed = clientWizardSchema.safeParse(data);
   if (!parsed.success) {
@@ -30,60 +28,49 @@ export async function createClientAction(prevState: any, data: any) {
     // 1. Create client organization, contacts and mapping in DB
     const client = await createClientWizard(userSupabase, parsed.data);
 
-    // 2. Generate Supabase Auth invitation link using the service role admin client
+    // 2. Create Supabase Auth user with admin permissions and provided password
     const adminSupabase = createAdminClient();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
-    const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.generateLink({
-      type: 'invite',
+    const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
       email: parsed.data.profile.email,
-      options: {
-        redirectTo: `${appUrl}/reset-password`,
-        data: {
-          role: 'CLIENT',
-          client_id: client.id,
-        },
+      password: parsed.data.profile.password,
+      email_confirm: true,
+      user_metadata: {
+        role: 'CLIENT',
+        client_id: client.id,
       },
     });
 
-    if (inviteError) {
-      console.error('[AUTH INVITE ERROR] Failed to generate link:', inviteError);
+    if (authError || !authUser.user) {
+      await userSupabase.from('clients').delete().eq('id', client.id);
+      console.error('[AUTH USER CREATE ERROR]:', authError || 'Missing auth user');
       return {
-        success: true,
-        message: 'Client organization created in DB, but Auth invitation link generation failed.',
-        clientId: client.id,
+        success: false,
+        error: authError?.message || 'Failed to create client authentication user.',
       };
     }
 
-    const inviteLink = inviteData.properties.action_link;
-
-    // 3. Send custom styled SMTP invitation email
-    const emailHtml = getInvitationEmail(client.company_name, inviteLink, inviteLink);
-    const emailRes = await sendEmail({
-      to: parsed.data.profile.email,
-      subject: 'Welcome to Pharmegic Healthcare Portal',
-      html: emailHtml,
-    });
+    await userSupabase
+      .from('clients')
+      .update({ auth_user_id: authUser.user.id })
+      .eq('id', client.id);
 
     revalidatePath('/admin/clients');
     return {
       success: true,
-      message: emailRes.fallback
-        ? 'Client created. SMTP not configured/failed. (Invite link printed to server console).'
-        : 'Client created and invitation email successfully dispatched.',
+      message: 'Client created and login credentials set successfully.',
       clientId: client.id,
-      inviteLink: emailRes.fallback ? inviteLink : undefined,
     };
-  } catch (err: any) {
+  } catch (err) {
     console.error('[CLIENT CREATE ACTION ERROR]:', err);
+    const message = err instanceof Error ? err.message : String(err);
     return {
       success: false,
-      error: err.message || 'An unexpected error occurred.',
+      error: message || 'An unexpected error occurred.',
     };
   }
 }
 
-export async function updateClientAction(clientId: string, profile: any, chemicalIds?: string[]) {
+export async function updateClientAction(clientId: string, profile: Record<string, unknown>, chemicalIds?: string[]) {
   const userSupabase = await createClient();
 
   // Verify permissions
@@ -103,6 +90,9 @@ export async function updateClientAction(clientId: string, profile: any, chemica
     if (oldClientError) throw oldClientError;
 
     const finalProfile = { ...profile };
+    if (profile.primary_contact_first_name || profile.primary_contact_last_name) {
+      finalProfile.contact_person = `${profile.primary_contact_first_name || ''} ${profile.primary_contact_last_name || ''}`.trim();
+    }
 
     if (oldClient && oldClient.email !== profile.email) {
       // Check for email collision in the database
@@ -150,8 +140,9 @@ export async function updateClientAction(clientId: string, profile: any, chemica
     await updateClient(userSupabase, clientId, finalProfile, chemicalIds);
     revalidatePath('/admin/clients');
     return { success: true, message: 'Client profile updated successfully.' };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to update client.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message || 'Failed to update client.' };
   }
 }
 
@@ -187,8 +178,9 @@ export async function deleteClientAction(clientId: string) {
 
     revalidatePath('/admin/clients');
     return { success: true, message: 'Client and all associated files deleted successfully.' };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to delete client.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message || 'Failed to delete client.' };
   }
 }
 
@@ -216,8 +208,9 @@ export async function checkClientActivationStatus(email: string) {
     }
     
     return { success: true, needsActivation: false, exists: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to check status.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message || 'Failed to check status.' };
   }
 }
 
@@ -279,7 +272,8 @@ export async function resendClientInviteAction(email: string) {
         : 'Invitation email successfully resent to client.',
       inviteLink: emailRes.fallback ? inviteLink : undefined,
     };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to resend invite.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message || 'Failed to resend invite.' };
   }
 }

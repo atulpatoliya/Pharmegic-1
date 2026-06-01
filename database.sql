@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS public.clients (
     email TEXT UNIQUE NOT NULL,
     email2 TEXT,
     email3 TEXT,
+    primary_contact_first_name TEXT,
+    primary_contact_last_name TEXT,
     cc_emails TEXT,
     phone TEXT,
     phone1 TEXT,
@@ -569,3 +571,15 @@ VALUES
 ('Trichloroethylene', 'Trichloroethylene', '79-01-6', '201-167-4', '1-10 tonnes', '2026-12-31', 8.50, 1.20, 'active'),
 ('Dimethylformamide (DMF)', 'Dimethylformamide (DMF)', '68-12-2', '200-679-5', '100-1000 tonnes', '2027-09-15', 500.00, 0.00, 'active')
 ON CONFLICT (cas_number) DO NOTHING;
+
+-- ============================================================================
+-- OPTIONAL MIGRATION: Sync client profile fields with current form behavior
+-- ============================================================================
+ALTER TABLE public.clients
+  ADD COLUMN IF NOT EXISTS primary_contact_first_name TEXT,
+  ADD COLUMN IF NOT EXISTS primary_contact_last_name TEXT,
+  ADD COLUMN IF NOT EXISTS cc_emails TEXT,
+  ADD COLUMN IF NOT EXISTS cc_phones TEXT,
+  ADD COLUMN IF NOT EXISTS auth_user_id UUID;
+
+-- Note: authorized chemicals are still supported by other app flows, so no schema drop is applied here.
