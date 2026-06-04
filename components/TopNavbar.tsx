@@ -9,7 +9,7 @@ import Breadcrumbs from './Breadcrumbs';
 
 interface TopNavbarProps {
   userEmail: string;
-  role: 'MASTER_ADMIN' | 'CLIENT' | 'STAFF';
+  role: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT';
   notificationCount?: number;
 }
 
@@ -24,16 +24,17 @@ export default function TopNavbar({ userEmail, role, notificationCount = 0 }: To
   };
 
   const getRoleLabel = (r: string) => {
+    if (r === 'SUPER_ADMIN') return 'Super Admin';
     if (r === 'MASTER_ADMIN') return 'Master Admin';
-    if (r === 'STAFF') return 'Compliance Staff';
     return 'Client Representative';
   };
 
   const getRoleBadgeVariant = (r: string) => {
-    if (r === 'MASTER_ADMIN') return 'danger';
-    if (r === 'STAFF') return 'info';
+    if (r === 'SUPER_ADMIN') return 'danger';
+    if (r === 'MASTER_ADMIN') return 'warning';
     return 'success';
   };
+
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-100 bg-white px-6 shadow-xs">

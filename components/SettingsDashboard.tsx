@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { updateAdminProfileSettingsAction, updateAdminAuthAction } from '@/actions/settings';
+import { updateAdminProfileSettingsAction, updateAdminAuthAction, updateSmtpSettingsAction } from '@/actions/settings';
 import { updateTemplateAction } from '@/actions/templates';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
@@ -19,7 +19,8 @@ import {
   Lock,
   Mail,
   Palette,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Server
 } from 'lucide-react';
 
 interface SettingsData {
@@ -30,6 +31,12 @@ interface SettingsData {
   bcc_emails: string | null;
   timezone: string | null;
   profile_image: string | null;
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_user?: string | null;
+  smtp_pass?: string | null;
+  smtp_from?: string | null;
+  smtp_cc_default?: string | null;
 }
 
 interface TemplateData {
@@ -50,8 +57,9 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
   const [isProfilePending, startProfileTransition] = useTransition();
   const [isBrandingPending, startBrandingTransition] = useTransition();
   const [isAuthPending, startAuthTransition] = useTransition();
+  const [isSmtpPending, startSmtpTransition] = useTransition();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'branding' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'branding' | 'security' | 'smtp'>('profile');
 
   // 1. Profile Settings State
   const [profile, setProfile] = useState({
@@ -70,9 +78,16 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
 
   // 3. Security State
   const [emailUpdate, setEmailUpdate] = useState('');
-  const [passwordForm, setPasswordForm] = useState({
-    password: '',
-    confirmPassword: '',
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirmPassword: '' });
+
+  // 4. SMTP State
+  const [smtp, setSmtp] = useState({
+    smtp_host: initialSettings?.smtp_host || '',
+    smtp_port: initialSettings?.smtp_port ?? 587,
+    smtp_user: initialSettings?.smtp_user || '',
+    smtp_pass: initialSettings?.smtp_pass || '',
+    smtp_from: initialSettings?.smtp_from || '',
+    smtp_cc_default: initialSettings?.smtp_cc_default || '',
   });
 
   // Image Upload Handler (Base64 conversion)
@@ -180,6 +195,25 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     toast.info('Branding inputs reset to default template.');
   };
 
+  const handleSaveSmtp = () => {
+    startSmtpTransition(async () => {
+      const res = await updateSmtpSettingsAction({
+        smtp_host: smtp.smtp_host,
+        smtp_port: Number(smtp.smtp_port),
+        smtp_user: smtp.smtp_user,
+        smtp_pass: smtp.smtp_pass,
+        smtp_from: smtp.smtp_from,
+        smtp_cc_default: smtp.smtp_cc_default,
+      });
+      if (res.success) {
+        toast.success(res.message || 'SMTP settings saved.');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to save SMTP settings.');
+      }
+    });
+  };
+
   return (
     <div className="space-y-8 animate-slide-in">
       {/* Title */}
@@ -224,7 +258,18 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
             }`}
           >
             <Lock className="h-4.5 w-4.5" />
-            Security & Login
+            Security &amp; Login
+          </button>
+          <button
+            onClick={() => setActiveTab('smtp')}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+              activeTab === 'smtp'
+                ? 'bg-primary text-white'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Server className="h-4.5 w-4.5" />
+            Email Settings
           </button>
         </div>
 
@@ -557,6 +602,74 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
                 </CardContent>
               </Card>
             </div>
+          )}
+          {/* TAB 4: SMTP EMAIL SETTINGS */}
+          {activeTab === 'smtp' && (
+            <Card className="border-slate-100 shadow-xs">
+              <CardHeader>
+                <div className="flex items-center gap-2 text-primary">
+                  <Server className="h-5 w-5" />
+                  <CardTitle>Certificate Email Settings</CardTitle>
+                </div>
+                <CardDescription>
+                  Configure SMTP settings for sending TCC certificate emails to clients. Only used for certificate delivery.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs font-semibold text-amber-700">
+                  ⚠ SMTP is used only for certificate delivery. No invite, reset, or password emails are sent.
+                </div>
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <Input
+                      label="SMTP Host"
+                      placeholder="smtp.gmail.com"
+                      value={smtp.smtp_host}
+                      onChange={(e) => setSmtp({ ...smtp, smtp_host: e.target.value })}
+                    />
+                  </div>
+                  <Input
+                    label="SMTP Port"
+                    type="number"
+                    placeholder="587"
+                    value={String(smtp.smtp_port)}
+                    onChange={(e) => setSmtp({ ...smtp, smtp_port: Number(e.target.value) })}
+                  />
+                  <Input
+                    label="SMTP Username"
+                    placeholder="smtp@company.com"
+                    value={smtp.smtp_user}
+                    onChange={(e) => setSmtp({ ...smtp, smtp_user: e.target.value })}
+                  />
+                  <Input
+                    type="password"
+                    label="SMTP Password"
+                    placeholder="••••••••"
+                    value={smtp.smtp_pass}
+                    onChange={(e) => setSmtp({ ...smtp, smtp_pass: e.target.value })}
+                  />
+                  <Input
+                    type="email"
+                    label="From Email Address"
+                    placeholder="noreply@pharmegic.com"
+                    value={smtp.smtp_from}
+                    onChange={(e) => setSmtp({ ...smtp, smtp_from: e.target.value })}
+                  />
+                  <Input
+                    type="email"
+                    label="Default CC Email (Admin)"
+                    placeholder="admin@pharmegic.com"
+                    value={smtp.smtp_cc_default}
+                    onChange={(e) => setSmtp({ ...smtp, smtp_cc_default: e.target.value })}
+                  />
+                </div>
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <Button onClick={handleSaveSmtp} isLoading={isSmtpPending} disabled={isSmtpPending}>
+                    Save SMTP Settings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

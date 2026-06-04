@@ -1,203 +1,177 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { CheckCircle, XCircle, AlertTriangle, ShieldCheck, ShieldAlert, Award, FileText, Calendar, Building, FlaskConical, ArrowLeft } from 'lucide-react';
+import { Shield, CheckCircle2, XCircle, AlertTriangle, Building, FlaskConical, Calendar, Hash, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
-interface VerifyPageProps {
-  params: Promise<{
-    certNumber: string;
-  }>;
-}
+export const revalidate = 60;
 
-export const revalidate = 0; // Fresh verification check each scan
+interface VerifyPageProps {
+  params: Promise<{ certNumber: string }>;
+}
 
 export default async function VerifyCertificatePage({ params }: VerifyPageProps) {
   const { certNumber } = await params;
   const adminSupabase = createAdminClient();
 
-  // Fetch certificate details bypassing RLS
-  const { data: cert, error } = await adminSupabase
+  const { data: cert } = await adminSupabase
     .from('certificates')
     .select(`
-      *,
-      clients (company_name, legal_name),
-      tcc_applications:tcc_applications!certificates_tcc_application_id_fkey (
+      id,
+      certificate_number,
+      issued_at,
+      expires_at,
+      status,
+      clients (company_name, registration_number, country),
+      tcc_applications (
         quantity_mt,
-        kkdik_reg_no,
-        export_date,
-        chemicals (chemical_name, cas_number, ec_number)
+        chemicals (chemical_name, cas_number, ec_number, tonnage_band)
       )
     `)
-    .eq('certificate_number', certNumber)
+    .eq('certificate_number', decodeURIComponent(certNumber))
     .maybeSingle();
 
-  const isNotFound = !cert || error;
+  const now = new Date();
+  const isExpired = cert?.expires_at ? new Date(cert.expires_at) < now : false;
+  const verificationStatus = !cert ? 'invalid' : isExpired ? 'expired' : cert.status === 'revoked' ? 'revoked' : 'valid';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between py-12 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="flex-1 flex flex-col justify-center max-w-xl w-full mx-auto space-y-6">
-        
-        {/* Logo Header */}
-        <div className="text-center">
-          <h1 className="text-xl font-black text-slate-800 tracking-wider">PHARMEGIC HEALTHCARE</h1>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">COMPLIANCE REGISTRY VERIFICATION</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/30 to-slate-100 flex flex-col items-center justify-center p-6">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center gap-2.5 bg-white border border-slate-200 rounded-full px-5 py-2.5 shadow-sm mb-6">
+          <Shield className="h-5 w-5 text-emerald-600" />
+          <span className="text-sm font-bold text-slate-700">Pharmegic Healthcare — Certificate Verification Portal</span>
         </div>
-
-        {isNotFound ? (
-          /* Not Found / Invalid */
-          <Card className="border-rose-200 shadow-lg bg-white overflow-hidden">
-            <div className="h-2 bg-rose-600" />
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="mx-auto w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center">
-                <XCircle className="h-10 w-10" />
-              </div>
-              <div className="space-y-1">
-                <h2 className="text-xl font-black text-slate-800">Verification Failed</h2>
-                <p className="text-sm font-semibold text-rose-600 uppercase tracking-wider">Unregistered Certificate Code</p>
-              </div>
-              <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-sm mx-auto">
-                The certificate number <span className="font-mono font-bold text-slate-800">{certNumber}</span> was not found in the Pharmegic Healthcare registry database. This document cannot be verified as authentic.
-              </p>
-              <div className="pt-4">
-                <Link href="/">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:text-emerald-700 cursor-pointer">
-                    <ArrowLeft className="h-4 w-4" /> Back to Portal Home
-                  </span>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          /* Certificate Found */
-          <Card className="border-slate-200 shadow-xl bg-white overflow-hidden">
-            {/* Status Colored Top Bar */}
-            <div className={`h-2 ${
-              cert.status === 'active' ? 'bg-emerald-600' : cert.status === 'expired' ? 'bg-amber-500' : 'bg-rose-600'
-            }`} />
-            
-            <CardContent className="p-8 space-y-6">
-              
-              {/* Verification Title */}
-              <div className="text-center space-y-3">
-                <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center ${
-                  cert.status === 'active' 
-                    ? 'bg-emerald-50 text-emerald-600' 
-                    : cert.status === 'expired' 
-                    ? 'bg-amber-50 text-amber-600' 
-                    : 'bg-rose-50 text-rose-600'
-                }`}>
-                  {cert.status === 'active' ? (
-                    <ShieldCheck className="h-10 w-10" />
-                  ) : (
-                    <ShieldAlert className="h-10 w-10" />
-                  )}
-                </div>
-                
-                <div className="space-y-1">
-                  <h2 className="text-xl font-black text-slate-800">Compliance Verified</h2>
-                  <div className="flex justify-center">
-                    {cert.status === 'active' ? (
-                      <Badge variant="success" className="text-xs px-3 py-1 font-bold">VALID CERTIFICATE</Badge>
-                    ) : cert.status === 'expired' ? (
-                      <Badge variant="warning" className="text-xs px-3 py-1 font-bold">EXPIRED PERMIT</Badge>
-                    ) : (
-                      <Badge variant="danger" className="text-xs px-3 py-1 font-bold">REVOKED / CANCELLED</Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <hr className="border-slate-100" />
-
-              {/* Certificate Details */}
-              <div className="space-y-4 text-xs font-semibold text-slate-600">
-                <h3 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Substance and Registry Specs</h3>
-                
-                <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 space-y-3">
-                  <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                    <span className="text-slate-400 font-medium">Certificate Registration No:</span>
-                    <span className="font-mono text-slate-800 font-bold">{cert.certificate_number}</span>
-                  </div>
-                  
-                  <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                    <span className="text-slate-400 font-medium">Authorized Holder:</span>
-                    <span className="text-slate-800 font-bold text-right">{cert.clients?.company_name}</span>
-                  </div>
-
-                  {cert.clients?.legal_name && (
-                    <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                      <span className="text-slate-400 font-medium">Legal Entity Name:</span>
-                      <span className="text-slate-800 font-bold text-right">{cert.clients.legal_name}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                    <span className="text-slate-400 font-medium">Chemical Name:</span>
-                    <span className="text-slate-800 font-bold text-right">{cert.tcc_applications?.chemicals?.chemical_name}</span>
-                  </div>
-
-                  <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                    <span className="text-slate-400 font-medium">CAS Registry Number:</span>
-                    <span className="text-slate-800 font-bold">{cert.tcc_applications?.chemicals?.cas_number}</span>
-                  </div>
-
-                  {cert.tcc_applications?.chemicals?.ec_number && (
-                    <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                      <span className="text-slate-400 font-medium">EC Number:</span>
-                      <span className="text-slate-800 font-bold">{cert.tcc_applications.chemicals.ec_number}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                    <span className="text-slate-400 font-medium">Authorized Export Quantity:</span>
-                    <span className="text-slate-800 font-bold">{cert.tcc_applications?.quantity_mt} MT (Metric Tons)</span>
-                  </div>
-
-                  <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                    <span className="text-slate-400 font-medium">KKDIK Registration No:</span>
-                    <span className="font-mono text-slate-800 font-bold">{cert.tcc_applications?.kkdik_reg_no}</span>
-                  </div>
-
-                  <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                    <span className="text-slate-400 font-medium">Date of Issuance:</span>
-                    <span className="text-slate-800 font-bold">{new Date(cert.issued_at).toLocaleDateString()}</span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 font-medium">Date of Expiration:</span>
-                    <span className="text-slate-800 font-bold">
-                      {cert.expires_at ? new Date(cert.expires_at).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Message notice */}
-              <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-[10px] font-semibold flex gap-2">
-                <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <div>
-                  This is a verified live record matching the compliance database registry. Printed documents must contain matching parameters to be recognized at customs control checkpoints.
-                </div>
-              </div>
-
-              <div className="text-center pt-2">
-                <Link href="/">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:text-emerald-700 cursor-pointer">
-                    <ArrowLeft className="h-4 w-4" /> Go to Portal Home
-                  </span>
-                </Link>
-              </div>
-
-            </CardContent>
-          </Card>
-        )}
-
       </div>
 
-      {/* Verification page footer notice */}
-      <div className="text-center text-[9px] text-slate-400 font-bold uppercase mt-8">
-        Pharmegic Healthcare Compliance Control Registry.
+      <div className="w-full max-w-2xl">
+        {/* Status Banner */}
+        <div className={`rounded-2xl p-6 mb-6 text-center ${
+          verificationStatus === 'valid' ? 'bg-emerald-600' :
+          verificationStatus === 'expired' ? 'bg-amber-500' :
+          'bg-rose-600'
+        }`}>
+          <div className="flex flex-col items-center gap-3">
+            {verificationStatus === 'valid' ? (
+              <CheckCircle2 className="h-12 w-12 text-white" />
+            ) : verificationStatus === 'expired' ? (
+              <AlertTriangle className="h-12 w-12 text-white" />
+            ) : (
+              <XCircle className="h-12 w-12 text-white" />
+            )}
+            <div>
+              <h1 className="text-2xl font-black text-white tracking-tight">
+                {verificationStatus === 'valid' ? 'Certificate Valid & Active' :
+                 verificationStatus === 'expired' ? 'Certificate Expired' :
+                 verificationStatus === 'revoked' ? 'Certificate Revoked' :
+                 'Certificate Not Found'}
+              </h1>
+              <p className="text-white/80 text-sm font-medium mt-1">
+                {verificationStatus === 'valid' ? 'This Tonnage Compliance Certificate is authentic and currently valid.' :
+                 verificationStatus === 'expired' ? 'This certificate was valid but has passed its expiry date.' :
+                 verificationStatus === 'revoked' ? 'This certificate has been revoked by the issuing authority.' :
+                 'No certificate matching this number exists in the registry.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Certificate Details */}
+        {cert ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            {/* Certificate Number */}
+            <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Hash className="h-4 w-4 text-slate-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Certificate Number</span>
+              </div>
+              <span className="font-mono font-black text-slate-800 text-lg">{cert.certificate_number}</span>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Company */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <Building className="h-3.5 w-3.5" /> Certificate Holder
+                </div>
+                <p className="font-bold text-slate-800 text-base">{(cert.clients as any)?.company_name}</p>
+                {(cert.clients as any)?.registration_number && (
+                  <p className="text-xs text-slate-500 font-medium">Reg. No: {(cert.clients as any).registration_number}</p>
+                )}
+                {(cert.clients as any)?.country && (
+                  <p className="text-xs text-slate-500 font-medium">{(cert.clients as any).country}</p>
+                )}
+
+              </div>
+
+              {/* Chemical */}
+              {(cert.tcc_applications as any)?.chemicals && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    <FlaskConical className="h-3.5 w-3.5" /> Substance Details
+                  </div>
+                  <p className="font-bold text-slate-800">{(cert.tcc_applications as any).chemicals.chemical_name}</p>
+                  <p className="text-xs text-slate-500 font-medium font-mono">
+                    CAS: {(cert.tcc_applications as any).chemicals.cas_number}
+                    {(cert.tcc_applications as any).chemicals.ec_number && ` • EC: ${(cert.tcc_applications as any).chemicals.ec_number}`}
+                  </p>
+                  <p className="text-sm font-bold text-slate-700 mt-1">
+                    {(cert.tcc_applications as any).quantity_mt} Metric Tons (MT)
+                  </p>
+                </div>
+              )}
+
+
+              {/* Validity */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <Calendar className="h-3.5 w-3.5" /> Validity Period
+                </div>
+                <p className="text-sm font-semibold text-slate-700">
+                  Issued: <span className="font-bold text-slate-800">{new Date(cert.issued_at).toLocaleDateString()}</span>
+                </p>
+                <p className={`text-sm font-semibold ${isExpired ? 'text-rose-600' : 'text-slate-700'}`}>
+                  Expires:{' '}
+                  <span className="font-bold">
+                    {cert.expires_at ? new Date(cert.expires_at).toLocaleDateString() : 'N/A'}
+                    {isExpired && ' (Expired)'}
+                  </span>
+                </p>
+              </div>
+
+              {/* Status */}
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Status</div>
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
+                  verificationStatus === 'valid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                  verificationStatus === 'expired' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                  'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}>
+                  {verificationStatus === 'valid' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                  {verificationStatus.toUpperCase()}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
+            <p className="text-slate-500 font-medium text-sm">
+              No certificate with number <span className="font-mono font-bold text-slate-800">{certNumber}</span> was found in the registry.
+            </p>
+            <p className="text-xs text-slate-400 font-medium mt-2">
+              Please check the certificate number and try again, or contact the issuing authority.
+            </p>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="mt-6 text-center space-y-2">
+          <p className="text-xs text-slate-400 font-medium">
+            Issued by Pharmegic Healthcare Compliance Division
+          </p>
+          <Link href="/login" className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors">
+            <ExternalLink className="h-3 w-3" /> Portal Login
+          </Link>
+        </div>
       </div>
     </div>
   );

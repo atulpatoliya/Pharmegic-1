@@ -1,7 +1,7 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
-import { updateTemplate } from '@/services/db';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getSession } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 
 export async function updateTemplateAction(templateId: string, data: {
@@ -10,18 +10,19 @@ export async function updateTemplateAction(templateId: string, data: {
   accent_color: string;
   footer_text: string;
 }) {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || (user.user_metadata?.role !== 'MASTER_ADMIN' && user.user_metadata?.role !== 'STAFF')) {
+  const session = await getSession();
+  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
     return { success: false, error: 'Unauthorized.' };
   }
 
+  const adminSupabase = createAdminClient();
   try {
-    await updateTemplate(supabase, templateId, data);
-    revalidatePath('/admin/templates');
-    return { success: true, message: 'Document certificate template updated successfully.' };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to update template.' };
+    const { error } = await adminSupabase.from('templates').update(data).eq('id', templateId);
+    if (error) throw error;
+    revalidatePath('/admin/settings');
+    return { success: true, message: 'Certificate template updated successfully.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
   }
 }

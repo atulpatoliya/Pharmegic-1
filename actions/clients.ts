@@ -1,281 +1,469 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClientWizard, updateClient, deleteClient } from '@/services/db';
-import { clientWizardSchema } from '@/lib/validations';
+import { getSession } from '@/lib/auth/session';
+import { hashPassword } from '@/lib/auth/password';
+import { clientWizardSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
+// ============================================================================
+// HELPER: Verify admin session
+// ============================================================================
+async function requireAdmin() {
+  const session = await getSession();
+  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
+    return null;
+  }
+  return session;
+}
+
+// ============================================================================
+// CREATE CLIENT
+// ============================================================================
 export async function createClientAction(prevState: unknown, data: unknown) {
-  // Validate input
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized. Admins only.' };
+
   const parsed = clientWizardSchema.safeParse(data);
   if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0].message,
-    };
+    return { success: false, error: parsed.error.issues[0].message };
   }
 
-  const userSupabase = await createClient();
-
-  // Verify caller is admin/staff
-  const { data: { user } } = await userSupabase.auth.getUser();
-  if (!user || (user.user_metadata?.role !== 'MASTER_ADMIN' && user.user_metadata?.role !== 'STAFF')) {
-    return { success: false, error: 'Unauthorized. Admins only.' };
-  }
+  const adminSupabase = createAdminClient();
+  const { profile, contacts } = parsed.data;
 
   try {
-    // Use the service role client for DB writes so admin RLS does not block creation.
-    const adminSupabase = createAdminClient();
+    // 1. Check email uniqueness
+    const { data: existing } = await adminSupabase
+      .from('clients')
+      .select('id')
+      .eq('email', profile.email.toLowerCase())
+      .maybeSingle();
+    if (existing) return { success: false, error: 'A client with this email already exists.' };
 
-    // 1. Create client organization, contacts and mapping in DB
-    const client = await createClientWizard(adminSupabase, parsed.data);
+    // 2. Hash password
+    const password_hash = await hashPassword(profile.password);
 
-    // 2. Create Supabase Auth user with admin permissions and provided password
-    const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
-      email: parsed.data.profile.email,
-      password: parsed.data.profile.password,
-      email_confirm: true,
-      user_metadata: {
+    // 3. Create client record
+    const { data: client, error: clientError } = await adminSupabase
+      .from('clients')
+      .insert({
+        company_name: profile.company_name,
+        legal_name: profile.legal_name || null,
+        registration_number: profile.registration_number,
+        uuid_number: profile.uuid_number || null,
+        owner_name: profile.owner_name || null,
+        email: profile.email.toLowerCase(),
+        phone: profile.phone || null,
+        primary_contact_first_name: profile.primary_contact_first_name,
+        primary_contact_last_name: profile.primary_contact_last_name,
+        cc_emails: profile.cc_emails || null,
+        cc_phones: profile.cc_phones || null,
+        address: profile.address || null,
+        city: profile.city || null,
+        state: profile.state || null,
+        country: profile.country || 'Turkey',
+        postal_code: profile.postal_code || null,
+        status: profile.status,
+      })
+      .select()
+      .single();
+
+    if (clientError || !client) throw clientError || new Error('Failed to create client');
+
+    // 4. Create user login record
+    const { data: user, error: userError } = await adminSupabase
+      .from('users')
+      .insert({
+        email: profile.email.toLowerCase(),
+        password_hash,
         role: 'CLIENT',
         client_id: client.id,
-      },
-    });
+        is_disabled: false,
+      })
+      .select()
+      .single();
 
-    if (authError || !authUser.user) {
+    if (userError || !user) {
       await adminSupabase.from('clients').delete().eq('id', client.id);
-      console.error('[AUTH USER CREATE ERROR]:', authError || 'Missing auth user');
-      return {
-        success: false,
-        error: authError?.message || 'Failed to create client authentication user.',
-      };
+      throw userError || new Error('Failed to create user login record');
     }
 
-    await adminSupabase
-      .from('clients')
-      .update({ auth_user_id: authUser.user.id })
-      .eq('id', client.id);
+    // 5. Insert secondary contacts
+    if (contacts.length > 0) {
+      const contactRows = contacts.map((c) => ({
+        client_id: client.id,
+        first_name: c.first_name,
+        last_name: c.last_name,
+        email: c.email,
+        phone: c.phone || null,
+        role: c.role || null,
+      }));
+      await adminSupabase.from('client_contacts').insert(contactRows);
+    }
+
+    // 6. Activity log
+    await adminSupabase.from('activity_logs').insert({
+      client_id: client.id,
+      user_id: session.userId,
+      action: 'CLIENT_CREATED',
+      entity_type: 'clients',
+      entity_id: client.id,
+      description: `Client ${client.company_name} created by admin`,
+    });
 
     revalidatePath('/admin/clients');
-    return {
-      success: true,
-      message: 'Client created and login credentials set successfully.',
-      clientId: client.id,
-    };
+    return { success: true, message: 'Client created and login credentials set successfully.', clientId: client.id };
   } catch (err) {
-    console.error('[CLIENT CREATE ACTION ERROR]:', err);
+    console.error('[CLIENT CREATE ERROR]:', err);
     const message = err instanceof Error ? err.message : String(err);
-    return {
-      success: false,
-      error: message || 'An unexpected error occurred.',
-    };
+    return { success: false, error: message || 'An unexpected error occurred.' };
   }
 }
 
+// ============================================================================
+// UPDATE CLIENT PROFILE
+// ============================================================================
 export async function updateClientAction(clientId: string, profile: Record<string, unknown>, chemicalIds?: string[]) {
-  const userSupabase = await createClient();
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
 
-  // Verify permissions
-  const { data: { user } } = await userSupabase.auth.getUser();
-  if (!user || (user.user_metadata?.role !== 'MASTER_ADMIN' && user.user_metadata?.role !== 'STAFF')) {
-    return { success: false, error: 'Unauthorized.' };
-  }
-
+  const adminSupabase = createAdminClient();
   try {
-    // 1. Fetch current client data to check if email has changed
-    const { data: oldClient, error: oldClientError } = await userSupabase
+    const { error } = await adminSupabase
       .from('clients')
-      .select('email, auth_user_id')
-      .eq('id', clientId)
-      .single();
+      .update({ ...profile, updated_at: new Date().toISOString() })
+      .eq('id', clientId);
 
-    if (oldClientError) throw oldClientError;
+    if (error) throw error;
 
-    const finalProfile = { ...profile };
-    if (profile.primary_contact_first_name || profile.primary_contact_last_name) {
-      finalProfile.contact_person = `${profile.primary_contact_first_name || ''} ${profile.primary_contact_last_name || ''}`.trim();
-    }
-
-    if (oldClient && oldClient.email !== profile.email) {
-      // Check for email collision in the database
-      const { data: duplicateClient } = await userSupabase
-        .from('clients')
-        .select('id')
-        .eq('email', profile.email)
-        .neq('id', clientId)
-        .maybeSingle();
-
-      if (duplicateClient) {
-        return { success: false, error: 'This email address is already in use by another client.' };
-      }
-
-      const adminSupabase = createAdminClient();
-
-      if (oldClient.auth_user_id) {
-        const { error: authUpdateError } = await adminSupabase.auth.admin.updateUserById(
-          oldClient.auth_user_id,
-          { email: profile.email }
-        );
-        if (authUpdateError) {
-          console.error('[AUTH EMAIL UPDATE ERROR]:', authUpdateError);
-          return { success: false, error: 'Failed to update client authentication email: ' + authUpdateError.message };
-        }
-      } else {
-        // If auth_user_id is not set, search by old email and link it
-        const { data: authUsers } = await adminSupabase.auth.admin.listUsers();
-        const match = authUsers.users.find((u) => u.email === oldClient.email);
-        if (match) {
-          const { error: authUpdateError } = await adminSupabase.auth.admin.updateUserById(
-            match.id,
-            { email: profile.email }
-          );
-          if (authUpdateError) {
-            console.error('[AUTH EMAIL UPDATE ERROR]:', authUpdateError);
-            return { success: false, error: 'Failed to update client authentication email: ' + authUpdateError.message };
-          }
-          finalProfile.auth_user_id = match.id;
-        }
+    if (chemicalIds !== undefined) {
+      // Sync client chemicals
+      await adminSupabase.from('client_chemicals').delete().eq('client_id', clientId);
+      if (chemicalIds.length > 0) {
+        const insertRows = chemicalIds.map(cid => ({
+          client_id: clientId,
+          chemical_id: cid,
+          available_quantity: 0, // Assigned via client detail page later or default to 0
+          status: 'active'
+        }));
+        await adminSupabase.from('client_chemicals').insert(insertRows);
       }
     }
 
-    // 2. Perform DB update
-    await updateClient(userSupabase, clientId, finalProfile, chemicalIds);
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CLIENT_UPDATED',
+      entity_type: 'clients',
+      entity_id: clientId,
+      description: 'Client profile updated by admin',
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
     revalidatePath('/admin/clients');
     return { success: true, message: 'Client profile updated successfully.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message || 'Failed to update client.' };
+    return { success: false, error: message };
   }
 }
 
-export async function deleteClientAction(clientId: string) {
-  const userSupabase = await createClient();
 
-  // Verify permissions
-  const { data: { user } } = await userSupabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== 'MASTER_ADMIN') {
-    return { success: false, error: 'Unauthorized. Admins only.' };
-  }
+// ============================================================================
+// CHANGE CLIENT EMAIL (Admin only)
+// ============================================================================
+export async function changeClientEmailAction(clientId: string, newEmail: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
 
+  const parsed = changeEmailSchema.safeParse({ new_email: newEmail });
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const adminSupabase = createAdminClient();
   try {
-    // 1. Fetch client to find the associated user email for auth deletion
-    const { data: client } = await userSupabase
-      .from('clients')
-      .select('email')
-      .eq('id', clientId)
-      .single();
+    const emailLower = newEmail.toLowerCase();
 
-    // 2. Perform DB Deletions (Cascades automatically)
-    await deleteClient(userSupabase, clientId);
+    // Check uniqueness in clients and users
+    const { data: dupClient } = await adminSupabase.from('clients').select('id').eq('email', emailLower).neq('id', clientId).maybeSingle();
+    if (dupClient) return { success: false, error: 'Email already in use by another client.' };
 
-    // 3. Delete user from auth if exists
-    if (client?.email) {
-      const adminSupabase = createAdminClient();
-      const { data: authUsers } = await adminSupabase.auth.admin.listUsers();
-      const match = authUsers.users.find((u) => u.email === client.email);
-      if (match) {
-        await adminSupabase.auth.admin.deleteUser(match.id);
-      }
-    }
+    // Update clients table
+    const { error: cErr } = await adminSupabase.from('clients').update({ email: emailLower }).eq('id', clientId);
+    if (cErr) throw cErr;
+
+    // Update users table
+    const { error: uErr } = await adminSupabase.from('users').update({ email: emailLower }).eq('client_id', clientId);
+    if (uErr) throw uErr;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'EMAIL_CHANGED',
+      entity_type: 'clients',
+      entity_id: clientId,
+      description: `Client email changed to ${emailLower}`,
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Client email updated successfully.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// CHANGE CLIENT PASSWORD (Admin only)
+// ============================================================================
+export async function changeClientPasswordAction(clientId: string, newPassword: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const parsed = changePasswordSchema.safeParse({ new_password: newPassword });
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const password_hash = await hashPassword(newPassword);
+    const { error } = await adminSupabase.from('users').update({ password_hash }).eq('client_id', clientId);
+    if (error) throw error;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'PASSWORD_CHANGED',
+      entity_type: 'users',
+      entity_id: clientId,
+      description: 'Client password changed by admin',
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Password updated successfully.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// TOGGLE CLIENT LOGIN (Enable / Disable)
+// ============================================================================
+export async function toggleClientLoginAction(clientId: string, disable: boolean) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase.from('users').update({ is_disabled: disable }).eq('client_id', clientId);
+    if (error) throw error;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: disable ? 'LOGIN_DISABLED' : 'LOGIN_ENABLED',
+      entity_type: 'users',
+      entity_id: clientId,
+      description: disable ? 'Client login disabled by admin' : 'Client login re-enabled by admin',
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: disable ? 'Client login disabled.' : 'Client login enabled.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// ARCHIVE CLIENT
+// ============================================================================
+export async function archiveClientAction(clientId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase.from('clients').update({ status: 'inactive' }).eq('id', clientId);
+    if (error) throw error;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CLIENT_ARCHIVED',
+      entity_type: 'clients',
+      entity_id: clientId,
+      description: 'Client archived by admin',
+    });
 
     revalidatePath('/admin/clients');
-    return { success: true, message: 'Client and all associated files deleted successfully.' };
+    return { success: true, message: 'Client archived successfully.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message || 'Failed to delete client.' };
+    return { success: false, error: message };
   }
 }
 
-export async function checkClientActivationStatus(email: string) {
-  const userSupabase = await createClient();
+// ============================================================================
+// DELETE CLIENT
+// ============================================================================
+export async function deleteClientAction(clientId: string) {
+  const session = await requireAdmin();
+  if (!session || session.role !== 'SUPER_ADMIN') return { success: false, error: 'Unauthorized. Super Admin only.' };
 
-  // Verify caller is admin/staff
-  const { data: { user } } = await userSupabase.auth.getUser();
-  if (!user || (user.user_metadata?.role !== 'MASTER_ADMIN' && user.user_metadata?.role !== 'STAFF')) {
-    return { success: false, error: 'Unauthorized.' };
-  }
-
+  const adminSupabase = createAdminClient();
   try {
-    const adminSupabase = createAdminClient();
-    const { data: authUsers } = await adminSupabase.auth.admin.listUsers();
-    const match = authUsers.users.find((u) => u.email === email);
-    
-    // If the user doesn't exist in auth, or exists but has null last_sign_in_at
-    if (!match) {
-      return { success: true, needsActivation: true, exists: false };
-    }
-    
-    if (!match.last_sign_in_at) {
-      return { success: true, needsActivation: true, exists: true };
-    }
-    
-    return { success: true, needsActivation: false, exists: true };
+    // Delete user first (FK constraint)
+    await adminSupabase.from('users').delete().eq('client_id', clientId);
+    await adminSupabase.from('clients').delete().eq('id', clientId);
+
+    revalidatePath('/admin/clients');
+    return { success: true, message: 'Client deleted successfully.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message || 'Failed to check status.' };
+    return { success: false, error: message };
   }
 }
 
-export async function resendClientInviteAction(email: string) {
-  const userSupabase = await createClient();
+// ============================================================================
+// ASSIGN CHEMICAL TO CLIENT
+// ============================================================================
+export async function assignChemicalToClientAction(clientId: string, data: unknown) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
 
-  // Verify caller is admin/staff
-  const { data: { user } } = await userSupabase.auth.getUser();
-  if (!user || (user.user_metadata?.role !== 'MASTER_ADMIN' && user.user_metadata?.role !== 'STAFF')) {
-    return { success: false, error: 'Unauthorized.' };
-  }
+  const parsed = assignChemicalSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
 
+  const adminSupabase = createAdminClient();
   try {
-    // 1. Fetch client record
-    const { data: client, error: clientErr } = await userSupabase
-      .from('clients')
-      .select('id, company_name')
-      .eq('email', email)
-      .single();
+    const { error } = await adminSupabase
+      .from('client_chemicals')
+      .upsert({
+        client_id: clientId,
+        chemical_id: parsed.data.chemical_id,
+        available_quantity: parsed.data.available_quantity,
+        validity_date: parsed.data.validity_date,
+        status: parsed.data.status,
+        assigned_by: session.userId,
+      }, { onConflict: 'client_id,chemical_id' });
 
-    if (clientErr || !client) {
-      return { success: false, error: 'Client record not found in database.' };
-    }
+    if (error) throw error;
 
-    const adminSupabase = createAdminClient();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
-    // 2. Generate new invite link
-    const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.generateLink({
-      type: 'invite',
-      email,
-      options: {
-        redirectTo: `${appUrl}/reset-password`,
-        data: {
-          role: 'CLIENT',
-          client_id: client.id,
-        },
-      },
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CHEMICAL_ASSIGNED',
+      entity_type: 'client_chemicals',
+      entity_id: clientId,
+      description: `Chemical assigned to client`,
     });
 
-    if (inviteError) {
-      throw inviteError;
-    }
-
-    const inviteLink = inviteData.properties.action_link;
-
-    // 3. Send email
-    const emailHtml = getInvitationEmail(client.company_name, inviteLink, inviteLink);
-    const emailRes = await sendEmail({
-      to: email,
-      subject: 'Set Password for Pharmegic Healthcare Portal',
-      html: emailHtml,
-    });
-
-    return {
-      success: true,
-      message: emailRes.fallback
-        ? 'Invitation link generated (printed to server console, configure SMTP in Vercel to receive real emails).'
-        : 'Invitation email successfully resent to client.',
-      inviteLink: emailRes.fallback ? inviteLink : undefined,
-    };
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Chemical assigned successfully.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message || 'Failed to resend invite.' };
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// REMOVE CHEMICAL FROM CLIENT
+// ============================================================================
+export async function removeChemicalFromClientAction(clientId: string, chemicalId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase
+      .from('client_chemicals')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId);
+
+    if (error) throw error;
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Chemical removed.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// SECONDARY CONTACTS CRUD
+// ============================================================================
+export async function addContactAction(clientId: string, contact: { first_name: string; last_name: string; email: string; phone?: string; role?: string }) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase.from('client_contacts').insert({ client_id: clientId, ...contact });
+    if (error) throw error;
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Contact added.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteContactAction(contactId: string, clientId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase.from('client_contacts').delete().eq('id', contactId);
+    if (error) throw error;
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Contact removed.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// INTERNAL NOTES
+// ============================================================================
+export async function addInternalNoteAction(clientId: string, note: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const parsed = internalNoteSchema.safeParse({ note });
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase.from('internal_notes').insert({
+      client_id: clientId,
+      author_id: session.userId,
+      note: parsed.data.note,
+    });
+    if (error) throw error;
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Note added.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteInternalNoteAction(noteId: string, clientId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase.from('internal_notes').delete().eq('id', noteId);
+    if (error) throw error;
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Note deleted.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
   }
 }

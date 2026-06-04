@@ -43,6 +43,30 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
 
   const [showPassword, setShowPassword] = useState(false);
 
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; phone?: string }>({});
+
+  const handleEmailChange = (value: string) => {
+    setProfile((p) => ({ ...p, email: value }));
+    if (!value) {
+      setFieldErrors((e) => ({ ...e, email: 'Email is required' }));
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setFieldErrors((e) => ({ ...e, email: 'Enter a valid email address' }));
+    } else {
+      setFieldErrors((e) => ({ ...e, email: undefined }));
+    }
+  };
+
+  const handlePhoneChange = (value: string) => {
+    setProfile((p) => ({ ...p, phone: value }));
+    if (!value) {
+      setFieldErrors((e) => ({ ...e, phone: 'Mobile number is required' }));
+    } else if (!/^[+\d][\d\s\-().]{6,19}$/.test(value)) {
+      setFieldErrors((e) => ({ ...e, phone: 'Enter a valid mobile number (digits only)' }));
+    } else {
+      setFieldErrors((e) => ({ ...e, phone: undefined }));
+    }
+  };
+
   const [tempContact, setTempContact] = useState({
     first_name: '',
     last_name: '',
@@ -95,7 +119,6 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
     const payload = {
       profile,
       contacts,
-      authorizedChemicalIds: [],
     };
 
     startTransition(async () => {
@@ -186,35 +209,37 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
             onChange={(e) => setProfile({ ...profile, primary_contact_last_name: e.target.value })}
             required
           />
-          <Input
-            type="email"
-            label="Email Address"
-            placeholder="jane@company.com"
-            value={profile.email}
-            onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-            required
-          />
-          <Input
-            label="Mobile Number"
-            placeholder="+90 532 123 4567"
-            value={profile.phone}
-            onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-            required
-          />
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Login Credential</h3>
-            <p className="text-xs text-slate-500">Set the client's initial authentication details.</p>
+          <div className="w-full flex flex-col gap-1">
+            <Input
+              type="email"
+              label="Email Address"
+              placeholder="jane@company.com"
+              value={profile.email}
+              onChange={(e) => handleEmailChange(e.target.value)}
+              required
+            />
+            {fieldErrors.email && (
+              <p className="text-xs text-rose-500 flex items-center gap-1 mt-0.5">
+                <span>⚠</span> {fieldErrors.email}
+              </p>
+            )}
           </div>
-        </div>
-
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          <div className="w-full flex flex-col gap-1">
+            <Input
+              label="Mobile Number"
+              placeholder="+90 532 123 4567"
+              value={profile.phone}
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              required
+            />
+            {fieldErrors.phone && (
+              <p className="text-xs text-rose-500 flex items-center gap-1 mt-0.5">
+                <span>⚠</span> {fieldErrors.phone}
+              </p>
+            )}
+          </div>
           <div className="w-full flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Password</label>
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Password <span className="text-rose-500">*</span></label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -236,6 +261,8 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
           </div>
         </div>
       </section>
+
+
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-6">

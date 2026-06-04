@@ -1,20 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
-import { getClientDashboardStats } from '@/services/db';
+import { getSession } from '@/lib/auth/session';
+import { createAdminClient } from '@/lib/supabase/admin';
 import ClientDashboard from '@/components/ClientDashboard';
 import { redirect } from 'next/navigation';
 
-export const revalidate = 0; // Disable server caching for client feeds
+export const revalidate = 0;
 
 export default async function ClientDashboardPage() {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    redirect('/login');
-  }
+  const session = await getSession();
+  if (!session || session.role !== 'CLIENT') redirect('/login');
 
-  const clientId = user.user_metadata?.client_id;
+  const clientId = session.clientId;
   if (!clientId) {
     return (
       <div className="py-12 text-center text-sm font-semibold text-slate-400">
@@ -23,15 +18,58 @@ export default async function ClientDashboardPage() {
     );
   }
 
-  const { stats, authorizedSubstances, certificates, notifications } = 
-    await getClientDashboardStats(supabase, clientId);
+  const adminSupabase = createAdminClient();
+
+  const [statsRes, substancesRes, certsRes, notifRes] = await Promise.all([
+    adminSupabase
+      .from('tcc_applications')
+      .select('status', { count: 'exact' })
+      .eq('client_id', clientId),
+    adminSupabase
+      .from('client_chemicals')
+      .select('*, chemicals(*)')
+      .eq('client_id', clientId)
+      .eq('status', 'active'),
+    adminSupabase
+      .from('certificates')
+      .select('*, tcc_applications(quantity_mt, chemicals(chemical_name, cas_number))')
+      .eq('client_id', clientId)
+      .order('issued_at', { ascending: false })
+      .limit(10),
+    adminSupabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', session.userId)
+      .order('created_at', { ascending: false })
+      .limit(10),
+  ]);
+
+  const substances = substancesRes.data || [];
+  const activePermissions = substances.length;
+  const remainingQuota = substances.reduce((sum, item) => sum + Number(item.available_quantity || 0), 0);
+
+  // Get total exported from approved applications
+  const { data: approvedApps } = await adminSupabase
+    .from('tcc_applications')
+    .select('quantity_mt')
+    .eq('client_id', clientId)
+    .eq('status', 'approved');
+
+  const totalExported = (approvedApps || []).reduce((sum, item) => sum + Number(item.quantity_mt || 0), 0);
+
+  const stats = {
+    activePermissions,
+    totalExported,
+    remainingQuota
+  };
 
   return (
     <ClientDashboard
       stats={stats}
-      authorizedSubstances={authorizedSubstances as any}
-      certificates={certificates as any}
-      notifications={notifications as any}
+      authorizedSubstances={(substancesRes.data || []) as any}
+      certificates={(certsRes.data || []) as any}
+      notifications={(notifRes.data || []) as any}
     />
   );
+
 }

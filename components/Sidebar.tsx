@@ -18,7 +18,7 @@ import {
 import { useEffect } from 'react';
 
 interface SidebarProps {
-  role: 'MASTER_ADMIN' | 'CLIENT' | 'STAFF';
+  role: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT';
   companyName?: string;
 }
 
@@ -39,13 +39,19 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     { href: '/admin/settings', label: 'Settings', icon: Settings },
   ];
 
+  if (role === 'SUPER_ADMIN') {
+    // Add Super Admin controls link
+    adminLinks.splice(4, 0, { href: '/admin/super', label: 'Super Admin', icon: Shield });
+  }
+
   const clientLinks = [
     { href: '/client', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/client/apply', label: 'Apply for TCC', icon: FileSignature },
     { href: '/client/certificates', label: 'My Certificates', icon: Award },
   ];
 
-  const links = role === 'MASTER_ADMIN' || role === 'STAFF' ? adminLinks : clientLinks;
+  const links = role === 'SUPER_ADMIN' || role === 'MASTER_ADMIN' ? adminLinks : clientLinks;
+
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-primary text-primary-foreground border-r border-primary/20">

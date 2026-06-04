@@ -1,18 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
+import { getSession } from '@/lib/auth/session';
+import { createAdminClient } from '@/lib/supabase/admin';
 import TccApplicationForm from '@/components/TccApplicationForm';
 import { redirect } from 'next/navigation';
 
-export const revalidate = 0; // Fresh substances quota mapping
+export const revalidate = 0;
 
 export default async function ApplyPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSession();
+  if (!session || session.role !== 'CLIENT') redirect('/login');
 
-  if (!user) {
-    redirect('/login');
-  }
-
-  const clientId = user.user_metadata?.client_id;
+  const clientId = session.clientId;
   if (!clientId) {
     return (
       <div className="py-12 text-center text-sm font-semibold text-slate-400">
@@ -21,20 +18,18 @@ export default async function ApplyPage() {
     );
   }
 
-  // Fetch authorized chemicals for this client
-  const { data: mappings } = await supabase
-    .from('client_chemicals')
-    .select('chemical_id, chemicals (*)')
-    .eq('client_id', clientId);
+  const adminSupabase = createAdminClient();
 
-  // Filter only active substances
+  // Fetch only authorized + active chemicals for this client
+  const { data: mappings } = await adminSupabase
+    .from('client_chemicals')
+    .select('chemical_id, available_quantity, validity_date, chemicals(*)')
+    .eq('client_id', clientId)
+    .eq('status', 'active');
+
   const authorizedSubstances = (mappings || [])
-    .map((m: any) => m.chemicals)
+    .map((m: any) => ({ ...m.chemicals, authorized_quantity: m.available_quantity }))
     .filter((chem: any) => chem && chem.status === 'active');
 
-  return (
-    <TccApplicationForm
-      authorizedSubstances={authorizedSubstances as any}
-    />
-  );
+  return <TccApplicationForm authorizedSubstances={authorizedSubstances as any} />;
 }

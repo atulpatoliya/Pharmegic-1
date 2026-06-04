@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { updateClientAction, deleteClientAction, checkClientActivationStatus, resendClientInviteAction } from '@/actions/clients';
+import { updateClientAction, deleteClientAction } from '@/actions/clients';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -13,6 +13,7 @@ import { Badge } from './ui/Badge';
 import { Dialog } from './ui/Dialog';
 import { toast } from '@/store/toast';
 import ClientWizard from './ClientWizard';
+
 import {
   Search,
   Filter,
@@ -98,9 +99,8 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   });
   const [editChemicalIds, setEditChemicalIds] = useState<string[]>([]);
   const [loadingEditData, setLoadingEditData] = useState(false);
-  const [showResendInvite, setShowResendInvite] = useState(false);
-  const [isResendingInvite, setIsResendingInvite] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
 
   // Update local clients when initialClients change
   useEffect(() => {
@@ -141,11 +141,10 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
       postal_code: client.postal_code || '',
       status: client.status,
     });
-    setShowResendInvite(false); // Reset
     setIsEditOpen(true);
     setLoadingEditData(true);
-
     try {
+
       // 1. Fetch authorized chemicals
       const { data, error } = await supabase
         .from('client_chemicals')
@@ -154,12 +153,6 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
 
       if (error) throw error;
       setEditChemicalIds(data.map((item) => item.chemical_id));
-
-      // 2. Check auth/activation status
-      const statusRes = await checkClientActivationStatus(client.email);
-      if (statusRes.success && statusRes.needsActivation) {
-        setShowResendInvite(true);
-      }
     } catch (err: any) {
       toast.error('Failed to load edit data: ' + err.message);
     } finally {
@@ -167,29 +160,6 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
     }
   };
 
-  const handleResendInvite = async () => {
-    if (!selectedClient) return;
-    setIsResendingInvite(true);
-    try {
-      const res = await resendClientInviteAction(selectedClient.email);
-      if (res.success) {
-        if (res.inviteLink) {
-          toast.success(`${res.message} Invite Link: ${res.inviteLink}`, 10000);
-        } else {
-          toast.success(res.message || 'Invitation email successfully resent.');
-        }
-        if (res.inviteLink) {
-          console.log('[DEBUG DEVELOPER INVITATION LINK]:', res.inviteLink);
-        }
-      } else {
-        toast.error(res.error || 'Failed to resend invitation.');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'An error occurred.');
-    } finally {
-      setIsResendingInvite(false);
-    }
-  };
 
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,18 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
+import { getSession } from '@/lib/auth/session';
+import { createAdminClient } from '@/lib/supabase/admin';
 import CertificatesList from '@/components/CertificatesList';
 import { redirect } from 'next/navigation';
 
-export const revalidate = 0; // Live compliance records refresh
+export const revalidate = 0;
 
 export default async function CertificatesPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSession();
+  if (!session || session.role !== 'CLIENT') redirect('/login');
 
-  if (!user) {
-    redirect('/login');
-  }
-
-  const clientId = user.user_metadata?.client_id;
+  const clientId = session.clientId;
   if (!clientId) {
     return (
       <div className="py-12 text-center text-sm font-semibold text-slate-400">
@@ -21,16 +18,12 @@ export default async function CertificatesPage() {
     );
   }
 
-  // Fetch certificates for the logged-in client
-  const { data: certificates } = await supabase
+  const adminSupabase = createAdminClient();
+  const { data: certificates } = await adminSupabase
     .from('certificates')
-    .select('*, tcc_applications:tcc_applications!certificates_tcc_application_id_fkey (quantity_mt, chemicals (chemical_name, cas_number))')
+    .select('*, tcc_applications(quantity_mt, chemicals(chemical_name, cas_number))')
     .eq('client_id', clientId)
     .order('issued_at', { ascending: false });
 
-  return (
-    <CertificatesList
-      initialCertificates={(certificates || []) as any}
-    />
-  );
+  return <CertificatesList initialCertificates={(certificates || []) as any} />;
 }

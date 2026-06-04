@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { updateClientAction, checkClientActivationStatus, resendClientInviteAction } from '@/actions/clients';
+import { updateClientAction } from '@/actions/clients';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { toast } from '@/store/toast';
 import { Briefcase, AlertCircle } from 'lucide-react';
+
 
 interface ChemicalOption {
   id: string;
@@ -66,47 +67,8 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
   });
 
   const [editChemicalIds, setEditChemicalIds] = useState<string[]>(initialChemicalIds);
-  const [showResendInvite, setShowResendInvite] = useState(false);
-  const [isResendingInvite, setIsResendingInvite] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function checkStatus() {
-      try {
-        const statusRes = await checkClientActivationStatus(client.email);
-        if (statusRes.success && statusRes.needsActivation) {
-          setShowResendInvite(true);
-        }
-      } catch (e) {
-        console.error('Failed to check activation status', e);
-      }
-    }
-    checkStatus();
-  }, [client.email]);
-
-  const handleResendInvite = async () => {
-    setIsResendingInvite(true);
-    try {
-      const res = await resendClientInviteAction(client.email);
-      if (res.success) {
-        if (res.inviteLink) {
-          toast.success(`${res.message} Invite Link: ${res.inviteLink}`, 10000);
-        } else {
-          toast.success(res.message || 'Invitation email successfully resent.');
-        }
-        if (res.inviteLink) {
-          console.log('[DEBUG DEVELOPER INVITATION LINK]:', res.inviteLink);
-        }
-      } else {
-        toast.error(res.error || 'Failed to resend invitation.');
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(message || 'An error occurred.');
-    } finally {
-      setIsResendingInvite(false);
-    }
-  };
 
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,36 +223,20 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-6 border-t border-slate-100 w-full">
-        <div>
-          {showResendInvite && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleResendInvite}
-              isLoading={isResendingInvite}
-              disabled={isPending || isResendingInvite}
-              className="text-amber-600 border-amber-200 hover:bg-amber-50 cursor-pointer"
-            >
-              Resend Password Generation Mail
-            </Button>
-          )}
-        </div>
-        <div className="flex gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push('/admin/clients')}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" isLoading={isPending} disabled={isPending}>
-            Save Client Profile
-          </Button>
-        </div>
+      <div className="flex justify-end items-center gap-3 pt-6 border-t border-slate-100 w-full">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push('/admin/clients')}
+          disabled={isPending}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" isLoading={isPending} disabled={isPending}>
+          Save Client Profile
+        </Button>
       </div>
+
     </form>
   );
 }

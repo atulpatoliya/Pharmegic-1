@@ -4,8 +4,7 @@ import { login } from '@/actions/auth';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { toast } from '@/store/toast';
-import { Shield } from 'lucide-react';
-import Link from 'next/link';
+import { Shield, Lock, Mail } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -40,14 +39,11 @@ export default function LoginForm() {
         toast.error(res.error || 'Login failed.');
       } else {
         toast.success('Successfully logged in!');
-        
-        // Refresh router state to update middleware cookies
         router.refresh();
 
-        // Redirect based on role
         if (redirectTo) {
           router.push(redirectTo);
-        } else if (res.role === 'MASTER_ADMIN' || res.role === 'STAFF') {
+        } else if (res.role === 'MASTER_ADMIN' || res.role === 'SUPER_ADMIN') {
           router.push('/admin');
         } else {
           router.push('/client');
@@ -57,50 +53,50 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8">
+    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8" suppressHydrationWarning>
+
       {/* Brand Header */}
       <div className="flex flex-col items-center mb-8">
-        <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center text-white mb-3 shadow-md">
-          <Shield className="h-6 w-6 text-accent" />
+        <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center text-white mb-4 shadow-lg">
+          <Shield className="h-7 w-7" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Pharmegic Portal</h2>
-        <p className="text-sm text-slate-500 text-center mt-1">
-          Compliance and Tonnage Compliance Certificate Registry
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Pharmegic Portal</h1>
+        <p className="text-sm text-slate-500 text-center mt-1.5 font-medium">
+          Compliance &amp; TCC Certificate Management System
         </p>
       </div>
 
       {errorMsg && (
-        <div className="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-100 text-xs font-semibold text-rose-600">
+        <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-100 text-xs font-semibold text-rose-600 flex items-start gap-2">
+          <span className="text-rose-400 mt-0.5">⚠</span>
           {errorMsg}
         </div>
       )}
 
-      {/* Login Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
-        <Input
-          type="email"
-          label="Corporate Email"
-          placeholder="officer@company.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={isPending}
-          required
-        />
+        <div className="w-full flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <Mail className="h-3.5 w-3.5 text-slate-400" /> Corporate Email
+          </label>
+          <input
+            type="email"
+            id="login-email"
+            placeholder="officer@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={isPending}
+            required
+            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+          />
+        </div>
 
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-              Secure Password
-            </span>
-            <Link
-              href="/forgot-password"
-              className="text-xs font-semibold text-accent hover:text-accent-hover transition-colors"
-            >
-              Forgot?
-            </Link>
-          </div>
+        <div className="w-full flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <Lock className="h-3.5 w-3.5 text-slate-400" /> Password
+          </label>
           <input
             type="password"
+            id="login-password"
             placeholder="••••••••"
             className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
             value={password}
@@ -110,16 +106,18 @@ export default function LoginForm() {
           />
         </div>
 
-        <Button type="submit" className="w-full" isLoading={isPending}>
+        <Button type="submit" id="login-submit" className="w-full h-11 text-sm font-bold" isLoading={isPending}>
           Authenticate Session
         </Button>
       </form>
 
-      {/* Info Panel */}
-      <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-        <span className="text-xs text-slate-400 font-medium">
-          Protected Compliance System
-        </span>
+      <div className="mt-8 pt-6 border-t border-slate-100 text-center space-y-1">
+        <p className="text-xs text-slate-400 font-medium">
+          🔒 Secure Pharmaceutical Compliance System
+        </p>
+        <p className="text-[10px] text-slate-300 font-medium">
+          Password recovery must be done by an administrator.
+        </p>
       </div>
     </div>
   );

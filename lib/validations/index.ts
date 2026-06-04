@@ -1,26 +1,16 @@
 import { z } from 'zod';
 
-// AUTHENTICATION SCHEMAS
+// ============================================================================
+// AUTHENTICATION
+// ============================================================================
 export const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
 });
 
-export const forgotPasswordSchema = z.object({
-  email: z.string().email({ message: 'Invalid email address' }),
-});
-
-export const resetPasswordSchema = z
-  .object({
-    password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
-    confirmPassword: z.string().min(6, { message: 'Password confirmation must be at least 6 characters' }),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
-  });
-
+// ============================================================================
 // CHEMICAL SCHEMAS
+// ============================================================================
 export const chemicalSchema = z.object({
   chemical_name: z.string().min(2, { message: 'Chemical name is required' }),
   cas_number: z.string().regex(/^\d{2,7}-\d{2}-\d$/, { message: 'Invalid CAS number format (e.g. 110-80-5)' }),
@@ -31,22 +21,24 @@ export const chemicalSchema = z.object({
   status: z.enum(['active', 'inactive']).default('active'),
 });
 
+// ============================================================================
 // CLIENT SCHEMAS
+// ============================================================================
 export const contactSchema = z.object({
-  first_name: z.string().min(2, { message: 'Contact first name is required' }),
-  last_name: z.string().min(2, { message: 'Contact last name is required' }),
+  first_name: z.string().min(1, { message: 'First name is required' }),
+  last_name: z.string().min(1, { message: 'Last name is required' }),
   email: z.string().email({ message: 'Invalid email' }),
   phone: z.string().optional().or(z.literal('')),
   role: z.string().optional().or(z.literal('')),
 });
 
-export const clientStep1Schema = z.object({
+export const clientProfileSchema = z.object({
   company_name: z.string().min(2, { message: 'Company name is required' }),
   legal_name: z.string().optional().or(z.literal('')),
   registration_number: z.string().min(2, { message: 'Registration number is required' }),
   uuid_number: z.string().optional().or(z.literal('')),
-  primary_contact_first_name: z.string().min(2, { message: 'Primary contact first name is required' }),
-  primary_contact_last_name: z.string().min(2, { message: 'Primary contact last name is required' }),
+  primary_contact_first_name: z.string().min(1, { message: 'First name is required' }),
+  primary_contact_last_name: z.string().min(1, { message: 'Last name is required' }),
   email: z.string().email({ message: 'Invalid primary contact email' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
   owner_name: z.string().optional().or(z.literal('')),
@@ -62,15 +54,57 @@ export const clientStep1Schema = z.object({
 });
 
 export const clientWizardSchema = z.object({
-  profile: clientStep1Schema,
+  profile: clientProfileSchema,
   contacts: z.array(contactSchema).default([]),
-  authorizedChemicalIds: z.array(z.string()).default([]), // Authorized chemicals for this client
 });
 
-// TCC APPLICATION SCHEMA
+// ============================================================================
+// ASSIGN CHEMICAL TO CLIENT
+// ============================================================================
+export const assignChemicalSchema = z.object({
+  chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
+  available_quantity: z.coerce.number().min(0.01, { message: 'Quantity must be greater than 0' }),
+  validity_date: z.string().min(1, { message: 'Validity date is required' }),
+  status: z.enum(['active', 'expired', 'suspended']).default('active'),
+});
+
+// ============================================================================
+// INTERNAL NOTE
+// ============================================================================
+export const internalNoteSchema = z.object({
+  note: z.string().min(1, { message: 'Note cannot be empty' }).max(2000),
+});
+
+// ============================================================================
+// TCC APPLICATION
+// ============================================================================
 export const tccApplicationSchema = z.object({
   chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
   quantity_mt: z.coerce.number().positive({ message: 'Quantity must be greater than 0' }),
   kkdik_reg_no: z.string().min(1, { message: 'KKDIK registration number is required' }),
   export_date: z.string().min(1, { message: 'Expected export date is required' }),
+  remarks: z.string().optional().or(z.literal('')),
+});
+
+// ============================================================================
+// SMTP SETTINGS
+// ============================================================================
+export const smtpSettingsSchema = z.object({
+  smtp_host: z.string().min(1, { message: 'SMTP host is required' }),
+  smtp_port: z.coerce.number().min(1).max(65535),
+  smtp_user: z.string().min(1, { message: 'SMTP username is required' }),
+  smtp_pass: z.string().min(1, { message: 'SMTP password is required' }),
+  smtp_from: z.string().email({ message: 'Invalid From email' }),
+  smtp_cc_default: z.string().optional().or(z.literal('')),
+});
+
+// ============================================================================
+// CHANGE CLIENT CREDENTIALS (admin only)
+// ============================================================================
+export const changePasswordSchema = z.object({
+  new_password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+});
+
+export const changeEmailSchema = z.object({
+  new_email: z.string().email({ message: 'Invalid email address' }),
 });

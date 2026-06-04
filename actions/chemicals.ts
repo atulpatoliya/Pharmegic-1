@@ -1,11 +1,20 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
-import { createChemical, updateChemical, deleteChemical } from '@/services/db';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getSession } from '@/lib/auth/session';
 import { chemicalSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
-export async function createChemicalAction(prevState: any, formData: FormData) {
+async function requireAdmin() {
+  const session = await getSession();
+  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) return null;
+  return session;
+}
+
+export async function createChemicalAction(prevState: unknown, formData: FormData) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
   const data = {
     chemical_name: formData.get('chemical_name') as string,
     cas_number: formData.get('cas_number') as string,
@@ -17,71 +26,57 @@ export async function createChemicalAction(prevState: any, formData: FormData) {
   };
 
   const parsed = chemicalSchema.safeParse(data);
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0].message,
-    };
-  }
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
 
-  const supabase = await createClient();
-
-  // Role authorization check
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || (user.user_metadata?.role !== 'MASTER_ADMIN' && user.user_metadata?.role !== 'STAFF')) {
-    return { success: false, error: 'Unauthorized.' };
-  }
-
+  const adminSupabase = createAdminClient();
   try {
-    await createChemical(supabase, parsed.data);
+    const { error } = await adminSupabase.from('chemicals').insert({
+      ...parsed.data,
+      exported_quantity: 0,
+    });
+    if (error) throw error;
     revalidatePath('/admin/chemicals');
     return { success: true, message: 'Chemical added successfully.' };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const e = err as { code?: string; message?: string };
     return {
       success: false,
-      error: err.code === '23505' ? 'A chemical with this CAS number already exists.' : err.message || 'Failed to create chemical substance.',
+      error: e.code === '23505' ? 'A chemical with this CAS number already exists.' : e.message || 'Failed to create chemical.',
     };
   }
 }
 
-export async function updateChemicalAction(id: string, data: any) {
+export async function updateChemicalAction(id: string, data: unknown) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
   const parsed = chemicalSchema.partial().safeParse(data);
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0].message,
-    };
-  }
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
 
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || (user.user_metadata?.role !== 'MASTER_ADMIN' && user.user_metadata?.role !== 'STAFF')) {
-    return { success: false, error: 'Unauthorized.' };
-  }
-
+  const adminSupabase = createAdminClient();
   try {
-    await updateChemical(supabase, id, parsed.data);
+    const { error } = await adminSupabase.from('chemicals').update(parsed.data).eq('id', id);
+    if (error) throw error;
     revalidatePath('/admin/chemicals');
     return { success: true, message: 'Chemical updated successfully.' };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to update chemical.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
   }
 }
 
 export async function deleteChemicalAction(id: string) {
-  const supabase = await createClient();
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== 'MASTER_ADMIN') {
-    return { success: false, error: 'Unauthorized. Admins only.' };
-  }
-
+  const adminSupabase = createAdminClient();
   try {
-    await deleteChemical(supabase, id);
+    const { error } = await adminSupabase.from('chemicals').delete().eq('id', id);
+    if (error) throw error;
     revalidatePath('/admin/chemicals');
     return { success: true, message: 'Chemical deleted successfully.' };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to delete chemical.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
   }
 }

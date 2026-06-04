@@ -67,7 +67,7 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
   // Dialog state
   const [isActionOpen, setIsActionOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
-  const [actionType, setActionType] = useState<'approved' | 'rejected' | 'modification_requested'>('approved');
+  const [actionType, setActionType] = useState<'approved' | 'rejected' | 'changes_required'>('approved');
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -88,7 +88,7 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
     return matchesSearch && matchesStatus;
   });
 
-  const handleOpenAction = (app: Application, type: 'approved' | 'rejected' | 'modification_requested') => {
+  const handleOpenAction = (app: Application, type: 'approved' | 'rejected' | 'changes_required') => {
     setSelectedApp(app);
     setActionType(type);
     setRejectionReason('');
@@ -109,9 +109,15 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
     startTransition(async () => {
       const res = await processTccAction(selectedApp.id, actionType, rejectionReason);
       if (res.success) {
-        toast.success(res.message || `Application successfully processed.`);
         setIsActionOpen(false);
-        router.refresh();
+        if (actionType === 'approved' && res.certificateId) {
+          // Redirect to certificate preview page — no auto-email
+          toast.success('Certificate generated! Redirecting to preview...');
+          router.push(`/admin/certificate-preview/${res.certificateId}`);
+        } else {
+          toast.success(res.message || 'Application processed.');
+          router.refresh();
+        }
       } else {
         setActionError(res.error || 'Failed to process application action.');
         toast.error(res.error || 'Failed to process application action.');
@@ -168,7 +174,7 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
               { id: 'all', label: 'All Permits' },
               { id: 'pending', label: 'Awaiting Action' },
               { id: 'approved', label: 'Issued / Approved' },
-              { id: 'modification_requested', label: 'Revisions Requested' },
+              { id: 'changes_required', label: 'Changes Required' },
               { id: 'rejected', label: 'Rejected' },
             ].map((tab) => (
               <button
@@ -287,10 +293,10 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleOpenAction(app, 'modification_requested')}
+                            onClick={() => handleOpenAction(app, 'changes_required')}
                             className="text-amber-700 border-amber-200 hover:bg-amber-50 h-8"
                           >
-                            Revise
+                            Changes
                           </Button>
                           <Button
                             size="sm"

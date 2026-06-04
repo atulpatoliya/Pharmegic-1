@@ -387,11 +387,12 @@ export async function getClientDashboardStats(supabase: SupabaseClient, clientId
   const userProfile = userProfileRes.data;
 
   const totalExported = (approvedApps || []).reduce((sum, app) => sum + Number(app.quantity_mt), 0);
-  const authorizedSubstances = (mappings || []).map((m: { chemicals: Record<string, unknown> }) => m.chemicals);
-  const remainingQuota = authorizedSubstances.reduce((sum: number, chem: Record<string, unknown>) => {
-    const available = typeof chem.available_quantity === 'number' ? chem.available_quantity : 0;
+  const authorizedSubstances = (mappings || []).map((m: any) => m.chemicals);
+  const remainingQuota = authorizedSubstances.reduce((sum: number, chem: any) => {
+    const available = chem && typeof chem.available_quantity === 'number' ? chem.available_quantity : 0;
     return sum + Number(available || 0);
   }, 0);
+
 
   let notifications: Record<string, unknown>[] = [];
   if (userProfile && userProfile.length > 0) {
