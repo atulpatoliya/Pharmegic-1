@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveTemplate } from '@/services/db';
 import BrandingDashboard from '@/components/BrandingDashboard';
 import { redirect } from 'next/navigation';
@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 export const revalidate = 0; // Live templates reload
 
 export default async function BrandingPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const template = await getActiveTemplate(supabase);
 
   if (!template) {

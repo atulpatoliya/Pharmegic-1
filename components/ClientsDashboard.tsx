@@ -107,6 +107,25 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
     setClients(initialClients);
   }, [initialClients]);
 
+  // ── Realtime subscription: auto-refresh when clients table changes ──
+  useEffect(() => {
+    const channel = supabase
+      .channel('clients-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clients' },
+        () => {
+          // Re-fetch data from the server when any change occurs
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, router]);
+
   // Handle Search and Filter
   const filteredClients = clients.filter((c) => {
     const matchesSearch =

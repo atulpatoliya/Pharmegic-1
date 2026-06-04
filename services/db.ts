@@ -120,7 +120,6 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
       uuid_number: input.profile.uuid_number || null,
       primary_contact_first_name: input.profile.primary_contact_first_name,
       primary_contact_last_name: input.profile.primary_contact_last_name,
-      contact_person: `${input.profile.primary_contact_first_name} ${input.profile.primary_contact_last_name}`,
       email: input.profile.email,
       owner_name: input.profile.owner_name || 'Company Representative',
       phone: input.profile.phone || null,
@@ -142,7 +141,8 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
   if (input.contacts.length > 0) {
     const contactsData = input.contacts.map((c) => ({
       client_id: client.id,
-      person_name: `${c.first_name} ${c.last_name}`,
+      first_name: c.first_name,
+      last_name: c.last_name,
       email: c.email,
       phone: c.phone || null,
       role: c.role || null,

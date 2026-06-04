@@ -1,11 +1,11 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getChemicals } from '@/services/db';
 import WizardPageClient from './WizardPageClient';
 
 export const revalidate = 0;
 
 export default async function NewClientPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const chemicals = await getChemicals(supabase, '', 'active');
 
   return (

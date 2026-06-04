@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getChemicals } from '@/services/db';
 import { redirect } from 'next/navigation';
 import EditClientClient from './EditClientClient';
@@ -7,7 +7,7 @@ export const revalidate = 0;
 
 export default async function EditClientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // 1. Fetch client
   const { data: client, error: clientError } = await supabase

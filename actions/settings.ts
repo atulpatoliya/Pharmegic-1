@@ -61,8 +61,7 @@ export async function updateAdminProfileSettingsAction(profileData: {
   try {
     const { error } = await adminSupabase
       .from('admin_settings')
-      .update({ ...profileData, updated_at: new Date().toISOString() })
-      .eq('id', 1);
+      .upsert({ id: 1, ...profileData, updated_at: new Date().toISOString() }, { onConflict: 'id' });
 
     if (error) throw error;
     revalidatePath('/admin/settings');
@@ -91,8 +90,7 @@ export async function updateSmtpSettingsAction(smtpData: {
   try {
     const { error } = await adminSupabase
       .from('admin_settings')
-      .update({ ...smtpData, updated_at: new Date().toISOString() })
-      .eq('id', 1);
+      .upsert({ id: 1, ...smtpData, updated_at: new Date().toISOString() }, { onConflict: 'id' });
 
     if (error) throw error;
     revalidatePath('/admin/settings');

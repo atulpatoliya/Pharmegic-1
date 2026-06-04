@@ -400,10 +400,10 @@ VALUES
 ON CONFLICT (cas_number) DO NOTHING;
 
 -- Seed initial administration credentials
--- Password hash corresponds to 'Admin @1234' with 12 bcrypt salt rounds
+-- Password hash corresponds to 'Admin@1234' with 12 bcrypt salt rounds
 INSERT INTO public.users (email, password_hash, role, is_disabled)
 VALUES 
-('atul.patoliya@gmail.com', '$2b$12$t1dsDSj.Jqd6iisDcJFxyOpNXhfCyhmhZFOau0/c4WIp5CorQxvrq', 'SUPER_ADMIN', false),
-('directoratulpatoliya@gmail.com', '$2b$12$t1dsDSj.Jqd6iisDcJFxyOpNXhfCyhmhZFOau0/c4WIp5CorQxvrq', 'MASTER_ADMIN', false)
+('atul.patoliya@gmail.com', '$2b$12$nFbwz4f2OVFV.oISYd028emI1rdc58Zoi5BxRnfXtbaKFa9D3u9pm', 'SUPER_ADMIN', false),
+('directoratulpatoliya@gmail.com', '$2b$12$oe./N.URUVDKV90AQARTieIOl0MmvZ68jX9skCUtEtTK6ppWHnxOq', 'MASTER_ADMIN', false)
 ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 

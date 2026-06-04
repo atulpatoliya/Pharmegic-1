@@ -360,7 +360,71 @@ export async function assignChemicalToClientAction(clientId: string, data: unkno
     });
 
     revalidatePath(`/admin/clients/${clientId}`);
-    return { success: true, message: 'Chemical assigned successfully.' };
+    return { success: true, message: 'Substance assigned successfully.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// ADD NEW CHEMICAL AND ASSIGN TO CLIENT
+// ============================================================================
+export async function addNewChemicalToClientAction(clientId: string, data: any) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  if (!data.chemical_name) return { success: false, error: 'Chemical name is required.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    // 1. Insert new chemical into master table
+    const { data: newChem, error: chemErr } = await adminSupabase
+      .from('chemicals')
+      .insert({
+        chemical_name: data.chemical_name,
+        cas_number: data.cas_number || null,
+        ec_number: data.ec_number || null,
+        tonnage_band: data.tonnage_band || null,
+        status: 'active'
+      })
+      .select('id')
+      .single();
+
+    if (chemErr) throw chemErr;
+
+    // Calculate quota based on tonnage band
+    let calcQuota = 0;
+    if (data.tonnage_band === '1-10 tonnes') calcQuota = 10;
+    else if (data.tonnage_band === '10-100 tonnes') calcQuota = 100;
+    else if (data.tonnage_band === '100-1000 tonnes') calcQuota = 1000;
+    else if (data.tonnage_band === '1000+ tonnes') calcQuota = 2000;
+
+    // 2. Assign to client
+    const { error: assignErr } = await adminSupabase
+      .from('client_chemicals')
+      .insert({
+        client_id: clientId,
+        chemical_id: newChem.id,
+        available_quantity: calcQuota,
+        validity_date: data.validity_date || null,
+        status: 'active',
+        assigned_by: session.userId,
+      });
+
+    if (assignErr) throw assignErr;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CHEMICAL_ASSIGNED',
+      entity_type: 'client_chemicals',
+      entity_id: newChem.id,
+      description: `Added and assigned new substance: ${data.chemical_name}`,
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'New substance added and assigned.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };
@@ -378,13 +442,66 @@ export async function removeChemicalFromClientAction(clientId: string, chemicalI
   try {
     const { error } = await adminSupabase
       .from('client_chemicals')
-      .delete()
+      .update({ status: 'trashed' })
       .eq('client_id', clientId)
       .eq('chemical_id', chemicalId);
 
     if (error) throw error;
+    
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CHEMICAL_TRASHED',
+      entity_type: 'client_chemicals',
+      entity_id: chemicalId,
+      description: `Moved substance to trash`,
+    });
+
     revalidatePath(`/admin/clients/${clientId}`);
-    return { success: true, message: 'Chemical removed.' };
+    return { success: true, message: 'Substance moved to trash.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// EDIT CLIENT CHEMICAL
+// ============================================================================
+export async function editClientChemicalAction(clientId: string, chemicalId: string, data: any) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    let calcQuota = 0;
+    if (data.tonnage_band === '1-10 tonnes') calcQuota = 10;
+    else if (data.tonnage_band === '10-100 tonnes') calcQuota = 100;
+    else if (data.tonnage_band === '100-1000 tonnes') calcQuota = 1000;
+    else if (data.tonnage_band === '1000+ tonnes') calcQuota = 2000;
+
+    const { error } = await adminSupabase
+      .from('client_chemicals')
+      .update({
+        available_quantity: calcQuota,
+        validity_date: data.validity_date || null,
+      })
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId);
+
+    if (error) throw error;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CHEMICAL_EDITED',
+      entity_type: 'client_chemicals',
+      entity_id: chemicalId,
+      description: `Edited substance allocation limits`,
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Substance allocation updated.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

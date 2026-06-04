@@ -11,7 +11,7 @@ function getSecret(): Uint8Array {
 const ADMIN_ROLES = ['SUPER_ADMIN', 'MASTER_ADMIN'];
 const CLIENT_ROLE = 'CLIENT';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes — always accessible

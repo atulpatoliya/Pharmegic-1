@@ -1,11 +1,11 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getTccApplications } from '@/services/db';
 import ApprovalsDashboard from '@/components/ApprovalsDashboard';
 
 export const revalidate = 0; // Live updates for admin approvals
 
 export default async function ApprovalsPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // Fetch all applications
   const applications = await getTccApplications(supabase, 'all');

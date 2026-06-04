@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveTemplate } from '@/services/db';
 import { getAdminSettingsAction } from '@/actions/settings';
 import SettingsDashboard from '@/components/SettingsDashboard';
@@ -6,7 +6,7 @@ import SettingsDashboard from '@/components/SettingsDashboard';
 export const revalidate = 0; // Live settings refresh
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // Fetch active template
   const template = await getActiveTemplate(supabase);
