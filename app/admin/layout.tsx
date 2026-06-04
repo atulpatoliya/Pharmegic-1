@@ -15,13 +15,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect('/api/auth/clear?error=Unauthorized');
   }
 
-  // Count unread notifications (admin-level — by user id)
   const adminSupabase = createAdminClient();
-  const { count: notificationCount } = await adminSupabase
-    .from('notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', session.userId)
-    .eq('read', false);
+  const [{ count: notificationCount }, { data: notifications }] = await Promise.all([
+    adminSupabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', session.userId)
+      .eq('read', false),
+    adminSupabase
+      .from('notifications')
+      .select('id, title, message, read, created_at')
+      .eq('user_id', session.userId)
+      .order('created_at', { ascending: false })
+      .limit(40),
+  ]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50" suppressHydrationWarning>
@@ -31,6 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           userEmail={session.email}
           role={session.role}
           notificationCount={notificationCount || 0}
+          notifications={(notifications || []) as any}
         />
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
           {children}

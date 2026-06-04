@@ -2,7 +2,9 @@
 
 import { useLayoutStore } from '@/store/layout';
 import { logout } from '@/actions/auth';
-import { Menu, LogOut, User, Bell } from 'lucide-react';
+import { Menu, LogOut, User } from 'lucide-react';
+import NotificationBell from './NotificationBell';
+import type { NotificationRow } from '@/lib/notifications';
 import { useRouter } from 'next/navigation';
 import { Badge } from './ui/Badge';
 import Breadcrumbs from './Breadcrumbs';
@@ -11,9 +13,15 @@ interface TopNavbarProps {
   userEmail: string;
   role: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT';
   notificationCount?: number;
+  notifications?: NotificationRow[];
 }
 
-export default function TopNavbar({ userEmail, role, notificationCount = 0 }: TopNavbarProps) {
+export default function TopNavbar({
+  userEmail,
+  role,
+  notificationCount = 0,
+  notifications = [],
+}: TopNavbarProps) {
   const { toggleSidebar } = useLayoutStore();
   const router = useRouter();
 
@@ -53,15 +61,10 @@ export default function TopNavbar({ userEmail, role, notificationCount = 0 }: To
 
       {/* Right section: Profile & Actions */}
       <div className="flex items-center gap-6">
-        {/* Notifications Icon */}
-        <button className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors cursor-pointer">
-          <Bell className="h-5 w-5" />
-          {notificationCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-white">
-              {notificationCount}
-            </span>
-          )}
-        </button>
+        <NotificationBell
+          initialNotifications={notifications}
+          unreadCount={notificationCount}
+        />
 
         {/* User Card */}
         <div className="flex items-center gap-3 border-l border-slate-100 pl-6">

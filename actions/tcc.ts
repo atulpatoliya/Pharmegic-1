@@ -8,6 +8,7 @@ import { tccApplicationSchema } from '@/lib/validations';
 import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
+import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
 
 // ============================================================================
 // APPLY FOR TCC (Client Action)
@@ -59,11 +60,14 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       };
     }
 
-    const { data: chemical } = await adminSupabase
-      .from('chemicals')
-      .select('chemical_name')
-      .eq('id', result.data.chemical_id)
-      .single();
+    const [{ data: chemical }, { data: client }] = await Promise.all([
+      adminSupabase
+        .from('chemicals')
+        .select('chemical_name')
+        .eq('id', result.data.chemical_id)
+        .single(),
+      adminSupabase.from('clients').select('company_name').eq('id', clientId).single(),
+    ]);
 
     if (!chemical) return { success: false, error: 'Chemical not found.' };
 
@@ -110,7 +114,16 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       metadata: { quantity: result.data.quantity_mt, chemical: chemical.chemical_name },
     });
 
+    // 5. Notify admins of new pending application
+    const companyLabel = client?.company_name || 'A client';
+    await notifyAllAdmins(
+      adminSupabase,
+      'New TCC application',
+      `${companyLabel} submitted ${result.data.quantity_mt} MT for ${chemical.chemical_name}. Review in Approvals.`
+    );
+
     revalidatePath('/client');
+    revalidatePath('/admin', 'layout');
     return { success: true, message: 'TCC Application submitted. Status: Pending Review.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -279,16 +292,17 @@ export async function processTccAction(
         .eq('client_id', app.client_id)
         .maybeSingle();
       if (clientUser) {
-        await adminSupabase.from('notifications').insert({
-          user_id: clientUser.id,
-          title: 'TCC Certificate Issued',
-          message: `Your certificate ${certNumber} has been issued for ${app.chemicals.chemical_name}.`,
-          read: false,
-        });
+        await notifyUser(
+          adminSupabase,
+          clientUser.id,
+          'TCC Certificate Issued',
+          `Your certificate ${certNumber} has been issued for ${app.chemicals.chemical_name}.`
+        );
       }
 
       revalidatePath('/admin/approvals');
-      revalidatePath('/admin');
+      revalidatePath('/admin', 'layout');
+      revalidatePath('/client', 'layout');
 
       // Return certificate ID so frontend can redirect to preview
       return { success: true, message: 'Application approved. Certificate generated.', certificateId: cert.id };
@@ -300,13 +314,15 @@ export async function processTccAction(
         .eq('client_id', app.client_id)
         .maybeSingle();
       if (clientUser) {
-        await adminSupabase.from('notifications').insert({
-          user_id: clientUser.id,
-          title: status === 'rejected' ? 'TCC Application Rejected' : 'TCC Changes Required',
-          message: rejectionReason || `Your TCC application for ${app.chemicals.chemical_name} requires attention.`,
-          read: false,
-        });
+        await notifyUser(
+          adminSupabase,
+          clientUser.id,
+          status === 'rejected' ? 'TCC Application Rejected' : 'TCC Changes Required',
+          rejectionReason || `Your TCC application for ${app.chemicals.chemical_name} requires attention.`
+        );
       }
+
+      revalidatePath('/client', 'layout');
 
       await adminSupabase.from('activity_logs').insert({
         client_id: app.client_id,
