@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 
 const MAX_BO_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -61,8 +62,10 @@ export async function uploadBoAttachment(
   const fileName = `bo/${clientId}/${applicationId}/${Date.now()}-${safeName}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  await ensureCertificatesBucket(supabase);
+
   const { error: uploadError } = await supabase.storage
-    .from('certificates')
+    .from(CERTIFICATES_BUCKET)
     .upload(fileName, buffer, {
       contentType: file.type || 'application/octet-stream',
       upsert: true,
@@ -72,6 +75,6 @@ export async function uploadBoAttachment(
     throw new Error(`BO upload failed: ${uploadError.message}`);
   }
 
-  const { data } = supabase.storage.from('certificates').getPublicUrl(fileName);
+  const { data } = supabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(fileName);
   return { url: data.publicUrl, name: file.name };
 }

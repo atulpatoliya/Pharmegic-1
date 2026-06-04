@@ -4,7 +4,8 @@ import { login } from '@/actions/auth';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { toast } from '@/store/toast';
-import { Shield, Lock, Mail } from 'lucide-react';
+import { Lock, Mail } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -63,11 +64,8 @@ export default function LoginForm() {
 
       {/* Brand Header */}
       <div className="flex flex-col items-center mb-8">
-        <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center text-white mb-4 shadow-lg">
-          <Shield className="h-7 w-7" />
-        </div>
-        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Pharmegic Portal</h1>
-        <p className="text-sm text-slate-500 text-center mt-1.5 font-medium">
+        <BrandLogo variant="full" href="/" className="mb-4" />
+        <p className="text-sm text-slate-500 text-center font-medium">
           Compliance &amp; TCC Certificate Management System
         </p>
       </div>

@@ -6,6 +6,7 @@ import { generateCertificatePdf } from '@/services/pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { tccApplicationSchema } from '@/lib/validations';
 import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
+import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================================
@@ -231,14 +232,15 @@ export async function processTccAction(
       });
 
       // 8. Upload PDF to Supabase Storage
+      await ensureCertificatesBucket(adminSupabase);
       const fileName = `${certNumber}.pdf`;
       const { error: uploadError } = await adminSupabase.storage
-        .from('certificates')
+        .from(CERTIFICATES_BUCKET)
         .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true });
 
       if (uploadError) throw new Error(`PDF upload failed: ${uploadError.message}`);
 
-      const { data: { publicUrl } } = adminSupabase.storage.from('certificates').getPublicUrl(fileName);
+      const { data: { publicUrl } } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(fileName);
 
       // 9. Register certificate in DB (NO email sent here)
       const { data: cert, error: certError } = await adminSupabase

@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Pharmegic Healthcare — Compliance Portal",
   description: "Enterprise pharmaceutical compliance and TCC certificate management portal.",
+  icons: {
+    icon: [{ url: "/favicon.png", type: "image/png" }],
+    apple: [{ url: "/favicon.png", type: "image/png" }],
+    shortcut: ["/favicon.png"],
+  },
 };
 
 export default function RootLayout({

@@ -22,11 +22,13 @@ This document describes the steps required to configure and run the Pharmegic He
    - The performance indexes and Row Level Security (RLS) policies.
    - The default branding template and initial chemical inventory for testing.
 
-### Configure Private Storage Bucket
-1. In the Supabase Dashboard, go to the **Storage** tab.
-2. Create a new bucket called **`certificates`**.
-3. Set the bucket to **Public** (or configure a custom policy allowing public read access, as certificates need to be downloadable by clients and verified by public custom officers through QR links).
-4. Update the bucket name in your environment file if necessary.
+### Configure Storage Bucket (required for BO uploads & PDF certificates)
+1. In the Supabase Dashboard, go to **Storage**.
+2. Create a bucket named exactly **`certificates`** (if it does not exist).
+3. Set the bucket to **Public** so clients and admins can open uploaded BO files and certificate PDFs.
+4. The app will also try to create this bucket automatically on first upload (needs service role key in `.env`).
+
+> If you see **"Bucket not found"** on TCC submit, the `certificates` storage bucket is missing — create it in Supabase Storage as above.
 
 ---
 

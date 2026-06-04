@@ -320,6 +320,25 @@ export default function ClientDashboardDetails({
     }
   };
 
+  const resolveChemical = (row: { chemicals?: { chemical_name?: string } | null }) =>
+    row.chemicals?.chemical_name || 'N/A';
+
+  const resolveCertificate = (row: { certificates?: { id?: string; certificate_number?: string; file_url?: string; issued_at?: string; status?: string } | null }) =>
+    row.certificates ?? null;
+
+  const tccStatusDisplay = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return { label: 'Approved', className: 'text-emerald-600', icon: CheckCircle };
+      case 'rejected':
+        return { label: 'Rejected', className: 'text-rose-600', icon: AlertCircle };
+      case 'changes_required':
+        return { label: 'Changes Required', className: 'text-amber-600', icon: AlertCircle };
+      default:
+        return { label: 'Pending Review', className: 'text-amber-600', icon: History };
+    }
+  };
+
   const handleExportCSV = () => {
     if (clientChemicals.length === 0) {
       setModalError('substances', 'No substance data to export.');
@@ -573,14 +592,22 @@ export default function ClientDashboardDetails({
         </div>
       )}
 
-      {/* 4. Issued Export Certificates Table */}
+      {/* 4. TCC Applications & Issued Certificates */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-8">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white">
-          <h2 className="font-bold text-slate-700 text-sm">Issued Export Certificates</h2>
-          {currentUserRole !== 'CLIENT' && (
+          <h2 className="font-bold text-slate-700 text-sm">
+            {currentUserRole === 'CLIENT' ? 'My TCC Applications & Certificates' : 'Issued Export Certificates'}
+          </h2>
+          {currentUserRole === 'CLIENT' ? (
+            <Link href="/client/apply">
+              <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800">
+                + Apply for TCC
+              </Button>
+            </Link>
+          ) : (
             <Link href="/admin/approvals">
               <Button size="sm" variant="outline" className="h-8 border-slate-300">
-                + Issue New
+                Review Applications
               </Button>
             </Link>
           )}
@@ -589,46 +616,90 @@ export default function ClientDashboardDetails({
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4">Certificate ID</th>
-                <th className="px-6 py-4">Document Type</th>
+                <th className="px-6 py-4">Reference</th>
                 <th className="px-6 py-4">Chemical Item</th>
-                <th className="px-6 py-4 text-right">Quantity Authorized</th>
-                <th className="px-6 py-4">Issue Date</th>
+                <th className="px-6 py-4 text-right">Quantity (MT)</th>
+                <th className="px-6 py-4">Submitted</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {certificates.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium">No certificates issued.</td></tr>
+              {tccHistory.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
+                    {currentUserRole === 'CLIENT'
+                      ? 'No TCC applications yet. Click "Apply for TCC" to submit your first request.'
+                      : 'No TCC applications for this client.'}
+                  </td>
+                </tr>
               ) : (
-                certificates.map((cert) => (
-                  <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-slate-800 tracking-wide text-xs">{cert.certificate_number}</td>
-                    <td className="px-6 py-4 text-slate-600 font-medium">Tonnage Coverage</td>
-                    <td className="px-6 py-4 text-slate-600 font-medium">{cert.tcc_applications?.chemicals?.chemical_name || 'N/A'}</td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-700">{Number(cert.tcc_applications?.quantity_mt || 0).toFixed(2)} MT</td>
-                    <td className="px-6 py-4 text-slate-600 font-medium" suppressHydrationWarning>{new Date(cert.issued_at).toLocaleDateString('en-GB')}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${cert.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}`}>
-                        {cert.status === 'active' ? <CheckCircle className="h-3.5 w-3.5" /> : <History className="h-3.5 w-3.5" />}
-                        {cert.status === 'active' ? 'Active' : 'Expired'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex justify-center gap-2">
-                        <Link href={currentUserRole === 'CLIENT' ? `/client/certificates` : `/admin/certificate-preview/${cert.id}`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50"><Eye className="h-4 w-4" /></Button>
-                        </Link>
-                        {cert.file_url && (
-                          <a href={cert.file_url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600"><Download className="h-4 w-4" /></Button>
-                          </a>
+                tccHistory.map((app) => {
+                  const cert = resolveCertificate(app);
+                  const statusInfo = tccStatusDisplay(app.status);
+                  const StatusIcon = statusInfo.icon;
+
+                  return (
+                    <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4 font-bold text-slate-800 tracking-wide text-xs">
+                        {app.tracking_id || app.id.slice(0, 8).toUpperCase()}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 font-medium">{resolveChemical(app)}</td>
+                      <td className="px-6 py-4 text-right font-medium text-slate-700">
+                        {Number(app.quantity_mt || 0).toFixed(2)} MT
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 font-medium" suppressHydrationWarning>
+                        {new Date(app.created_at).toLocaleDateString('en-GB')}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${statusInfo.className}`}>
+                          <StatusIcon className="h-3.5 w-3.5" />
+                          {statusInfo.label}
+                        </span>
+                        {app.status === 'rejected' && app.rejection_reason && (
+                          <p className="text-[10px] text-rose-500 mt-1 max-w-[200px]">{app.rejection_reason}</p>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex justify-center gap-2">
+                          {app.bo_attachment_url && (
+                            <a href={app.bo_attachment_url} target="_blank" rel="noopener noreferrer" title="View BO attachment">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          )}
+                          {cert?.id && app.status === 'approved' ? (
+                            <>
+                              <Link
+                                href={
+                                  currentUserRole === 'CLIENT'
+                                    ? '/client/certificates'
+                                    : `/admin/certificate-preview/${cert.id}`
+                                }
+                              >
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                              {cert.file_url && (
+                                <a href={cert.file_url} target="_blank" rel="noopener noreferrer" title="Download certificate PDF">
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </a>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium px-1">
+                              {app.status === 'pending' ? 'Awaiting review' : '—'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

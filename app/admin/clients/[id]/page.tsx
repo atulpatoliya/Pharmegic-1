@@ -54,11 +54,17 @@ export default async function ViewClientPage({ params }: { params: Promise<{ id:
     .order('created_at', { ascending: false });
 
   // 6. Fetch TCC Application history
-  const { data: tccHistory } = await adminSupabase
+  const { data: tccHistoryRaw } = await adminSupabase
     .from('tcc_applications')
     .select('*, chemicals(*), certificates(*)')
     .eq('client_id', id)
     .order('created_at', { ascending: false });
+
+  const tccHistory = (tccHistoryRaw || []).map((row: { chemicals?: unknown; certificates?: unknown }) => ({
+    ...row,
+    chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+    certificates: Array.isArray(row.certificates) ? row.certificates[0] ?? null : row.certificates,
+  }));
 
   // 7. Fetch Certificates
   const { data: certificates } = await adminSupabase

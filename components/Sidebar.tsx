@@ -15,6 +15,7 @@ import {
   Shield,
   Settings,
 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { useEffect } from 'react';
 
 interface SidebarProps {
@@ -73,13 +74,9 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     <div className="flex flex-col h-full bg-primary text-primary-foreground border-r border-primary/20">
       {/* Brand Header */}
       <div className="flex items-center justify-between p-6 border-b border-primary-hover">
-        <Link href="/" className="flex items-center gap-2">
-          <Shield className="h-6 w-6 text-accent shrink-0" />
-          <div className="flex flex-col">
-            <span className="font-bold text-sm uppercase tracking-wider">Pharmegic</span>
-            <span className="text-[10px] text-accent font-semibold tracking-widest">COMPLIANCE</span>
-          </div>
-        </Link>
+        <div className="rounded-lg bg-white px-2.5 py-1.5 shadow-xs">
+          <BrandLogo variant="sidebar" href="/" />
+        </div>
         <button
           onClick={() => setSidebarOpen(false)}
           className="md:hidden p-1 rounded-md text-primary-foreground/75 hover:text-white hover:bg-primary-hover"
