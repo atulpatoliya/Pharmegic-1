@@ -285,6 +285,13 @@ ALTER TABLE public.client_chemicals
     ADD CONSTRAINT client_chemicals_status_check
     CHECK (status IN ('active', 'expired', 'suspended', 'trashed'));
 
+-- Allow trashed status on global chemicals registry
+DO $$ BEGIN
+    ALTER TYPE public.chemical_status ADD VALUE 'trashed';
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================

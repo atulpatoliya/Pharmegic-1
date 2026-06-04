@@ -8,7 +8,9 @@ import {
   toggleClientLoginAction, 
   assignChemicalToClientAction, 
   addNewChemicalToClientAction,
-  removeChemicalFromClientAction, 
+  removeChemicalFromClientAction,
+  restoreClientChemicalAction,
+  permanentDeleteClientChemicalAction,
   editClientChemicalAction,
   addContactAction, 
   deleteContactAction, 
@@ -29,7 +31,7 @@ import {
   Building, Mail, Phone, MapPin, Calendar, CheckCircle, 
   AlertCircle, FileText, User, ShieldAlert, Key, Plus, Trash2,
   FileSignature, Award, Clipboard, StickyNote, History, Lock, Unlock,
-  Download, Ship, PieChart, TrendingUp, Filter, Eye, EyeOff, PenLine
+  Download, Ship, PieChart, TrendingUp, Filter, Eye, EyeOff, PenLine, RotateCcw
 } from 'lucide-react';
 import { useLayoutStore } from '@/store/layout';
 import dynamic from 'next/dynamic';
@@ -258,13 +260,44 @@ export default function ClientDashboardDetails({
   };
 
   const handleRemoveChemical = (chemId: string) => {
-    if (confirm('Move this substance to trash?')) {
+    if (confirm('Move this substance to trash? You can restore it from the Trash box below.')) {
       startTransition(async () => {
         const res = await removeChemicalFromClientAction(client.id, chemId);
         if (res.success) { toast.success('Substance moved to trash.'); router.refresh(); }
         else setModalError('substances', toErrorMessage(res.error, 'Failed to remove substance.'));
       });
     }
+  };
+
+  const handleRestoreClientChemical = (chemId: string) => {
+    startTransition(async () => {
+      const res = await restoreClientChemicalAction(client.id, chemId);
+      if (res.success) {
+        toast.success(res.message || 'Substance restored.');
+        router.refresh();
+      } else {
+        setModalError('substances', toErrorMessage(res.error, 'Failed to restore substance.'));
+      }
+    });
+  };
+
+  const handlePermanentDeleteClientChemical = (chemId: string, name: string) => {
+    if (
+      !confirm(
+        `Permanently delete "${name}" from this client? This removes the assignment forever and cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const res = await permanentDeleteClientChemicalAction(client.id, chemId);
+      if (res.success) {
+        toast.success(res.message || 'Substance permanently deleted.');
+        router.refresh();
+      } else {
+        setModalError('substances', toErrorMessage(res.error, 'Failed to permanently delete.'));
+      }
+    });
   };
   const handleAddContact = () => {
     if (!contactData.first_name.trim() || !contactData.last_name.trim() || !contactData.email.trim()) {
@@ -563,7 +596,7 @@ export default function ClientDashboardDetails({
               <Trash2 className="h-4 w-4 text-slate-500" />
               <h2 className="font-bold text-slate-600 text-sm">Deleted Inventory (Trash)</h2>
             </div>
-            <span className="text-xs text-slate-400">Data automatically deleted after 1 year</span>
+            <span className="text-xs text-slate-400">Restore to bring back · Delete permanently to remove forever</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -573,6 +606,7 @@ export default function ClientDashboardDetails({
                   <th className="px-6 py-3">CAS Number</th>
                   <th className="px-6 py-3">Deleted Date</th>
                   <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -583,6 +617,32 @@ export default function ClientDashboardDetails({
                     <td className="px-6 py-3 text-slate-400" suppressHydrationWarning>{new Date(cc.updated_at).toLocaleDateString('en-GB')}</td>
                     <td className="px-6 py-3">
                       <span className="px-2 py-0.5 bg-slate-200 text-slate-500 rounded text-[10px] font-bold">TRASHED</span>
+                    </td>
+                    <td className="px-6 py-3 text-right whitespace-nowrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs mr-2"
+                        disabled={isPending}
+                        onClick={() => handleRestoreClientChemical(cc.chemical_id)}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                        Restore
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs bg-rose-600 hover:bg-rose-700 text-white"
+                        disabled={isPending}
+                        onClick={() =>
+                          handlePermanentDeleteClientChemical(
+                            cc.chemical_id,
+                            cc.chemicals?.chemical_name || 'this substance'
+                          )
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Delete permanently
+                      </Button>
                     </td>
                   </tr>
                 ))}

@@ -30,6 +30,19 @@ This document describes the steps required to configure and run the Pharmegic He
 
 > If you see **"Bucket not found"** on TCC submit, the `certificates` storage bucket is missing — create it in Supabase Storage as above.
 
+### Chemical Registry trash (if you see error `22P02` on `/admin/chemicals`)
+Run this once in the Supabase SQL Editor (also included at the end of `database.sql`):
+
+```sql
+DO $$ BEGIN
+    ALTER TYPE public.chemical_status ADD VALUE 'trashed';
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+```
+
+Without this, the Chemical Registry page may crash and "Move to Trash" will not work.
+
 ---
 
 ## 2. Environment Variables configuration

@@ -1,17 +1,23 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { createChemicalAction, updateChemicalAction, deleteChemicalAction } from '@/actions/chemicals';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
+import {
+  createChemicalAction,
+  updateChemicalAction,
+  trashChemicalAction,
+  restoreChemicalAction,
+  permanentDeleteChemicalAction,
+} from '@/actions/chemicals';
+import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { Badge } from './ui/Badge';
 import { Dialog } from './ui/Dialog';
+import { TableColumnFilter } from './ui/TableColumnFilter';
 import { toast } from '@/store/toast';
 import {
-  Search,
   Plus,
   Edit2,
   Trash2,
@@ -19,9 +25,10 @@ import {
   Activity,
   AlertCircle,
   Calendar,
-  CheckCircle,
-  FileText,
-  Weight
+  Weight,
+  Building2,
+  RotateCcw,
+  Archive,
 } from 'lucide-react';
 
 interface Chemical {
@@ -35,27 +42,64 @@ interface Chemical {
   exported_quantity: number;
   status: 'active' | 'inactive';
   created_at: string;
+  company_names?: string[];
+  /** Sum of client_chemicals.available_quantity (live remaining) */
+  remaining_quota?: number;
+  /** Sum of approved TCC quantity_mt for this substance */
+  exported_mt?: number;
+  /** remaining_quota + exported_mt */
+  total_quota?: number;
 }
+
+function formatMt(value: number | undefined) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n.toFixed(1) : '0.0';
+}
+
+const INITIAL_COLUMN_FILTERS = {
+  company: '',
+  substance: '',
+  regulatory: '',
+  tonnage: 'all',
+  availableQuota: '',
+  exported: '',
+  status: 'all',
+};
+
+function matchesText(haystack: string, needle: string) {
+  if (!needle.trim()) return true;
+  return haystack.toLowerCase().includes(needle.trim().toLowerCase());
+}
+
+type TrashedChemical = Pick<
+  Chemical,
+  'id' | 'chemical_name' | 'cas_number' | 'ec_number' | 'tonnage_band' | 'validity_date' | 'status'
+>;
 
 interface ChemicalsDashboardProps {
   initialChemicals: Chemical[];
+  initialTrashedChemicals?: TrashedChemical[];
 }
 
-export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashboardProps) {
+export default function ChemicalsDashboard({
+  initialChemicals,
+  initialTrashedChemicals = [],
+}: ChemicalsDashboardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Search & Filter
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [columnFilters, setColumnFilters] = useState(INITIAL_COLUMN_FILTERS);
   const [chemicals, setChemicals] = useState<Chemical[]>(initialChemicals);
+  const [trashedChemicals, setTrashedChemicals] = useState<TrashedChemical[]>(initialTrashedChemicals);
 
   // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const [isPermanentDeleteOpen, setIsPermanentDeleteOpen] = useState(false);
 
   const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
+  const [selectedTrashed, setSelectedTrashed] = useState<TrashedChemical | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -71,18 +115,67 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
 
   useEffect(() => {
     setChemicals(initialChemicals);
-  }, [initialChemicals]);
+    setTrashedChemicals(initialTrashedChemicals);
+  }, [initialChemicals, initialTrashedChemicals]);
 
-  const filteredChemicals = chemicals.filter((chem) => {
-    const matchesSearch =
-      chem.chemical_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      chem.cas_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (chem.ec_number && chem.ec_number.toLowerCase().includes(searchTerm.toLowerCase()));
+  const tonnageFilterOptions = useMemo(() => {
+    const bands = [
+      ...new Set(chemicals.map((c) => c.tonnage_band).filter((b): b is string => Boolean(b))),
+    ].sort();
+    return [
+      { value: 'all', label: 'All bands' },
+      ...bands.map((b) => ({ value: b, label: b })),
+    ];
+  }, [chemicals]);
 
-    const matchesStatus = statusFilter === 'all' || chem.status === statusFilter;
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (columnFilters.company.trim()) n++;
+    if (columnFilters.substance.trim()) n++;
+    if (columnFilters.regulatory.trim()) n++;
+    if (columnFilters.tonnage !== 'all') n++;
+    if (columnFilters.availableQuota.trim()) n++;
+    if (columnFilters.exported.trim()) n++;
+    if (columnFilters.status !== 'all') n++;
+    return n;
+  }, [columnFilters]);
 
-    return matchesSearch && matchesStatus;
-  });
+  const filteredChemicals = useMemo(() => {
+    return chemicals.filter((chem) => {
+      const companies = (chem.company_names || []).join(' ');
+      if (!matchesText(companies, columnFilters.company)) return false;
+      if (!matchesText(chem.chemical_name, columnFilters.substance)) return false;
+
+      const regulatoryHaystack = [chem.cas_number, chem.ec_number || ''].join(' ');
+      if (!matchesText(regulatoryHaystack, columnFilters.regulatory)) return false;
+
+      if (columnFilters.tonnage !== 'all' && chem.tonnage_band !== columnFilters.tonnage) return false;
+
+      if (
+        columnFilters.availableQuota.trim() &&
+        !String(chem.remaining_quota ?? 0).includes(columnFilters.availableQuota.trim())
+      ) {
+        return false;
+      }
+
+      if (
+        columnFilters.exported.trim() &&
+        !String(chem.exported_mt ?? 0).includes(columnFilters.exported.trim())
+      ) {
+        return false;
+      }
+
+      if (columnFilters.status !== 'all' && chem.status !== columnFilters.status) return false;
+
+      return true;
+    });
+  }, [chemicals, columnFilters]);
+
+  const updateColumnFilter = (key: keyof typeof INITIAL_COLUMN_FILTERS, value: string) => {
+    setColumnFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const clearAllFilters = () => setColumnFilters(INITIAL_COLUMN_FILTERS);
 
   const handleOpenCreate = () => {
     setFormError(null);
@@ -180,22 +273,54 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
     });
   };
 
-  const handleOpenDelete = (chem: Chemical) => {
+  const handleOpenTrash = (chem: Chemical) => {
     setSelectedChemical(chem);
-    setIsDeleteOpen(true);
+    setIsTrashOpen(true);
   };
 
-  const handleDeleteChemical = async () => {
+  const handleMoveToTrash = async () => {
     if (!selectedChemical) return;
 
     startTransition(async () => {
-      const res = await deleteChemicalAction(selectedChemical.id);
+      const res = await trashChemicalAction(selectedChemical.id);
       if (res.success) {
-        toast.success(res.message || 'Chemical deleted.');
-        setIsDeleteOpen(false);
+        toast.success(res.message || 'Substance moved to trash.');
+        setIsTrashOpen(false);
         router.refresh();
       } else {
-        toast.error(res.error || 'Failed to delete chemical substance.');
+        toast.error(res.error || 'Failed to move substance to trash.');
+      }
+    });
+  };
+
+  const handleRestoreChemical = (chem: TrashedChemical) => {
+    startTransition(async () => {
+      const res = await restoreChemicalAction(chem.id);
+      if (res.success) {
+        toast.success(res.message || 'Substance restored.');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to restore substance.');
+      }
+    });
+  };
+
+  const handleOpenPermanentDelete = (chem: TrashedChemical) => {
+    setSelectedTrashed(chem);
+    setIsPermanentDeleteOpen(true);
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!selectedTrashed) return;
+
+    startTransition(async () => {
+      const res = await permanentDeleteChemicalAction(selectedTrashed.id);
+      if (res.success) {
+        toast.success(res.message || 'Substance permanently deleted.');
+        setIsPermanentDeleteOpen(false);
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to permanently delete substance.');
       }
     });
   };
@@ -224,59 +349,120 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
         </Button>
       </div>
 
-      {/* Filters card */}
-      <Card className="border-slate-100 shadow-xs">
-        <CardContent className="p-4 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search by substance name, CAS, EC registration number..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-slate-50 border-slate-200 focus:bg-white transition-all"
-            />
-          </div>
-          <div className="flex gap-4 w-full md:w-auto">
-            <div className="relative w-full md:w-48">
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                options={[
-                  { value: 'all', label: 'All Statuses' },
-                  { value: 'active', label: 'Active Substances' },
-                  { value: 'inactive', label: 'Inactive Substances' },
-                ]}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Chemicals inventory table */}
       <Card className="border-slate-100 overflow-hidden">
+        {activeFilterCount > 0 && (
+          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-slate-600">
+              Showing {filteredChemicals.length} of {chemicals.length} substances
+              <span className="text-primary ml-1">({activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active)</span>
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={clearAllFilters} className="h-8 text-xs">
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+              Clear all filters
+            </Button>
+          </div>
+        )}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead>
-              <tr className="bg-slate-50/75 border-b border-slate-100">
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Substance Details</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Regulatory IDs</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Tonnage Band</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Available Quota</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Exported (MT)</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+              <tr className="bg-slate-50/75 border-b border-slate-100 align-top">
+                <th className="p-3 min-w-[160px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Company Name</span>
+                  <TableColumnFilter
+                    value={columnFilters.company}
+                    onChange={(v) => updateColumnFilter('company', v)}
+                    placeholder="Filter company…"
+                  />
+                </th>
+                <th className="p-3 min-w-[200px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Substance Details</span>
+                  <TableColumnFilter
+                    value={columnFilters.substance}
+                    onChange={(v) => updateColumnFilter('substance', v)}
+                    placeholder="Filter name…"
+                  />
+                </th>
+                <th className="p-3 min-w-[140px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Regulatory IDs</span>
+                  <TableColumnFilter
+                    value={columnFilters.regulatory}
+                    onChange={(v) => updateColumnFilter('regulatory', v)}
+                    placeholder="CAS / EC…"
+                  />
+                </th>
+                <th className="p-3 min-w-[130px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tonnage Band</span>
+                  <TableColumnFilter
+                    type="select"
+                    value={columnFilters.tonnage}
+                    onChange={(v) => updateColumnFilter('tonnage', v)}
+                    options={tonnageFilterOptions}
+                  />
+                </th>
+                <th className="p-3 min-w-[150px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quota (Remaining)</span>
+                  <TableColumnFilter
+                    value={columnFilters.availableQuota}
+                    onChange={(v) => updateColumnFilter('availableQuota', v)}
+                    placeholder="MT…"
+                  />
+                </th>
+                <th className="p-3 min-w-[110px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Exported</span>
+                  <TableColumnFilter
+                    value={columnFilters.exported}
+                    onChange={(v) => updateColumnFilter('exported', v)}
+                    placeholder="MT…"
+                  />
+                </th>
+                <th className="p-3 min-w-[110px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</span>
+                  <TableColumnFilter
+                    type="select"
+                    value={columnFilters.status}
+                    onChange={(v) => updateColumnFilter('status', v)}
+                    options={[
+                      { value: 'all', label: 'All statuses' },
+                      { value: 'active', label: 'Active' },
+                      { value: 'inactive', label: 'Inactive' },
+                    ]}
+                  />
+                </th>
+                <th className="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right min-w-[90px]">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredChemicals.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
-                    No substances found in registry matching your search query.
+                  <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
+                    No substances found matching your column filters.
                   </td>
                 </tr>
               ) : (
                 filteredChemicals.map((chem) => (
                   <tr key={chem.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="p-4 align-top">
+                      {chem.company_names && chem.company_names.length > 0 ? (
+                        <div className="space-y-1">
+                          {chem.company_names.slice(0, 2).map((name) => (
+                            <div key={name} className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                              <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <span className="line-clamp-2">{name}</span>
+                            </div>
+                          ))}
+                          {chem.company_names.length > 2 && (
+                            <span className="text-[11px] font-bold text-primary">
+                              +{chem.company_names.length - 2} more
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic font-medium">Not assigned</span>
+                      )}
+                    </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-emerald-50 text-primary flex items-center justify-center font-bold">
@@ -310,17 +496,44 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
                         {chem.tonnage_band || 'N/A'}
                       </Badge>
                     </td>
-                    <td className="p-4 font-bold text-slate-800">
-                      <div className="flex items-center gap-1">
-                        <Weight className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{chem.available_quantity} MT</span>
-                      </div>
+                    <td className="p-4 align-top min-w-[150px]">
+                      {(() => {
+                        const remaining = Number(chem.remaining_quota ?? 0);
+                        const total = Number(chem.total_quota ?? 0);
+                        const exported = Number(chem.exported_mt ?? 0);
+                        const pct = total > 0 ? (exported / total) * 100 : 0;
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-end text-xs gap-2">
+                              <span className="font-bold text-slate-800 flex items-center gap-1">
+                                <Weight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                {formatMt(remaining)} MT
+                              </span>
+                              <span className="text-slate-400 font-medium whitespace-nowrap">
+                                of {formatMt(total)} MT
+                              </span>
+                            </div>
+                            {total > 0 ? (
+                              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className="h-full bg-teal-700 rounded-full transition-all"
+                                  style={{ width: `${Math.min(100, Math.max(4, pct))}%` }}
+                                  title={`${formatMt(exported)} MT exported (${pct.toFixed(0)}%)`}
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 font-medium italic">No quota assigned</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
-                    <td className="p-4 text-slate-600 font-medium">
+                    <td className="p-4 text-slate-600 font-medium align-top">
                       <div className="flex items-center gap-1">
-                        <Activity className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{chem.exported_quantity} MT</span>
+                        <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <span className="font-bold text-slate-700">{formatMt(chem.exported_mt)} MT</span>
                       </div>
+                      <p className="text-[11px] text-slate-400 font-medium mt-0.5">approved exports</p>
                     </td>
                     <td className="p-4">{getStatusBadge(chem.status)}</td>
                     <td className="p-4 text-right">
@@ -333,9 +546,9 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handleOpenDelete(chem)}
+                          onClick={() => handleOpenTrash(chem)}
                           className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
-                          title="Delete Substance"
+                          title="Move to Trash"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -348,6 +561,71 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
           </table>
         </div>
       </Card>
+
+      {/* Trash box */}
+      {trashedChemicals.length > 0 && (
+        <Card className="border-dashed border-slate-300 bg-slate-50/80 overflow-hidden">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Archive className="h-4 w-4 text-slate-500" />
+              <h2 className="font-bold text-slate-600 text-sm">Deleted Inventory (Trash)</h2>
+            </div>
+            <span className="text-xs text-slate-400 font-medium">
+              Restore to bring back · Delete permanently to remove forever
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-100/80 border-b border-slate-200">
+                  <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Substance</th>
+                  <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">CAS</th>
+                  <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {trashedChemicals.map((chem) => (
+                  <tr key={chem.id} className="text-slate-600">
+                    <td className="p-3 font-semibold text-slate-700">{chem.chemical_name}</td>
+                    <td className="p-3 font-mono text-xs text-slate-500">{chem.cas_number}</td>
+                    <td className="p-3">
+                      <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-500">
+                        TRASHED
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-right">
+                      <div className="inline-flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={isPending}
+                          onClick={() => handleRestoreChemical(chem)}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                          Restore
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-8 text-xs bg-rose-600 hover:bg-rose-700 text-white border-rose-600"
+                          disabled={isPending}
+                          onClick={() => handleOpenPermanentDelete(chem)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Delete permanently
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* 1. Create Chemical Modal */}
       <Dialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Register Chemical Substance">
@@ -528,33 +806,62 @@ export default function ChemicalsDashboard({ initialChemicals }: ChemicalsDashbo
         </form>
       </Dialog>
 
-      {/* 3. Delete Confirmation Modal */}
-      <Dialog isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} title="Confirm Deletion">
+      {/* Move to trash */}
+      <Dialog isOpen={isTrashOpen} onClose={() => setIsTrashOpen(false)} title="Move to Trash">
         <div className="space-y-4">
           <p className="text-sm text-slate-600 font-medium">
-            Are you sure you want to delete <span className="font-bold text-slate-800">{selectedChemical?.chemical_name}</span>?
+            Move <span className="font-bold text-slate-800">{selectedChemical?.chemical_name}</span> to trash?
+            It will be hidden from the registry until restored or permanently deleted.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={() => setIsTrashOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleMoveToTrash}
+              isLoading={isPending}
+              disabled={isPending}
+              className="bg-amber-600 hover:bg-amber-700 text-white border-amber-600"
+            >
+              Move to Trash
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Permanent delete from trash */}
+      <Dialog
+        isOpen={isPermanentDeleteOpen}
+        onClose={() => setIsPermanentDeleteOpen(false)}
+        title="Permanently Delete Substance"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 font-medium">
+            Permanently delete <span className="font-bold text-slate-800">{selectedTrashed?.chemical_name}</span>?
+            This cannot be undone.
           </p>
           <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg text-xs text-rose-700 font-semibold space-y-1">
-            <p className="font-bold">CAUTION: DATA LOSS WARNING.</p>
+            <p className="font-bold">CAUTION: PERMANENT DATA LOSS</p>
             <p>
-              Deleting this chemical will permanently remove it from the inventory. All active clients linked to this chemical will lose substance authorization mappings immediately. Existing applications and certificates referencing this chemical will experience database constraint side effects.
+              All client assignments, TCC applications, and certificates linked to this substance may be affected.
             </p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsDeleteOpen(false)}
+              onClick={() => setIsPermanentDeleteOpen(false)}
               disabled={isPending}
             >
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={handleDeleteChemical}
+              onClick={handlePermanentDelete}
               isLoading={isPending}
               disabled={isPending}
-              className="bg-rose-600 hover:bg-rose-700 text-white border-rose-600 hover:border-rose-700"
+              className="bg-rose-600 hover:bg-rose-700 text-white border-rose-600"
             >
               Delete Permanently
             </Button>

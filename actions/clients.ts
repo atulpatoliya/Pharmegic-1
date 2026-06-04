@@ -509,8 +509,80 @@ export async function removeChemicalFromClientAction(clientId: string, chemicalI
     revalidatePath(`/admin/clients/${clientId}`);
     return { success: true, message: 'Substance moved to trash.' };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
+    return { success: false, error: formatErrorMessage(err) };
+  }
+}
+
+export async function restoreClientChemicalAction(clientId: string, chemicalId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { data: link, error: fetchErr } = await adminSupabase
+      .from('client_chemicals')
+      .select('id, status')
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
+    if (!link) return { success: false, error: 'Substance assignment not found.' };
+    if (link.status !== 'trashed') {
+      return { success: false, error: 'This substance is not in trash.' };
+    }
+
+    const { error } = await adminSupabase
+      .from('client_chemicals')
+      .update({ status: 'active' })
+      .eq('id', link.id);
+
+    if (error) throw error;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CHEMICAL_RESTORED',
+      entity_type: 'client_chemicals',
+      entity_id: chemicalId,
+      description: 'Restored substance from trash',
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Substance restored.' };
+  } catch (err) {
+    return { success: false, error: formatErrorMessage(err) };
+  }
+}
+
+export async function permanentDeleteClientChemicalAction(clientId: string, chemicalId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase
+      .from('client_chemicals')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId)
+      .eq('status', 'trashed');
+
+    if (error) throw error;
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CHEMICAL_PERMANENTLY_DELETED',
+      entity_type: 'client_chemicals',
+      entity_id: chemicalId,
+      description: 'Permanently removed trashed substance assignment',
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true, message: 'Substance permanently deleted.' };
+  } catch (err) {
+    return { success: false, error: formatErrorMessage(err) };
   }
 }
 

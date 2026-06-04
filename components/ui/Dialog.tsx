@@ -11,9 +11,23 @@ interface DialogProps {
   title: string;
   children: React.ReactNode;
   closeOnBackdropClick?: boolean;
+  /** Wider modal for application review / certificate preview */
+  size?: 'default' | 'wide';
 }
 
-export function Dialog({ isOpen, onClose, title, children, closeOnBackdropClick = false }: DialogProps) {
+const sizeClasses = {
+  default: 'max-w-[800px]',
+  wide: 'max-w-6xl',
+};
+
+export function Dialog({
+  isOpen,
+  onClose,
+  title,
+  children,
+  closeOnBackdropClick = false,
+  size = 'default',
+}: DialogProps) {
   const [mounted, setMounted] = useState(false);
 
   // Set mounted state
@@ -46,7 +60,9 @@ export function Dialog({ isOpen, onClose, title, children, closeOnBackdropClick 
       />
 
       {/* Dialog Content */}
-      <div className="relative w-full max-w-[800px] rounded-lg border border-slate-100 bg-white p-6 shadow-xl transition-all duration-300 animate-slide-in max-h-[90vh] overflow-y-auto z-10">
+      <div
+        className={`relative w-full ${sizeClasses[size]} rounded-lg border border-slate-100 bg-white p-6 shadow-xl transition-all duration-300 animate-slide-in max-h-[90vh] overflow-y-auto z-10`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-wrap">
           <h2 className="text-lg font-bold text-slate-800">{title}</h2>

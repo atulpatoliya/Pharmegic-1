@@ -65,7 +65,65 @@ export async function updateChemicalAction(id: string, data: unknown) {
   }
 }
 
-export async function deleteChemicalAction(id: string) {
+export async function trashChemicalAction(id: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase
+      .from('chemicals')
+      .update({ status: 'trashed' })
+      .eq('id', id);
+
+    if (error) {
+      if (error.code === '22P02') {
+        return {
+          success: false,
+          error:
+            'Trash is not enabled in the database yet. Run the chemical_status migration in Supabase SQL (see setup.md).',
+        };
+      }
+      throw error;
+    }
+    revalidatePath('/admin/chemicals');
+    return { success: true, message: 'Substance moved to trash.' };
+  } catch (err: unknown) {
+    const e = err as { code?: string; message?: string };
+    if (e.code === '22P02') {
+      return {
+        success: false,
+        error:
+          'Trash is not enabled in the database yet. Run the chemical_status migration in Supabase SQL (see setup.md).',
+      };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+export async function restoreChemicalAction(id: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase
+      .from('chemicals')
+      .update({ status: 'active' })
+      .eq('id', id)
+      .eq('status', 'trashed');
+
+    if (error) throw error;
+    revalidatePath('/admin/chemicals');
+    return { success: true, message: 'Substance restored from trash.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+export async function permanentDeleteChemicalAction(id: string) {
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
 
@@ -74,7 +132,8 @@ export async function deleteChemicalAction(id: string) {
     const { error } = await adminSupabase.from('chemicals').delete().eq('id', id);
     if (error) throw error;
     revalidatePath('/admin/chemicals');
-    return { success: true, message: 'Chemical deleted successfully.' };
+    revalidatePath('/admin/clients');
+    return { success: true, message: 'Substance permanently deleted.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

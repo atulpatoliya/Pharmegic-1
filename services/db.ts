@@ -251,7 +251,14 @@ export async function deleteClient(supabase: SupabaseClient, clientId: string) {
 // CHEMICAL INVENTORY SERVICES
 // ============================================================================
 export async function getChemicals(supabase: SupabaseClient, search = '', status = 'all') {
-  let query = supabase.from('chemicals').select('*');
+  let query = supabase.from('chemicals').select(`
+    *,
+    client_chemicals (
+      status,
+      available_quantity,
+      clients ( company_name )
+    )
+  `).in('status', ['active', 'inactive']);
 
   if (status && status !== 'all') {
     query = query.eq('status', status);
@@ -263,7 +270,61 @@ export async function getChemicals(supabase: SupabaseClient, search = '', status
 
   const { data, error } = await query.order('chemical_name', { ascending: true });
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+  const chemicalIds = rows.map((r) => r.id as string);
+
+  const exportedByChemicalId: Record<string, number> = {};
+  if (chemicalIds.length > 0) {
+    const { data: approvedTccs, error: tccError } = await supabase
+      .from('tcc_applications')
+      .select('chemical_id, quantity_mt')
+      .eq('status', 'approved')
+      .in('chemical_id', chemicalIds);
+
+    if (tccError) throw tccError;
+
+    for (const tcc of approvedTccs || []) {
+      const id = tcc.chemical_id as string;
+      exportedByChemicalId[id] =
+        (exportedByChemicalId[id] || 0) + Number(tcc.quantity_mt ?? 0);
+    }
+  }
+
+  return rows.map((row) => {
+    const links = (row.client_chemicals || []) as {
+      status: string;
+      available_quantity: number;
+      clients: { company_name: string } | null;
+    }[];
+    const activeLinks = links.filter((cc) => cc.status !== 'trashed');
+
+    const company_names = [
+      ...new Set(
+        activeLinks
+          .filter((cc) => cc.clients?.company_name)
+          .map((cc) => cc.clients!.company_name)
+      ),
+    ].sort((a, b) => a.localeCompare(b));
+
+    const remaining_quota = activeLinks.reduce(
+      (sum, cc) => sum + Number(cc.available_quantity ?? 0),
+      0
+    );
+    const exported_mt = exportedByChemicalId[row.id as string] ?? 0;
+    const total_quota = remaining_quota + exported_mt;
+
+    const { client_chemicals: _omit, ...chem } = row as Record<string, unknown> & {
+      client_chemicals?: unknown;
+    };
+    return {
+      ...chem,
+      company_names,
+      remaining_quota,
+      exported_mt,
+      total_quota,
+    };
+  });
 }
 
 export async function createChemical(supabase: SupabaseClient, data: Record<string, unknown>) {
@@ -283,6 +344,21 @@ export async function updateChemical(supabase: SupabaseClient, id: string, data:
   return { success: true };
 }
 
+export async function getTrashedChemicals(supabase: SupabaseClient) {
+  const { data, error } = await supabase
+    .from('chemicals')
+    .select('id, chemical_name, cas_number, ec_number, tonnage_band, validity_date, status, created_at')
+    .eq('status', 'trashed')
+    .order('chemical_name', { ascending: true });
+
+  // 22P02 = enum value 'trashed' not added yet — run database.sql migration in Supabase
+  if (error) {
+    if (error.code === '22P02') return [];
+    throw error;
+  }
+  return data || [];
+}
+
 export async function deleteChemical(supabase: SupabaseClient, id: string) {
   const { error } = await supabase.from('chemicals').delete().eq('id', id);
   if (error) throw error;
@@ -296,7 +372,7 @@ export async function getTccApplications(supabase: SupabaseClient, statusFilter 
   let query = supabase.from('tcc_applications').select(`
     *,
     clients (company_name, email),
-    chemicals (chemical_name, cas_number, ec_number, validity_date, available_quantity),
+    chemicals (chemical_name, cas_number, ec_number, tonnage_band, validity_date, available_quantity),
     client_chemicals (available_quantity),
     certificates!certificates_tcc_application_id_fkey (*)
   `);
