@@ -110,15 +110,6 @@ export default function LoginForm() {
           Authenticate Session
         </Button>
       </form>
-
-      <div className="mt-8 pt-6 border-t border-slate-100 text-center space-y-1">
-        <p className="text-xs text-slate-400 font-medium">
-          🔒 Secure Pharmaceutical Compliance System
-        </p>
-        <p className="text-[10px] text-slate-300 font-medium">
-          Password recovery must be done by an administrator.
-        </p>
-      </div>
     </div>
   );
 }

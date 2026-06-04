@@ -6,7 +6,7 @@ async function seed() {
 
   // Seed Super Admin
   const superEmail = 'atul.patoliya@gmail.com';
-  const superPass = 'Admin @1234';
+  const superPass = 'Admin@1234';
   const superHash = await hashPassword(superPass);
 
   const { data: existingSuper } = await adminSupabase
@@ -35,7 +35,7 @@ async function seed() {
 
   // Seed Master Admin
   const masterEmail = 'directoratulpatoliya@gmail.com';
-  const masterPass = 'Admin @1234';
+  const masterPass = 'Admin@1234';
   const masterHash = await hashPassword(masterPass);
 
   const { data: existingMaster } = await adminSupabase
