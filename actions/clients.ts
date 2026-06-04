@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
+import { formatErrorMessage } from '@/lib/format-error';
 import { clientWizardSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
@@ -77,6 +78,7 @@ export async function createClientAction(prevState: unknown, data: unknown) {
       .insert({
         email: profile.email.toLowerCase(),
         password_hash,
+        login_password: profile.password,
         role: 'CLIENT',
         client_id: client.id,
         is_disabled: false,
@@ -116,8 +118,7 @@ export async function createClientAction(prevState: unknown, data: unknown) {
     return { success: true, message: 'Client created and login credentials set successfully.', clientId: client.id };
   } catch (err) {
     console.error('[CLIENT CREATE ERROR]:', err);
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message || 'An unexpected error occurred.' };
+    return { success: false, error: formatErrorMessage(err) };
   }
 }
 
@@ -226,7 +227,10 @@ export async function changeClientPasswordAction(clientId: string, newPassword: 
   const adminSupabase = createAdminClient();
   try {
     const password_hash = await hashPassword(newPassword);
-    const { error } = await adminSupabase.from('users').update({ password_hash }).eq('client_id', clientId);
+    const { error } = await adminSupabase
+      .from('users')
+      .update({ password_hash, login_password: newPassword })
+      .eq('client_id', clientId);
     if (error) throw error;
 
     await adminSupabase.from('activity_logs').insert({
@@ -374,24 +378,47 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
 
-  if (!data.chemical_name) return { success: false, error: 'Chemical name is required.' };
+  if (!data.chemical_name?.trim()) return { success: false, error: 'Chemical name is required.' };
+
+  const casNumber = data.cas_number?.trim();
+  if (!casNumber) return { success: false, error: 'CAS number is required.' };
 
   const adminSupabase = createAdminClient();
   try {
-    // 1. Insert new chemical into master table
-    const { data: newChem, error: chemErr } = await adminSupabase
+    // 1. Reuse existing chemical by CAS, or create new
+    const { data: existingChem } = await adminSupabase
       .from('chemicals')
-      .insert({
-        chemical_name: data.chemical_name,
-        cas_number: data.cas_number || null,
-        ec_number: data.ec_number || null,
-        tonnage_band: data.tonnage_band || null,
-        status: 'active'
-      })
       .select('id')
-      .single();
+      .eq('cas_number', casNumber)
+      .maybeSingle();
 
-    if (chemErr) throw chemErr;
+    let chemicalId = existingChem?.id;
+
+    if (!chemicalId) {
+      const { data: newChem, error: chemErr } = await adminSupabase
+        .from('chemicals')
+        .insert({
+          chemical_name: data.chemical_name.trim(),
+          cas_number: casNumber,
+          ec_number: data.ec_number?.trim() || null,
+          tonnage_band: data.tonnage_band || null,
+          status: 'active',
+        })
+        .select('id')
+        .single();
+
+      if (chemErr) throw chemErr;
+      chemicalId = newChem.id;
+    } else {
+      await adminSupabase
+        .from('chemicals')
+        .update({
+          chemical_name: data.chemical_name.trim(),
+          ec_number: data.ec_number?.trim() || null,
+          tonnage_band: data.tonnage_band || null,
+        })
+        .eq('id', chemicalId);
+    }
 
     // Calculate quota based on tonnage band
     let calcQuota = 0;
@@ -400,34 +427,56 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     else if (data.tonnage_band === '100-1000 tonnes') calcQuota = 1000;
     else if (data.tonnage_band === '1000+ tonnes') calcQuota = 2000;
 
-    // 2. Assign to client
-    const { error: assignErr } = await adminSupabase
+    const { data: existingLink } = await adminSupabase
       .from('client_chemicals')
-      .insert({
+      .select('id, status')
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId)
+      .maybeSingle();
+
+    if (existingLink && existingLink.status !== 'trashed') {
+      return { success: false, error: 'This substance is already assigned to this client.' };
+    }
+
+    if (existingLink?.status === 'trashed') {
+      const { error: restoreErr } = await adminSupabase
+        .from('client_chemicals')
+        .update({
+          available_quantity: calcQuota,
+          validity_date: data.validity_date || null,
+          status: 'active',
+          assigned_by: session.userId,
+        })
+        .eq('id', existingLink.id);
+
+      if (restoreErr) throw restoreErr;
+    } else {
+      const { error: assignErr } = await adminSupabase.from('client_chemicals').insert({
         client_id: clientId,
-        chemical_id: newChem.id,
+        chemical_id: chemicalId,
         available_quantity: calcQuota,
         validity_date: data.validity_date || null,
         status: 'active',
         assigned_by: session.userId,
       });
 
-    if (assignErr) throw assignErr;
+      if (assignErr) throw assignErr;
+    }
 
     await adminSupabase.from('activity_logs').insert({
       client_id: clientId,
       user_id: session.userId,
       action: 'CHEMICAL_ASSIGNED',
       entity_type: 'client_chemicals',
-      entity_id: newChem.id,
+      entity_id: chemicalId,
       description: `Added and assigned new substance: ${data.chemical_name}`,
     });
 
     revalidatePath(`/admin/clients/${clientId}`);
     return { success: true, message: 'New substance added and assigned.' };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
+    console.error('[ASSIGN CHEMICAL ERROR]:', err);
+    return { success: false, error: formatErrorMessage(err) };
   }
 }
 
@@ -472,6 +521,10 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
 
+  if (!data.chemical_name?.trim()) {
+    return { success: false, error: 'Chemical name is required.' };
+  }
+
   const adminSupabase = createAdminClient();
   try {
     let calcQuota = 0;
@@ -479,6 +532,18 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
     else if (data.tonnage_band === '10-100 tonnes') calcQuota = 100;
     else if (data.tonnage_band === '100-1000 tonnes') calcQuota = 1000;
     else if (data.tonnage_band === '1000+ tonnes') calcQuota = 2000;
+
+    const { error: chemError } = await adminSupabase
+      .from('chemicals')
+      .update({
+        chemical_name: data.chemical_name.trim(),
+        cas_number: data.cas_number || null,
+        ec_number: data.ec_number || null,
+        tonnage_band: data.tonnage_band || null,
+      })
+      .eq('id', chemicalId);
+
+    if (chemError) throw chemError;
 
     const { error } = await adminSupabase
       .from('client_chemicals')

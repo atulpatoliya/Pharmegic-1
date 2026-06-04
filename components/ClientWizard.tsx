@@ -1,10 +1,12 @@
 'use client';
 
 import { createClientAction } from '@/actions/clients';
+import { formatErrorMessage } from '@/lib/format-error';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { ModalErrorBox } from './ui/ModalErrorBox';
 import { toast } from '@/store/toast';
-import { Eye, EyeOff, Plus, Trash2, Save, User, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Save, User } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
 interface ClientWizardProps {
@@ -15,6 +17,7 @@ interface ClientWizardProps {
 export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
 
   const [profile, setProfile] = useState({
     company_name: '',
@@ -89,15 +92,16 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
 
   const addContact = () => {
     if (!tempContact.first_name || !tempContact.last_name || !tempContact.email) {
-      toast.error('First name, last name and email are required for adding a contact.');
+      setContactError('First name, last name and email are required for adding a contact.');
       return;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tempContact.email)) {
-      toast.error('Invalid contact email format.');
+      setContactError('Invalid contact email format.');
       return;
     }
 
+    setContactError(null);
     setContacts([...contacts, tempContact]);
     setTempContact({ first_name: '', last_name: '', email: '', phone: '', role: '' });
     toast.success('Secondary contact added to list.');
@@ -111,7 +115,6 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
     setError(null);
     const validationError = validateForm();
     if (validationError) {
-      toast.error(validationError);
       setError(validationError);
       return;
     }
@@ -124,9 +127,11 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
     startTransition(async () => {
       const res = await createClientAction(null, payload);
       if (!res.success) {
-        const message = res.error || 'Failed to create client.';
+        const message =
+          typeof res.error === 'string'
+            ? res.error
+            : formatErrorMessage(res.error) || 'Failed to create client.';
         setError(message);
-        toast.error(message);
         return;
       }
 
@@ -313,6 +318,7 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
             </Button>
           </div>
         </div>
+        <ModalErrorBox message={contactError} title="Contact Error" />
 
         <div className="mt-4 space-y-3">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Saved Secondary Contacts ({contacts.length})</h4>
@@ -384,15 +390,7 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
       </section>
 
 
-      {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-3xl text-sm font-semibold flex items-start gap-2.5">
-          <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h4 className="font-bold mb-1">Onboarding Error</h4>
-            <p className="text-xs leading-relaxed font-medium">{error}</p>
-          </div>
-        </div>
-      )}
+      <ModalErrorBox message={error} title="Onboarding Error" />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>

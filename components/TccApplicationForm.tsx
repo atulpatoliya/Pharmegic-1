@@ -13,11 +13,12 @@ import {
   AlertCircle,
   FlaskConical,
   Scale,
-  Calendar,
   CheckCircle,
   ArrowRight,
-  Info
+  Info,
+  Paperclip,
 } from 'lucide-react';
+import { ModalErrorBox } from './ui/ModalErrorBox';
 
 interface Substance {
   id: string;
@@ -42,6 +43,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
   const [quantity, setQuantity] = useState('');
   const [kkdikRegNo, setKkdikRegNo] = useState('');
   const [exportDate, setExportDate] = useState('');
+  const [boFile, setBoFile] = useState<File | null>(null);
 
   // Selected chemical info for preview
   const selectedSubstance = authorizedSubstances.find((s) => s.id === chemicalId);
@@ -52,31 +54,31 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
     if (!chemicalId) {
       setError('Please select an authorized chemical substance.');
-      toast.error('Please select an authorized chemical substance.');
       return;
     }
 
     if (!quantity || Number(quantity) <= 0) {
       setError('Please specify a positive quantity in metric tons (MT).');
-      toast.error('Please specify a positive quantity in metric tons (MT).');
       return;
     }
 
     if (selectedSubstance && Number(quantity) > selectedSubstance.available_quantity) {
       setError(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
-      toast.error(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
       return;
     }
 
     if (!kkdikRegNo.trim()) {
       setError('KKDIK registration number is required.');
-      toast.error('KKDIK registration number is required.');
       return;
     }
 
     if (!exportDate) {
       setError('Expected export date is required.');
-      toast.error('Expected export date is required.');
+      return;
+    }
+
+    if (!boFile) {
+      setError('BO attachment is required.');
       return;
     }
 
@@ -86,7 +88,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       const shipment = new Date(exportDate);
       if (shipment > expiry) {
         setError(`The expected export date exceeds the substance validity date (${expiry.toLocaleDateString()}).`);
-        toast.error(`The expected export date exceeds the substance validity date (${expiry.toLocaleDateString()}).`);
         return;
       }
     }
@@ -97,14 +98,14 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       payload.append('quantity_mt', quantity);
       payload.append('kkdik_reg_no', kkdikRegNo);
       payload.append('export_date', exportDate);
+      payload.append('bo_attachment', boFile);
 
       const res = await applyForTccAction(null, payload);
       if (res.success) {
         toast.success(res.message || 'TCC compliance application submitted.');
         router.push('/client');
       } else {
-        setError(res.error || 'Failed to submit application.');
-        toast.error(res.error || 'Failed to submit application.');
+        setError(typeof res.error === 'string' ? res.error : 'Failed to submit application.');
       }
     });
   };
@@ -197,15 +198,28 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   />
                 </div>
 
-                {error && (
-                  <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5 w-full my-4">
-                    <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
-                    <div className="flex-1 text-left">
-                      <h4 className="font-bold mb-1">Application Error</h4>
-                      <p className="text-xs leading-relaxed font-medium">{error}</p>
-                    </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+                    BO Attachment *
+                  </label>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 h-10 px-3 border border-slate-200 rounded-md bg-white cursor-pointer hover:bg-slate-50 text-sm text-slate-600">
+                      <Paperclip className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="truncate">{boFile ? boFile.name : 'Choose file...'}</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*,application/pdf"
+                        onChange={(e) => setBoFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      Image, PDF, Word, Excel, or PowerPoint (max 10 MB)
+                    </p>
                   </div>
-                )}
+                </div>
+
+                <ModalErrorBox message={error} title="Application Error" />
 
                 <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                   <Button

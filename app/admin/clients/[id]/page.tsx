@@ -88,11 +88,16 @@ export default async function ViewClientPage({ params }: { params: Promise<{ id:
     author_email: note.users?.email || 'System'
   }));
 
+  const normalizedClientChemicals = (clientChemicals || []).map((row: { chemicals?: unknown }) => ({
+    ...row,
+    chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+  }));
+
   return (
     <ClientDashboardDetails
       client={client}
       user={user}
-      clientChemicals={clientChemicals || []}
+      clientChemicals={normalizedClientChemicals}
       allChemicals={allChemicals || []}
       contacts={contacts || []}
       tccHistory={tccHistory || []}

@@ -6,7 +6,6 @@ import {
   changeClientEmailAction, 
   changeClientPasswordAction, 
   toggleClientLoginAction, 
-  archiveClientAction, 
   assignChemicalToClientAction, 
   addNewChemicalToClientAction,
   removeChemicalFromClientAction, 
@@ -22,13 +21,15 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Dialog } from '@/components/ui/Dialog';
+import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
+import { formatErrorMessage } from '@/lib/format-error';
 import { toast } from '@/store/toast';
 import Link from 'next/link';
 import { 
   Building, Mail, Phone, MapPin, Calendar, CheckCircle, 
   AlertCircle, FileText, User, ShieldAlert, Key, Plus, Trash2,
-  FileSignature, Award, Clipboard, StickyNote, History, Lock, Unlock, Archive,
-  Download, Ship, PieChart, TrendingUp, Filter, Eye, PenLine
+  FileSignature, Award, Clipboard, StickyNote, History, Lock, Unlock,
+  Download, Ship, PieChart, TrendingUp, Filter, Eye, EyeOff, PenLine
 } from 'lucide-react';
 import { useLayoutStore } from '@/store/layout';
 import dynamic from 'next/dynamic';
@@ -83,6 +84,8 @@ export default function ClientDashboardDetails({
   const [newEmail, setNewEmail] = useState(client.email);
   const [isPasswordModalOpen, setPasswordModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [isAssignChemModalOpen, setAssignChemModalOpen] = useState(false);
   const [assignChemData, setAssignChemData] = useState({
     chemical_name: '', cas_number: '', ec_number: '', tonnage_band: '', available_quantity: '', validity_date: ''
@@ -100,6 +103,28 @@ export default function ClientDashboardDetails({
   });
   const [isNoteModalOpen, setNoteModalOpen] = useState(false);
   const [noteContent, setNoteContent] = useState('');
+
+  type ModalErrorKey = 'email' | 'password' | 'assignChem' | 'editChem' | 'contact' | 'note' | 'security' | 'substances';
+  const [modalErrors, setModalErrors] = useState<Record<ModalErrorKey, string | null>>({
+    email: null,
+    password: null,
+    assignChem: null,
+    editChem: null,
+    contact: null,
+    note: null,
+    security: null,
+    substances: null,
+  });
+
+  const setModalError = (key: ModalErrorKey, message: string | null) => {
+    setModalErrors((prev) => ({ ...prev, [key]: message }));
+  };
+
+  const toErrorMessage = (err: unknown, fallback = 'Something went wrong.') => {
+    if (typeof err === 'string' && err.trim()) return err;
+    const formatted = formatErrorMessage(err);
+    return formatted === 'An unexpected error occurred.' ? fallback : formatted;
+  };
 
   // -------------------------------------------------------------
   // Data Calculations
@@ -132,48 +157,72 @@ export default function ClientDashboardDetails({
   // Handlers
   // -------------------------------------------------------------
   const handleEmailChange = () => {
-    if (!newEmail) return toast.error('Email is required.');
+    if (!newEmail) {
+      setModalError('email', 'Email is required.');
+      return;
+    }
+    setModalError('email', null);
     startTransition(async () => {
       const res = await changeClientEmailAction(client.id, newEmail);
-      if (res.success) { toast.success('Email updated.'); setEmailModalOpen(false); router.refresh(); }
-      else toast.error(res.error || 'Error');
+      if (res.success) {
+        toast.success('Email updated.');
+        setEmailModalOpen(false);
+        router.refresh();
+      } else {
+        setModalError('email', toErrorMessage(res.error, 'Failed to update email.'));
+      }
     });
   };
   const handlePasswordChange = () => {
-    if (newPassword.length < 6) return toast.error('Password too short.');
+    if (newPassword.length < 6) {
+      setModalError('password', 'Password must be at least 6 characters.');
+      return;
+    }
+    setModalError('password', null);
     startTransition(async () => {
       const res = await changeClientPasswordAction(client.id, newPassword);
-      if (res.success) { toast.success('Password updated.'); setPasswordModalOpen(false); setNewPassword(''); router.refresh(); }
-      else toast.error(res.error || 'Error');
+      if (res.success) {
+        toast.success('Password updated.');
+        setPasswordModalOpen(false);
+        setNewPassword('');
+        router.refresh();
+      } else {
+        setModalError('password', toErrorMessage(res.error, 'Failed to update password.'));
+      }
     });
   };
   const handleToggleLogin = () => {
+    setModalError('security', null);
     startTransition(async () => {
       const res = await toggleClientLoginAction(client.id, !user?.is_disabled);
-      if (res.success) { toast.success('Login toggled.'); router.refresh(); }
-      else toast.error(res.error || 'Error');
+      if (res.success) {
+        toast.success('Login toggled.');
+        router.refresh();
+      } else {
+        setModalError('security', toErrorMessage(res.error, 'Failed to update login status.'));
+      }
     });
   };
-  const handleArchiveClient = () => {
-    if (confirm('Archive this client?')) {
-      startTransition(async () => {
-        const res = await archiveClientAction(client.id);
-        if (res.success) { toast.success('Client archived.'); router.refresh(); }
-        else toast.error(res.error || 'Error');
-      });
-    }
-  };
   const handleAssignChemical = () => {
-    if (!assignChemData.chemical_name) return toast.error('Substance name is required.');
+    if (!assignChemData.chemical_name.trim()) {
+      setModalError('assignChem', 'Substance name is required.');
+      return;
+    }
+    if (!assignChemData.cas_number.trim()) {
+      setModalError('assignChem', 'CAS number is required.');
+      return;
+    }
+    setModalError('assignChem', null);
     startTransition(async () => {
       const res = await addNewChemicalToClientAction(client.id, assignChemData);
-      if (res.success) { 
+      if (res.success) {
         toast.success('Substance assigned.');
-        setAssignChemModalOpen(false); 
+        setAssignChemModalOpen(false);
         setAssignChemData({ chemical_name: '', cas_number: '', ec_number: '', tonnage_band: '', available_quantity: '', validity_date: '' });
-        router.refresh(); 
+        router.refresh();
+      } else {
+        setModalError('assignChem', toErrorMessage(res.error, 'Failed to assign substance.'));
       }
-      else toast.error(res.error || 'Error');
     });
   };
 
@@ -186,18 +235,25 @@ export default function ClientDashboardDetails({
       tonnage_band: cc.chemicals?.tonnage_band || '',
       validity_date: cc.validity_date || ''
     });
+    setModalError('editChem', null);
     setEditChemModalOpen(true);
   };
 
   const handleEditChemical = () => {
+    if (!editChemData.chemical_name.trim()) {
+      setModalError('editChem', 'Substance name is required.');
+      return;
+    }
+    setModalError('editChem', null);
     startTransition(async () => {
       const res = await editClientChemicalAction(client.id, activeEditChemId, editChemData);
-      if (res.success) { 
-        toast.success('Substance updated.'); 
-        setEditChemModalOpen(false); 
-        router.refresh(); 
+      if (res.success) {
+        toast.success('Substance updated.');
+        setEditChemModalOpen(false);
+        router.refresh();
+      } else {
+        setModalError('editChem', toErrorMessage(res.error, 'Failed to update substance.'));
       }
-      else toast.error(res.error || 'Error');
     });
   };
 
@@ -206,15 +262,25 @@ export default function ClientDashboardDetails({
       startTransition(async () => {
         const res = await removeChemicalFromClientAction(client.id, chemId);
         if (res.success) { toast.success('Substance moved to trash.'); router.refresh(); }
-        else toast.error(res.error || 'Error');
+        else setModalError('substances', toErrorMessage(res.error, 'Failed to remove substance.'));
       });
     }
   };
   const handleAddContact = () => {
+    if (!contactData.first_name.trim() || !contactData.last_name.trim() || !contactData.email.trim()) {
+      setModalError('contact', 'First name, last name, and email are required.');
+      return;
+    }
+    setModalError('contact', null);
     startTransition(async () => {
       const res = await addContactAction(client.id, contactData);
-      if (res.success) { toast.success('Contact added.'); setContactModalOpen(false); router.refresh(); }
-      else toast.error(res.error || 'Error');
+      if (res.success) {
+        toast.success('Contact added.');
+        setContactModalOpen(false);
+        router.refresh();
+      } else {
+        setModalError('contact', toErrorMessage(res.error, 'Failed to add contact.'));
+      }
     });
   };
   const handleDeleteContact = (id: string) => {
@@ -227,10 +293,21 @@ export default function ClientDashboardDetails({
     }
   };
   const handleAddNote = () => {
+    if (!noteContent.trim()) {
+      setModalError('note', 'Note cannot be empty.');
+      return;
+    }
+    setModalError('note', null);
     startTransition(async () => {
       const res = await addInternalNoteAction(client.id, noteContent);
-      if (res.success) { toast.success('Note added.'); setNoteModalOpen(false); setNoteContent(''); router.refresh(); }
-      else toast.error(res.error || 'Error');
+      if (res.success) {
+        toast.success('Note added.');
+        setNoteModalOpen(false);
+        setNoteContent('');
+        router.refresh();
+      } else {
+        setModalError('note', toErrorMessage(res.error, 'Failed to save note.'));
+      }
     });
   };
   const handleDeleteNote = (id: string) => {
@@ -244,7 +321,11 @@ export default function ClientDashboardDetails({
   };
 
   const handleExportCSV = () => {
-    if (clientChemicals.length === 0) return toast.error('No data to export');
+    if (clientChemicals.length === 0) {
+      setModalError('substances', 'No substance data to export.');
+      return;
+    }
+    setModalError('substances', null);
 
     const headers = ['Chemical Name', 'CAS Number', 'EC Number', 'Tonnage Band', 'Exported (MT)', 'Total Quota (MT)', 'Validity Date', 'Status'];
 
@@ -365,12 +446,17 @@ export default function ClientDashboardDetails({
               <Download className="h-4 w-4" />
             </Button>
             {currentUserRole !== 'CLIENT' && (
-              <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800 ml-2" onClick={() => setAssignChemModalOpen(true)}>
+              <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800 ml-2" onClick={() => { setModalError('assignChem', null); setAssignChemModalOpen(true); }}>
                 + Assign Sub.
               </Button>
             )}
           </div>
         </div>
+        {modalErrors.substances && (
+          <div className="px-5 pt-4">
+            <ModalErrorBox message={modalErrors.substances} />
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-white text-slate-500 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
@@ -559,18 +645,16 @@ export default function ClientDashboardDetails({
                 <CardTitle className="text-base text-slate-800">Account Security</CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-3">
-                <Button variant="outline" className="w-full justify-start" onClick={() => setEmailModalOpen(true)}>
-                  <Mail className="h-4 w-4 mr-2 text-slate-400" /> Change Email
+                <ModalErrorBox message={modalErrors.security} />
+                <Button variant="outline" className="w-full justify-start" onClick={() => { setNewEmail(client.email); setModalError('email', null); setEmailModalOpen(true); }}>
+                  <Mail className="h-4 w-4 mr-2 text-slate-400" /> Primary Email address
                 </Button>
-                <Button variant="outline" className="w-full justify-start" onClick={() => setPasswordModalOpen(true)}>
+                <Button variant="outline" className="w-full justify-start" onClick={() => { setNewPassword(''); setShowCurrentPassword(false); setShowNewPassword(false); setModalError('password', null); setPasswordModalOpen(true); }}>
                   <Key className="h-4 w-4 mr-2 text-slate-400" /> Reset Password
                 </Button>
                 <Button variant={user?.is_disabled ? 'primary' : 'outline'} className="w-full justify-start" onClick={handleToggleLogin} isLoading={isPending}>
                   {user?.is_disabled ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2 text-slate-400" />}
                   {user?.is_disabled ? 'Enable Login' : 'Disable Login'}
-                </Button>
-                <Button variant="destructive" className="w-full justify-start" onClick={handleArchiveClient} isLoading={isPending} disabled={client.status === 'inactive'}>
-                  <Archive className="h-4 w-4 mr-2" /> Archive Client
                 </Button>
               </CardContent>
             </Card>
@@ -578,7 +662,7 @@ export default function ClientDashboardDetails({
             <Card className="border-slate-100 shadow-xs lg:col-span-2">
               <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
                 <CardTitle className="text-base text-slate-800">Secondary Contacts</CardTitle>
-                <Button size="sm" onClick={() => setContactModalOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> Add Contact</Button>
+                <Button size="sm" onClick={() => { setModalError('contact', null); setContactModalOpen(true); }}><Plus className="h-4 w-4 mr-1.5" /> Add Contact</Button>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[250px] overflow-y-auto">
@@ -605,7 +689,7 @@ export default function ClientDashboardDetails({
             <Card className="border-slate-100 shadow-xs">
               <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
                 <CardTitle className="text-base text-slate-800 flex items-center gap-2"><StickyNote className="h-4 w-4 text-slate-400" /> Internal Notes</CardTitle>
-                <Button size="sm" onClick={() => setNoteModalOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> Add Note</Button>
+                <Button size="sm" onClick={() => { setModalError('note', null); setNoteModalOpen(true); }}><Plus className="h-4 w-4 mr-1.5" /> Add Note</Button>
               </CardHeader>
               <CardContent className="pt-4 max-h-[300px] overflow-y-auto space-y-3">
                 {internalNotes.map(n => (
@@ -648,27 +732,73 @@ export default function ClientDashboardDetails({
 
       {/* --- ALL MODALS --- */}
       {/* Email Modal */}
-      <Dialog isOpen={isEmailModalOpen} onClose={() => setEmailModalOpen(false)} title="Change Email Address">
+      <Dialog isOpen={isEmailModalOpen} onClose={() => { setEmailModalOpen(false); setModalError('email', null); }} title="Primary Email address">
         <div className="p-2 space-y-4">
-          <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" />
+          <Input
+            label="Primary Email address"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            type="email"
+          />
+          <ModalErrorBox message={modalErrors.email} />
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setEmailModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEmailModalOpen(false); setModalError('email', null); }}>Cancel</Button>
             <Button onClick={handleEmailChange} isLoading={isPending}>Save Changes</Button>
           </div>
         </div>
       </Dialog>
       {/* Password Modal */}
-      <Dialog isOpen={isPasswordModalOpen} onClose={() => setPasswordModalOpen(false)} title="Reset Password">
+      <Dialog isOpen={isPasswordModalOpen} onClose={() => { setPasswordModalOpen(false); setModalError('password', null); }} title="Reset Password">
         <div className="p-2 space-y-4">
-          <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="New strong password" />
+          <div className="w-full flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Current Password</label>
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? 'text' : 'password'}
+                readOnly
+                value={user?.login_password || ''}
+                placeholder={user?.login_password ? undefined : 'Not recorded — reset password to store'}
+                className="flex h-10 w-full rounded-md border border-slate-200 bg-slate-50 px-3 pr-10 py-2 text-sm text-slate-700"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
+                aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+              >
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="w-full flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">New Password</label>
+            <div className="relative">
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                placeholder="New strong password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
+                aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+              >
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <ModalErrorBox message={modalErrors.password} />
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setPasswordModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setPasswordModalOpen(false); setModalError('password', null); }}>Cancel</Button>
             <Button onClick={handlePasswordChange} isLoading={isPending}>Set Password</Button>
           </div>
         </div>
       </Dialog>
       {/* Assign Chemical Modal */}
-      <Dialog isOpen={isAssignChemModalOpen} onClose={() => setAssignChemModalOpen(false)} title="Assign Substance Authority">
+      <Dialog isOpen={isAssignChemModalOpen} onClose={() => { setAssignChemModalOpen(false); setModalError('assignChem', null); }} title="Assign Substance Authority">
         <div className="p-2 space-y-4">
           <div className="space-y-4">
             <div>
@@ -677,8 +807,8 @@ export default function ClientDashboardDetails({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold mb-1 block">CAS Number</label>
-                <Input placeholder="e.g. 67-56-1" value={assignChemData.cas_number} onChange={(e) => setAssignChemData({ ...assignChemData, cas_number: e.target.value })} />
+                <label className="text-sm font-semibold mb-1 block">CAS Number *</label>
+                <Input placeholder="e.g. 67-56-1" value={assignChemData.cas_number} onChange={(e) => setAssignChemData({ ...assignChemData, cas_number: e.target.value })} required />
               </div>
               <div>
                 <label className="text-sm font-semibold mb-1 block">EC Number</label>
@@ -706,28 +836,41 @@ export default function ClientDashboardDetails({
               </div>
             </div>
           </div>
+          <ModalErrorBox message={modalErrors.assignChem} />
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setAssignChemModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAssignChemModalOpen(false); setModalError('assignChem', null); }}>Cancel</Button>
             <Button onClick={handleAssignChemical} isLoading={isPending}>Assign Authority</Button>
           </div>
         </div>
       </Dialog>
       {/* Edit Chemical Modal */}
-      <Dialog isOpen={isEditChemModalOpen} onClose={() => setEditChemModalOpen(false)} title="Edit Substance Allocation">
+      <Dialog isOpen={isEditChemModalOpen} onClose={() => { setEditChemModalOpen(false); setModalError('editChem', null); }} title="Edit Substance Allocation">
         <div className="p-2 space-y-4">
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-semibold mb-1 block">Substance Name</label>
-              <Input value={editChemData.chemical_name} disabled className="bg-slate-50 text-slate-500" />
+              <label className="text-sm font-semibold mb-1 block">Substance Name *</label>
+              <Input
+                placeholder="e.g. Methanol"
+                value={editChemData.chemical_name}
+                onChange={(e) => setEditChemData({ ...editChemData, chemical_name: e.target.value })}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-semibold mb-1 block">CAS Number</label>
-                <Input value={editChemData.cas_number} disabled className="bg-slate-50 text-slate-500" />
+                <Input
+                  placeholder="e.g. 67-56-1"
+                  value={editChemData.cas_number}
+                  onChange={(e) => setEditChemData({ ...editChemData, cas_number: e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-semibold mb-1 block">EC Number</label>
-                <Input value={editChemData.ec_number} disabled className="bg-slate-50 text-slate-500" />
+                <Input
+                  placeholder="e.g. 200-659-6"
+                  value={editChemData.ec_number}
+                  onChange={(e) => setEditChemData({ ...editChemData, ec_number: e.target.value })}
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -751,14 +894,15 @@ export default function ClientDashboardDetails({
               </div>
             </div>
           </div>
+          <ModalErrorBox message={modalErrors.editChem} />
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setEditChemModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditChemModalOpen(false); setModalError('editChem', null); }}>Cancel</Button>
             <Button className="bg-teal-700 hover:bg-teal-800" onClick={handleEditChemical} isLoading={isPending}>Save Changes</Button>
           </div>
         </div>
       </Dialog>
       {/* Add Contact Modal */}
-      <Dialog isOpen={isContactModalOpen} onClose={() => setContactModalOpen(false)} title="Add Secondary Contact">
+      <Dialog isOpen={isContactModalOpen} onClose={() => { setContactModalOpen(false); setModalError('contact', null); }} title="Add Secondary Contact">
         <div className="p-2 space-y-4">
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -769,14 +913,15 @@ export default function ClientDashboardDetails({
             <Input placeholder="Phone Number" value={contactData.phone} onChange={e => setContactData({ ...contactData, phone: e.target.value })} />
             <Input placeholder="Role / Position" value={contactData.role} onChange={e => setContactData({ ...contactData, role: e.target.value })} />
           </div>
+          <ModalErrorBox message={modalErrors.contact} />
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setContactModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setContactModalOpen(false); setModalError('contact', null); }}>Cancel</Button>
             <Button onClick={handleAddContact} isLoading={isPending}>Add Contact</Button>
           </div>
         </div>
       </Dialog>
       {/* Add Note Modal */}
-      <Dialog isOpen={isNoteModalOpen} onClose={() => setNoteModalOpen(false)} title="Add Internal Note">
+      <Dialog isOpen={isNoteModalOpen} onClose={() => { setNoteModalOpen(false); setModalError('note', null); }} title="Add Internal Note">
         <div className="p-2 space-y-4">
           <textarea 
             className="w-full h-32 p-3 border border-slate-200 rounded-lg text-sm"
@@ -784,8 +929,9 @@ export default function ClientDashboardDetails({
             value={noteContent}
             onChange={(e) => setNoteContent(e.target.value)}
           ></textarea>
+          <ModalErrorBox message={modalErrors.note} />
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setNoteModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setNoteModalOpen(false); setModalError('note', null); }}>Cancel</Button>
             <Button onClick={handleAddNote} isLoading={isPending}>Save Note</Button>
           </div>
         </div>

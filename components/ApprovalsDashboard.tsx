@@ -33,7 +33,10 @@ interface Application {
   export_date: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'modification_requested';
   rejection_reason: string | null;
+  bo_attachment_url: string | null;
+  bo_attachment_name: string | null;
   created_at: string;
+  client_chemicals?: { available_quantity: number } | null;
   clients: {
     company_name: string;
     email: string;
@@ -360,9 +363,24 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
                   </div>
                   <div>
                     <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Available Quota</span>
-                    <span className="font-bold text-slate-800">{selectedApp?.chemicals.available_quantity} MT</span>
+                    <span className="font-bold text-slate-800">
+                      {selectedApp?.client_chemicals?.available_quantity ??
+                        selectedApp?.chemicals.available_quantity}{' '}
+                      MT
+                    </span>
                   </div>
                 </div>
+                {selectedApp?.bo_attachment_url && (
+                  <a
+                    href={selectedApp.bo_attachment_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    View BO: {selectedApp.bo_attachment_name || 'Attachment'}
+                  </a>
+                )}
               </div>
               <p className="text-xs text-slate-500 font-medium">
                 Approving will immediately subtract the requested tonnage from the inventory, generate the official PDF certificate with secure QR verification code, store the file, and dispatch SMTP email notification with PDF attachment.

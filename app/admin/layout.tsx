@@ -8,11 +8,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await getSession();
 
   if (!session) {
-    redirect('/login');
+    redirect('/api/auth/clear?error=SessionExpired');
   }
 
   if (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN') {
-    redirect('/login?error=Unauthorized');
+    redirect('/api/auth/clear?error=Unauthorized');
   }
 
   // Count unread notifications (admin-level — by user id)

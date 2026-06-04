@@ -13,10 +13,16 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '';
   const errorParam = searchParams.get('error');
+  const initialError =
+    errorParam === 'SessionExpired'
+      ? 'Your session expired. Please sign in again.'
+      : errorParam === 'Unauthorized'
+        ? 'You are not authorized to access that area.'
+        : errorParam || '';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errorMsg, setErrorMsg] = useState(errorParam || '');
+  const [errorMsg, setErrorMsg] = useState(initialError);
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = async (e: React.FormEvent) => {

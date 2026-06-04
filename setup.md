@@ -9,8 +9,13 @@ This document describes the steps required to configure and run the Pharmegic He
 ### Execute Schema SQL
 1. Open your project in the **Supabase Dashboard**.
 2. Navigate to the **SQL Editor** tab.
-3. Open the file [database.sql](file:///d:/Atul/Learning/Pharmegic/database.sql) in your editor, copy its contents, paste them into the Supabase SQL Editor, and click **Run**.
-4. This script will create:
+3. Open **`database.sql`** in your editor, copy its contents, paste them into the Supabase SQL Editor, and click **Run**.
+
+> **Important:** `database.sql` is **safe to re-run** — it does **not** drop tables or delete your data. It only creates missing tables/columns and adds seed rows when they do not exist yet.
+>
+> Use **`database.reset.sql`** only for a **brand-new empty database** in local development. That file deletes all data.
+
+4. This script will create or update:
    - All custom types and enums (`user_role`, `client_status`, `chemical_status`, `tcc_status`, `certificate_status`).
    - The required database tables (`clients`, `users`, `client_contacts`, `chemicals`, `tcc_applications`, `certificates`, `notifications`, `audit_logs`, `templates`, `client_chemicals`).
    - The automated PostgreSQL sync trigger linking `auth.users` to `public.users`.

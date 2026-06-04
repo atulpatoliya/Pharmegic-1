@@ -7,8 +7,12 @@ import { redirect } from 'next/navigation';
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
 
-  if (!session) redirect('/login');
-  if (session.role !== 'CLIENT') redirect('/login?error=Unauthorized');
+  if (!session) {
+    redirect('/api/auth/clear?error=SessionExpired');
+  }
+  if (session.role !== 'CLIENT') {
+    redirect('/api/auth/clear?error=Unauthorized');
+  }
 
   const adminSupabase = createAdminClient();
   let companyName = 'Partner Client';

@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth/session';
 import { generateCertificatePdf } from '@/services/pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { tccApplicationSchema } from '@/lib/validations';
+import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================================
@@ -49,16 +50,30 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       return { success: false, error: 'This chemical is not authorized for your company. Contact your administrator.' };
     }
 
-    // 2. Quota check
+    const clientQuota = Number(authChem.available_quantity ?? 0);
+    if (clientQuota < result.data.quantity_mt) {
+      return {
+        success: false,
+        error: `Insufficient quota. Requested: ${result.data.quantity_mt} MT, Available: ${clientQuota} MT.`,
+      };
+    }
+
     const { data: chemical } = await adminSupabase
       .from('chemicals')
-      .select('available_quantity, chemical_name')
+      .select('chemical_name')
       .eq('id', result.data.chemical_id)
       .single();
 
     if (!chemical) return { success: false, error: 'Chemical not found.' };
-    if (Number(chemical.available_quantity) < result.data.quantity_mt) {
-      return { success: false, error: `Insufficient quota. Requested: ${result.data.quantity_mt} MT, Available: ${chemical.available_quantity} MT.` };
+
+    const boFile = formData.get('bo_attachment');
+    if (!(boFile instanceof File) || boFile.size === 0) {
+      return { success: false, error: 'BO attachment is required.' };
+    }
+
+    const boValidation = validateBoAttachment(boFile);
+    if (!boValidation.ok) {
+      return { success: false, error: boValidation.error };
     }
 
     // 3. Create TCC application
@@ -78,6 +93,12 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       .single();
 
     if (appError) throw appError;
+
+    const { url: boUrl, name: boName } = await uploadBoAttachment(adminSupabase, boFile, clientId, app.id);
+    await adminSupabase
+      .from('tcc_applications')
+      .update({ bo_attachment_url: boUrl, bo_attachment_name: boName })
+      .eq('id', app.id);
 
     // 4. Audit log
     await adminSupabase.from('audit_logs').insert({
@@ -139,13 +160,30 @@ export async function processTccAction(
     if (updateError) throw updateError;
 
     if (status === 'approved') {
-      // 3. Deduct chemical quantity
-      const newAvailable = Number(app.chemicals.available_quantity) - Number(app.quantity_mt);
-      const newExported = Number(app.chemicals.exported_quantity) + Number(app.quantity_mt);
+      // 3. Deduct client-assigned quota (admin allocation on client_chemicals)
+      if (app.client_chemical_id) {
+        const { data: clientChem } = await adminSupabase
+          .from('client_chemicals')
+          .select('available_quantity')
+          .eq('id', app.client_chemical_id)
+          .single();
 
+        if (clientChem) {
+          const newClientAvailable = Math.max(
+            0,
+            Number(clientChem.available_quantity) - Number(app.quantity_mt)
+          );
+          await adminSupabase
+            .from('client_chemicals')
+            .update({ available_quantity: newClientAvailable })
+            .eq('id', app.client_chemical_id);
+        }
+      }
+
+      const newExported = Number(app.chemicals.exported_quantity) + Number(app.quantity_mt);
       await adminSupabase
         .from('chemicals')
-        .update({ available_quantity: newAvailable, exported_quantity: newExported })
+        .update({ exported_quantity: newExported })
         .eq('id', app.chemical_id);
 
       // 4. Record quota transaction

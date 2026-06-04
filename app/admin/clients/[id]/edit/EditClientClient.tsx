@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateClientAction } from '@/actions/clients';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { toast } from '@/store/toast';
+import { useLayoutStore } from '@/store/layout';
 import { Briefcase, AlertCircle } from 'lucide-react';
 
 
@@ -45,6 +46,12 @@ interface EditClientClientProps {
 export default function EditClientClient({ client, chemicals, initialChemicalIds }: EditClientClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const setCustomBreadcrumb = useLayoutStore((state) => state.setCustomBreadcrumb);
+
+  useEffect(() => {
+    setCustomBreadcrumb(client.company_name);
+    return () => setCustomBreadcrumb(null);
+  }, [client.company_name, setCustomBreadcrumb]);
 
   const [editProfile, setEditProfile] = useState({
     company_name: client.company_name || '',

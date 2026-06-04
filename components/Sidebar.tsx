@@ -24,7 +24,7 @@ interface SidebarProps {
 
 export default function Sidebar({ role, companyName }: SidebarProps) {
   const pathname = usePathname();
-  const { isSidebarOpen, setSidebarOpen } = useLayoutStore();
+  const { isSidebarOpen, setSidebarOpen, customBreadcrumb } = useLayoutStore();
 
   // Close sidebar on path changes (mobile)
   useEffect(() => {
@@ -44,13 +44,29 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     adminLinks.splice(4, 0, { href: '/admin/super', label: 'Super Admin', icon: Shield });
   }
 
+  const isClientProfileView =
+    /^\/admin\/clients\/(?!new(?:\/|$))[^/]+/.test(pathname);
+
+  const clientProfileHiddenHrefs = new Set([
+    '/admin',
+    '/admin/chemicals',
+    '/admin/approvals',
+    '/admin/settings',
+    '/admin/super',
+  ]);
+
+  const filteredAdminLinks = isClientProfileView
+    ? adminLinks.filter((link) => !clientProfileHiddenHrefs.has(link.href))
+    : adminLinks;
+
   const clientLinks = [
     { href: '/client', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/client/apply', label: 'Apply for TCC', icon: FileSignature },
     { href: '/client/certificates', label: 'My Certificates', icon: Award },
   ];
 
-  const links = role === 'SUPER_ADMIN' || role === 'MASTER_ADMIN' ? adminLinks : clientLinks;
+  const links =
+    role === 'SUPER_ADMIN' || role === 'MASTER_ADMIN' ? filteredAdminLinks : clientLinks;
 
 
   const sidebarContent = (
@@ -85,6 +101,10 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
         {links.map((link) => {
           const isActive = pathname === link.href || (link.href !== '/admin' && link.href !== '/client' && pathname.startsWith(link.href));
           const Icon = link.icon;
+          const displayLabel =
+            isClientProfileView && link.href === '/admin/clients' && customBreadcrumb
+              ? customBreadcrumb
+              : link.label;
 
           return (
             <Link
@@ -97,7 +117,7 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
               }`}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              <span>{link.label}</span>
+              <span className="truncate" title={displayLabel}>{displayLabel}</span>
             </Link>
           );
         })}

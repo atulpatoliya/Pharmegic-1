@@ -28,8 +28,16 @@ export default async function ApplyPage() {
     .eq('status', 'active');
 
   const authorizedSubstances = (mappings || [])
-    .map((m: any) => ({ ...m.chemicals, authorized_quantity: m.available_quantity }))
-    .filter((chem: any) => chem && chem.status === 'active');
+    .map((m: any) => {
+      const chem = Array.isArray(m.chemicals) ? m.chemicals[0] : m.chemicals;
+      if (!chem || chem.status !== 'active') return null;
+      return {
+        ...chem,
+        available_quantity: Number(m.available_quantity ?? 0),
+        validity_date: m.validity_date ?? chem.validity_date ?? null,
+      };
+    })
+    .filter(Boolean);
 
   return <TccApplicationForm authorizedSubstances={authorizedSubstances as any} />;
 }

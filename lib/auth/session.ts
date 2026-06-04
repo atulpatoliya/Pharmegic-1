@@ -1,14 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-
-const SESSION_COOKIE = 'pharmegic_session';
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
-
-function getSecret(): Uint8Array {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error('AUTH_SECRET environment variable is not set');
-  return new TextEncoder().encode(secret);
-}
+import { createAdminClient } from '@/lib/supabase/admin';
+import { SESSION_COOKIE, SESSION_MAX_AGE, getAuthSecret } from '@/lib/auth/constants';
 
 export interface SessionPayload {
   userId: string;
@@ -18,7 +11,7 @@ export interface SessionPayload {
 }
 
 export async function createSession(payload: SessionPayload): Promise<void> {
-  const secret = getSecret();
+  const secret = getAuthSecret();
   const token = await new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -35,15 +28,62 @@ export async function createSession(payload: SessionPayload): Promise<void> {
   });
 }
 
+async function reconcileSessionWithDatabase(
+  session: SessionPayload
+): Promise<SessionPayload | null> {
+  const supabase = createAdminClient();
+
+  let user: {
+    id: string;
+    email: string;
+    role: string;
+    client_id: string | null;
+    is_disabled: boolean;
+  } | null = null;
+
+  const { data: userById } = await supabase
+    .from('users')
+    .select('id, email, role, client_id, is_disabled')
+    .eq('id', session.userId)
+    .maybeSingle();
+
+  user = userById;
+
+  // After DB reset/reseed, JWT may still hold an old user id — match by email
+  if (!user) {
+    const { data: userByEmail } = await supabase
+      .from('users')
+      .select('id, email, role, client_id, is_disabled')
+      .eq('email', session.email.toLowerCase().trim())
+      .maybeSingle();
+    user = userByEmail;
+  }
+
+  if (!user || user.is_disabled) return null;
+
+  const validated: SessionPayload = {
+    userId: user.id,
+    email: user.email,
+    role: user.role as SessionPayload['role'],
+    clientId: user.client_id ?? null,
+  };
+
+  // Do not call createSession here — layouts/pages cannot modify cookies during render.
+  // Return reconciled user for this request; proxy clears stale cookies on redirect to /login.
+  return validated;
+}
+
 export async function getSession(): Promise<SessionPayload | null> {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(SESSION_COOKIE)?.value;
     if (!token) return null;
 
-    const secret = getSecret();
+    const secret = getAuthSecret();
     const { payload } = await jwtVerify(token, secret);
-    return payload as unknown as SessionPayload;
+    const jwtSession = payload as unknown as SessionPayload;
+
+    return await reconcileSessionWithDatabase(jwtSession);
   } catch {
     return null;
   }

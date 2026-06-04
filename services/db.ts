@@ -297,6 +297,7 @@ export async function getTccApplications(supabase: SupabaseClient, statusFilter 
     *,
     clients (company_name, email),
     chemicals (chemical_name, cas_number, ec_number, validity_date, available_quantity),
+    client_chemicals (available_quantity),
     certificates!certificates_tcc_application_id_fkey (*)
   `);
 
@@ -375,7 +376,7 @@ export async function getClientDashboardStats(supabase: SupabaseClient, clientId
   ] = await Promise.all([
     supabase.from('client_chemicals').select('*', { count: 'exact', head: true }).eq('client_id', clientId),
     supabase.from('tcc_applications').select('quantity_mt').eq('client_id', clientId).eq('status', 'approved'),
-    supabase.from('client_chemicals').select('chemical_id, chemicals (*)').eq('client_id', clientId),
+    supabase.from('client_chemicals').select('chemical_id, available_quantity, chemicals (*)').eq('client_id', clientId).eq('status', 'active'),
     supabase.from('certificates').select('*, tcc_applications:tcc_applications!certificates_tcc_application_id_fkey (quantity_mt, chemicals (chemical_name, cas_number))').eq('client_id', clientId).order('issued_at', { ascending: false }).limit(10),
     supabase.from('users').select('id').eq('client_id', clientId).limit(1)
   ]);
@@ -387,10 +388,8 @@ export async function getClientDashboardStats(supabase: SupabaseClient, clientId
   const userProfile = userProfileRes.data;
 
   const totalExported = (approvedApps || []).reduce((sum, app) => sum + Number(app.quantity_mt), 0);
-  const authorizedSubstances = (mappings || []).map((m: any) => m.chemicals);
-  const remainingQuota = authorizedSubstances.reduce((sum: number, chem: any) => {
-    const available = chem && typeof chem.available_quantity === 'number' ? chem.available_quantity : 0;
-    return sum + Number(available || 0);
+  const remainingQuota = (mappings || []).reduce((sum: number, row: { available_quantity?: number }) => {
+    return sum + Number(row.available_quantity ?? 0);
   }, 0);
 
 
@@ -411,7 +410,6 @@ export async function getClientDashboardStats(supabase: SupabaseClient, clientId
       totalExported: parseFloat(totalExported.toFixed(2)),
       remainingQuota: parseFloat(remainingQuota.toFixed(2)),
     },
-    authorizedSubstances,
     certificates: certificates || [],
     notifications,
   };

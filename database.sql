@@ -1,47 +1,43 @@
--- PHARMEGIC HEALTHCARE DATABASE SCHEMA (MASTER VERSION)
--- PostgreSQL schema for Supabase — Custom Auth (no Supabase Auth)
+-- =============================================================================
+-- PHARMEGIC HEALTHCARE DATABASE SCHEMA (SAFE / IDEMPOTENT)
+-- =============================================================================
+-- Safe to re-run: does NOT drop tables or delete existing rows.
+-- - Creates missing tables, columns, indexes, triggers, and policies
+-- - Seed inserts use ON CONFLICT DO NOTHING (no overwrites)
+--
+-- Need a completely empty database? Use database.reset.sql first (DEV ONLY),
+-- then run this file.
+-- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================================
--- DROP EXISTING OBJECTS
+-- ENUMS (create only if missing)
 -- ============================================================================
-DROP TRIGGER IF EXISTS on_auth_user_changed ON auth.users;
-DROP TRIGGER IF EXISTS trg_sync_clients_columns ON public.clients;
-DROP TRIGGER IF EXISTS trg_sync_chemicals_columns ON public.chemicals;
-DROP TRIGGER IF EXISTS trg_sync_tcc_applications_columns ON public.tcc_applications;
-DROP TRIGGER IF EXISTS trg_sync_certificates_columns ON public.certificates;
+DO $$ BEGIN
+    CREATE TYPE public.user_role AS ENUM ('SUPER_ADMIN', 'MASTER_ADMIN', 'CLIENT');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-DROP TABLE IF EXISTS public.internal_notes CASCADE;
-DROP TABLE IF EXISTS public.activity_logs CASCADE;
-DROP TABLE IF EXISTS public.quota_transactions CASCADE;
-DROP TABLE IF EXISTS public.templates CASCADE;
-DROP TABLE IF EXISTS public.audit_logs CASCADE;
-DROP TABLE IF EXISTS public.notifications CASCADE;
-DROP TABLE IF EXISTS public.certificates CASCADE;
-DROP TABLE IF EXISTS public.tcc_applications CASCADE;
-DROP TABLE IF EXISTS public.client_chemicals CASCADE;
-DROP TABLE IF EXISTS public.client_permissions CASCADE;
-DROP TABLE IF EXISTS public.chemicals CASCADE;
-DROP TABLE IF EXISTS public.client_contacts CASCADE;
-DROP TABLE IF EXISTS public.users CASCADE;
-DROP TABLE IF EXISTS public.clients CASCADE;
-DROP TABLE IF EXISTS public.admin_settings CASCADE;
+DO $$ BEGIN
+    CREATE TYPE public.client_status AS ENUM ('active', 'inactive', 'pending');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-DROP TYPE IF EXISTS public.user_role CASCADE;
-DROP TYPE IF EXISTS public.client_status CASCADE;
-DROP TYPE IF EXISTS public.chemical_status CASCADE;
-DROP TYPE IF EXISTS public.tcc_status CASCADE;
-DROP TYPE IF EXISTS public.certificate_status CASCADE;
+DO $$ BEGIN
+    CREATE TYPE public.chemical_status AS ENUM ('active', 'inactive');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- ============================================================================
--- ENUMS
--- ============================================================================
-CREATE TYPE public.user_role AS ENUM ('SUPER_ADMIN', 'MASTER_ADMIN', 'CLIENT');
-CREATE TYPE public.client_status AS ENUM ('active', 'inactive', 'pending');
-CREATE TYPE public.chemical_status AS ENUM ('active', 'inactive');
-CREATE TYPE public.tcc_status AS ENUM ('pending', 'approved', 'rejected', 'changes_required', 'expired');
-CREATE TYPE public.certificate_status AS ENUM ('active', 'expired', 'revoked');
+DO $$ BEGIN
+    CREATE TYPE public.tcc_status AS ENUM ('pending', 'approved', 'rejected', 'changes_required', 'expired');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE public.certificate_status AS ENUM ('active', 'expired', 'revoked');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================================
 -- 1. ADMIN SETTINGS (Singleton)
@@ -55,7 +51,6 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     bcc_emails TEXT DEFAULT '',
     timezone TEXT DEFAULT 'UTC',
     profile_image TEXT,
-    -- SMTP Settings
     smtp_host TEXT DEFAULT '',
     smtp_port INTEGER DEFAULT 587,
     smtp_user TEXT DEFAULT '',
@@ -74,30 +69,22 @@ CREATE TABLE IF NOT EXISTS public.clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-
-    -- Company Profile
     company_name TEXT NOT NULL,
     legal_name TEXT,
     uuid_number TEXT UNIQUE,
     registration_number TEXT,
     owner_name TEXT,
-
-    -- Location
     address TEXT,
     city TEXT,
     state TEXT,
     postal_code TEXT,
     country TEXT DEFAULT 'Turkey',
-
-    -- Primary Contact
     email TEXT UNIQUE NOT NULL,
     phone TEXT,
     primary_contact_first_name TEXT,
     primary_contact_last_name TEXT,
     cc_emails TEXT,
     cc_phones TEXT,
-
-    -- System
     status public.client_status DEFAULT 'pending'
 );
 
@@ -154,7 +141,7 @@ CREATE TABLE IF NOT EXISTS public.client_chemicals (
     chemical_id UUID NOT NULL REFERENCES public.chemicals(id) ON DELETE CASCADE,
     available_quantity NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (available_quantity >= 0),
     validity_date DATE,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'suspended')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'suspended', 'trashed')),
     assigned_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -174,6 +161,8 @@ CREATE TABLE IF NOT EXISTS public.tcc_applications (
     export_date DATE,
     kkdik_reg_no TEXT,
     remarks TEXT,
+    bo_attachment_url TEXT,
+    bo_attachment_name TEXT,
     status public.tcc_status DEFAULT 'pending',
     rejection_reason TEXT,
     approved_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
@@ -194,7 +183,6 @@ CREATE TABLE IF NOT EXISTS public.certificates (
     issued_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE,
     status public.certificate_status DEFAULT 'active',
-    -- Mail tracking
     mail_sent BOOLEAN NOT NULL DEFAULT false,
     mail_sent_at TIMESTAMP WITH TIME ZONE,
     mail_sent_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
@@ -284,6 +272,20 @@ CREATE TABLE IF NOT EXISTS public.templates (
 );
 
 -- ============================================================================
+-- COLUMN MIGRATIONS (add new columns without touching existing rows)
+-- ============================================================================
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS login_password TEXT;
+
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_url TEXT;
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_name TEXT;
+
+-- Allow trashed status on client_chemicals (existing DBs may have old constraint)
+ALTER TABLE public.client_chemicals DROP CONSTRAINT IF EXISTS client_chemicals_status_check;
+ALTER TABLE public.client_chemicals
+    ADD CONSTRAINT client_chemicals_status_check
+    CHECK (status IN ('active', 'expired', 'suspended', 'trashed'));
+
+-- ============================================================================
 -- INDEXES
 -- ============================================================================
 CREATE INDEX IF NOT EXISTS idx_clients_email ON public.clients(email);
@@ -311,22 +313,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_clients_updated_at ON public.clients;
 CREATE TRIGGER trg_clients_updated_at
     BEFORE UPDATE ON public.clients
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_users_updated_at ON public.users;
 CREATE TRIGGER trg_users_updated_at
     BEFORE UPDATE ON public.users
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_client_chemicals_updated_at ON public.client_chemicals;
 CREATE TRIGGER trg_client_chemicals_updated_at
     BEFORE UPDATE ON public.client_chemicals
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_tcc_applications_updated_at ON public.tcc_applications;
 CREATE TRIGGER trg_tcc_applications_updated_at
     BEFORE UPDATE ON public.tcc_applications
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_internal_notes_updated_at ON public.internal_notes;
 CREATE TRIGGER trg_internal_notes_updated_at
     BEFORE UPDATE ON public.internal_notes
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -349,38 +356,55 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.internal_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 
--- Since we use custom JWT sessions (not Supabase Auth), all DB access
--- goes through the service-role admin client on the server.
--- RLS policies below are for defence-in-depth using service_role bypass.
-
--- Allow service_role full access to all tables (server-side API uses admin client)
--- All client-facing queries use the anon key but are handled server-side.
-
+DROP POLICY IF EXISTS "Service role full access" ON public.admin_settings;
 CREATE POLICY "Service role full access" ON public.admin_settings FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.clients;
 CREATE POLICY "Service role full access" ON public.clients FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.users;
 CREATE POLICY "Service role full access" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.client_contacts;
 CREATE POLICY "Service role full access" ON public.client_contacts FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.chemicals;
 CREATE POLICY "Service role full access" ON public.chemicals FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.client_chemicals;
 CREATE POLICY "Service role full access" ON public.client_chemicals FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.tcc_applications;
 CREATE POLICY "Service role full access" ON public.tcc_applications FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.certificates;
 CREATE POLICY "Service role full access" ON public.certificates FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.quota_transactions;
 CREATE POLICY "Service role full access" ON public.quota_transactions FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.notifications;
 CREATE POLICY "Service role full access" ON public.notifications FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.activity_logs;
 CREATE POLICY "Service role full access" ON public.activity_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.audit_logs;
 CREATE POLICY "Service role full access" ON public.audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.internal_notes;
 CREATE POLICY "Service role full access" ON public.internal_notes FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON public.templates;
 CREATE POLICY "Service role full access" ON public.templates FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- ============================================================================
--- SEED DATA
+-- SEED DATA (insert only when missing — never overwrites existing rows)
 -- ============================================================================
-
--- Default admin settings
 INSERT INTO public.admin_settings (id, full_name, email)
 VALUES (1, 'Admin User', 'directoratulpatoliya@gmail.com')
 ON CONFLICT (id) DO NOTHING;
 
--- Default branding template
 INSERT INTO public.templates (id, logo, accent_color, footer_text, signature_image)
 VALUES (
   'd4e30b6f-6c18-472e-8d8a-36fb644b9b94',
@@ -388,9 +412,8 @@ VALUES (
   '#064e3b',
   'Pharmegic Healthcare Compliance Division. For verification, scan the QR code.',
   null
-) ON CONFLICT DO NOTHING;
+) ON CONFLICT (id) DO NOTHING;
 
--- Seed chemicals
 INSERT INTO public.chemicals (chemical_name, cas_number, ec_number, tonnage_band, validity_date, available_quantity, exported_quantity, status)
 VALUES
 ('Ethylene Glycol Monoethyl Ether', '110-80-5', '203-804-1', '10-100 tonnes', '2027-12-31', 150.00, 25.50, 'active'),
@@ -399,11 +422,9 @@ VALUES
 ('Dimethylformamide (DMF)', '68-12-2', '200-679-5', '100-1000 tonnes', '2027-09-15', 500.00, 0.00, 'active')
 ON CONFLICT (cas_number) DO NOTHING;
 
--- Seed initial administration credentials
--- Password hash corresponds to 'Admin@1234' with 12 bcrypt salt rounds
+-- Default admin accounts (only created if email does not exist yet)
 INSERT INTO public.users (email, password_hash, role, is_disabled)
-VALUES 
+VALUES
 ('atul.patoliya@gmail.com', '$2b$12$nFbwz4f2OVFV.oISYd028emI1rdc58Zoi5BxRnfXtbaKFa9D3u9pm', 'SUPER_ADMIN', false),
 ('directoratulpatoliya@gmail.com', '$2b$12$oe./N.URUVDKV90AQARTieIOl0MmvZ68jX9skCUtEtTK6ppWHnxOq', 'MASTER_ADMIN', false)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
-
+ON CONFLICT (email) DO NOTHING;

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { formatErrorMessage } from '@/lib/format-error';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -37,9 +38,13 @@ export const useToastStore = create<ToastState>((set) => ({
     })),
 }));
 
+function toMessage(msg: unknown): string {
+  return typeof msg === 'string' ? msg : formatErrorMessage(msg);
+}
+
 export const toast = {
-  success: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'success', duration),
-  error: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'error', duration),
-  warning: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'warning', duration),
-  info: (msg: string, duration?: number) => useToastStore.getState().addToast(msg, 'info', duration),
+  success: (msg: unknown, duration?: number) => useToastStore.getState().addToast(toMessage(msg), 'success', duration),
+  error: (msg: unknown, duration?: number) => useToastStore.getState().addToast(toMessage(msg), 'error', duration),
+  warning: (msg: unknown, duration?: number) => useToastStore.getState().addToast(toMessage(msg), 'warning', duration),
+  info: (msg: unknown, duration?: number) => useToastStore.getState().addToast(toMessage(msg), 'info', duration),
 };
