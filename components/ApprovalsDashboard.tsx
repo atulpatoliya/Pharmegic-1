@@ -444,8 +444,8 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
                           <div>
                             <div className="font-bold text-slate-700">{app.chemicals.chemical_name}</div>
                             <div className="text-xs text-slate-400 font-medium">
-                              CAS: {app.chemicals.cas_number}{' '}
-                              {app.chemicals.ec_number ? `• EC: ${app.chemicals.ec_number}` : ''}
+                              CAS: {app.chemicals.cas_number}{' '}<br></br>
+                              {app.chemicals.ec_number ? `EC: ${app.chemicals.ec_number}` : ''}
                             </div>
                           </div>
                         </div>

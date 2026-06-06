@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 
 export default function LoginPage() {
   return (
-    <div className="flex-1 flex flex-col justify-center items-center px-4 py-12 bg-linear-to-tr from-slate-900 via-slate-800 to-primary" suppressHydrationWarning>
+    <div className="flex-1 flex flex-col justify-center items-center px-4 py-12 bg-white" suppressHydrationWarning>
 
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(16,185,129,0.1),transparent)] pointer-events-none" />
       <Suspense

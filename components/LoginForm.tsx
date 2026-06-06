@@ -60,11 +60,12 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8" suppressHydrationWarning>
+    <div className="w-full max-w-[500px] bg-white rounded-2xl shadow-xl border border-slate-100 p-8 shadow-emerald-900/50" suppressHydrationWarning>
 
       {/* Brand Header */}
       <div className="flex flex-col items-center mb-8">
-        <BrandLogo variant="full" href="/" className="mb-4" />
+        <BrandLogo variant="full" href="/" className="mb-10" />
+        <h1 class="text-3xl font-bold text-center mb-2">Welcome to Pharmegic</h1>
         <p className="text-sm text-slate-500 text-center font-medium">
           Compliance &amp; TCC Certificate Management System
         </p>

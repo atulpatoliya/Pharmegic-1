@@ -11,7 +11,7 @@ interface BrandLogoProps {
 }
 
 const SIZES: Record<BrandLogoVariant, { src: string; width: number; height: number }> = {
-  full: { src: '/pharmegic-logo.png', width: 220, height: 48 },
+  full: { src: '/pharmegic-logo.png', width: 2200, height: 48 },
   icon: { src: '/favicon.png', width: 40, height: 40 },
   sidebar: { src: '/pharmegic-logo.png', width: 200, height: 44 },
 };
@@ -25,7 +25,7 @@ export default function BrandLogo({ variant = 'full', href = '/', className }: B
       alt="Pharmegic Healthcare"
       width={width}
       height={height}
-      className={clsx('h-auto w-auto max-w-full object-contain', className)}
+      className={clsx('h-auto w-full max-w-full object-contain', className)}
       priority={variant === 'sidebar' || variant === 'full'}
     />
   );
@@ -35,7 +35,7 @@ export default function BrandLogo({ variant = 'full', href = '/', className }: B
   }
 
   return (
-    <Link href={href} className="inline-flex items-center focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent rounded-md">
+    <Link href={href} className="w-full inline-flex items-center focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent rounded-md">
       {image}
     </Link>
   );
