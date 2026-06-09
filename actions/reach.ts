@@ -2,10 +2,12 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
-import { generateReachCertificatePdf } from '@/services/pdf';
+import { generateReachPdfForClientChemical } from '@/lib/reach-pdf-data';
+import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
+import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import {
   REACH_CERTIFICATE_TYPE,
   getLastDateOfYear,
@@ -99,31 +101,15 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
     .eq('type', REACH_CERTIFICATE_TYPE)
     .eq('status', 'active');
 
-  const { data: branding } = await adminSupabase.from('templates').select('*').limit(1).maybeSingle();
-
   const issueDate = new Date(issuedDate);
   const expiryDate = new Date(validatedDate);
   const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
   const certNumber = `RC-${issueDate.getFullYear()}-${randStr}`;
 
-  const pdfBuffer = await generateReachCertificatePdf({
-    certificateNumber: certNumber,
+  const pdfBuffer = await generateReachPdfForClientChemical(client, chemical, {
     registrationNumber: registrationNumber.trim(),
-    companyName: client.company_name,
-    companyAddress: [client.address, client.city, client.state, client.postal_code, client.country]
-      .filter(Boolean)
-      .join(', '),
-    uuidNumber: client.uuid_number || '',
-    chemicalName: chemical.chemical_name,
-    casNumber: chemical.cas_number,
-    ecNumber: chemical.ec_number || '',
-    tonnageBand: chemical.tonnage_band || 'N/A',
-    issueDate: issuedDate,
-    expiryDate: validatedDate,
-    logoUrl: branding?.logo || null,
-    signatureUrl: branding?.signature_image || null,
-    footerText: branding?.footer_text || null,
-    accentColor: branding?.accent_color || '#064e3b',
+    issuedDate,
+    validatedDate,
   });
 
   await ensureCertificatesBucket(adminSupabase);
@@ -194,6 +180,90 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   };
 }
 
+export async function regenerateReachCertificateFile(certId: string) {
+  const adminSupabase = createAdminClient();
+
+  const { data: cert } = await adminSupabase
+    .from('certificates')
+    .select(
+      'id, certificate_number, registration_number, issued_at, expires_at, client_id, chemical_id, type'
+    )
+    .eq('id', certId)
+    .eq('type', REACH_CERTIFICATE_TYPE)
+    .single();
+
+  if (!cert?.client_id || !cert.chemical_id) return { success: false as const, error: 'Certificate not found.' };
+
+  const [{ data: client }, { data: chemical }] = await Promise.all([
+    adminSupabase
+      .from('clients')
+      .select('id, company_name, uuid_number, address, city, state, postal_code, country')
+      .eq('id', cert.client_id)
+      .single(),
+    adminSupabase
+      .from('chemicals')
+      .select('id, chemical_name, cas_number, ec_number, tonnage_band')
+      .eq('id', cert.chemical_id)
+      .single(),
+  ]);
+
+  if (!client || !chemical || !cert.registration_number) {
+    return { success: false as const, error: 'Missing certificate data for regeneration.' };
+  }
+
+  const pdfBuffer = await generateReachPdfForClientChemical(client, chemical, {
+    registrationNumber: cert.registration_number,
+    issuedDate: cert.issued_at.split('T')[0],
+    validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),
+  });
+
+  await ensureCertificatesBucket(adminSupabase);
+  const fileName = `${cert.certificate_number}.pdf`;
+  const { error: uploadError } = await adminSupabase.storage
+    .from(CERTIFICATES_BUCKET)
+    .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true });
+
+  if (uploadError) return { success: false as const, error: uploadError.message };
+
+  const {
+    data: { publicUrl },
+  } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(fileName);
+
+  await adminSupabase.from('certificates').update({ file_url: publicUrl }).eq('id', certId);
+
+  return { success: true as const, fileUrl: publicUrl };
+}
+
+export async function issueReachCertificateFromPreviewAction(
+  clientId: string,
+  chemicalId: string,
+  data: { registrationNumber: string; issuedDate: string; validatedDate: string }
+) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  try {
+    const result = await createReachCertificate({
+      clientId,
+      chemicalId,
+      userId: session.userId,
+      registrationNumber: data.registrationNumber,
+      issuedDate: data.issuedDate,
+      validatedDate: data.validatedDate,
+    });
+
+    if (!result.success) return result;
+    return {
+      success: true,
+      message: result.message,
+      certificateId: result.certificateId,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
 // ============================================================================
 // ISSUE RC CERTIFICATE (Admin — renew from substance table)
 // ============================================================================
@@ -238,6 +308,176 @@ export async function issueReachCertificateAction(clientId: string, chemicalId: 
       message: result.message,
       certificateId: result.certificateId,
     };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+async function fetchReachCertificateMailContext(certificateId: string) {
+  const adminSupabase = createAdminClient();
+
+  const [{ data: cert, error }, { data: settings }] = await Promise.all([
+    adminSupabase
+      .from('certificates')
+      .select(`
+        *,
+        chemicals (chemical_name),
+        clients (
+          id,
+          company_name,
+          email,
+          client_contacts (email)
+        )
+      `)
+      .eq('id', certificateId)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .single(),
+    adminSupabase
+      .from('admin_settings')
+      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, cc_emails, bcc_emails')
+      .eq('id', 1)
+      .single(),
+  ]);
+
+  if (error || !cert) throw new Error('REACH certificate not found.');
+  if (!cert.clients?.email) throw new Error('Client primary email is not configured.');
+
+  const contactEmails =
+    cert.clients.client_contacts?.map((c: { email: string }) => c.email).filter(Boolean) || [];
+
+  const recipients = buildCertificateRecipients({
+    primaryEmail: cert.clients.email,
+    contactEmails,
+    adminCcEmails: settings?.cc_emails,
+    adminBccEmails: settings?.bcc_emails,
+  });
+
+  const { data: pdfData, error: pdfError } = await adminSupabase.storage
+    .from(CERTIFICATES_BUCKET)
+    .download(`${cert.certificate_number}.pdf`);
+
+  if (pdfError || !pdfData) throw new Error('Could not retrieve certificate PDF from storage.');
+
+  const pdfBuffer = Buffer.from(await pdfData.arrayBuffer());
+
+  return {
+    cert,
+    settings,
+    recipients,
+    pdfBuffer,
+    chemicalName: cert.chemicals?.chemical_name || 'N/A',
+  };
+}
+
+export async function sendReachCertificateEmailAction(certificateId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+
+  try {
+    const { cert, settings, recipients, pdfBuffer, chemicalName } =
+      await fetchReachCertificateMailContext(certificateId);
+
+    await sendCertEmail({
+      to: recipients.to,
+      cc: recipients.cc,
+      bcc: recipients.bcc,
+      subject: `REACH Compliance Certificate Issued — ${cert.certificate_number}`,
+      certificateNumber: cert.certificate_number,
+      companyName: cert.clients.company_name,
+      chemicalName,
+      pdfBuffer,
+      pdfFileName: `${cert.certificate_number}.pdf`,
+      smtpConfig: settings || undefined,
+      certificateType: 'REACH',
+    });
+
+    const now = new Date().toISOString();
+    await adminSupabase
+      .from('certificates')
+      .update({
+        mail_sent: true,
+        mail_sent_at: now,
+        mail_sent_by: session.userId,
+      })
+      .eq('id', certificateId);
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: cert.client_id,
+      user_id: session.userId,
+      action: 'REACH_CERTIFICATE_EMAIL_SENT',
+      entity_type: 'certificates',
+      entity_id: certificateId,
+      description: `RC certificate email sent to ${recipients.to}`,
+    });
+
+    revalidatePath(`/admin/clients/${cert.client_id}/rc-certificates`);
+    revalidatePath(`/admin/clients/${cert.client_id}/rc-preview/${cert.chemical_id}`);
+
+    return {
+      success: true,
+      message: `Certificate email sent to ${recipients.to}`,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[SEND REACH CERT EMAIL ERROR]:', err);
+    return { success: false, error: message };
+  }
+}
+
+export async function resendReachCertificateEmailAction(certificateId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+
+  try {
+    const { cert, settings, recipients, pdfBuffer, chemicalName } =
+      await fetchReachCertificateMailContext(certificateId);
+
+    if (!cert.mail_sent) {
+      return { success: false, error: 'Certificate has not been sent yet. Use Send Mail first.' };
+    }
+
+    await sendCertEmail({
+      to: recipients.to,
+      cc: recipients.cc,
+      bcc: recipients.bcc,
+      subject: `REACH Compliance Certificate (Resent) — ${cert.certificate_number}`,
+      certificateNumber: cert.certificate_number,
+      companyName: cert.clients.company_name,
+      chemicalName,
+      pdfBuffer,
+      pdfFileName: `${cert.certificate_number}.pdf`,
+      smtpConfig: settings || undefined,
+      certificateType: 'REACH',
+    });
+
+    const now = new Date().toISOString();
+    await adminSupabase
+      .from('certificates')
+      .update({
+        mail_resend_count: (cert.mail_resend_count || 0) + 1,
+        last_resend_at: now,
+        last_resend_by: session.userId,
+      })
+      .eq('id', certificateId);
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: cert.client_id,
+      user_id: session.userId,
+      action: 'REACH_CERTIFICATE_EMAIL_RESENT',
+      entity_type: 'certificates',
+      entity_id: certificateId,
+      description: `RC certificate email resent (${(cert.mail_resend_count || 0) + 1}x)`,
+    });
+
+    revalidatePath(`/admin/clients/${cert.client_id}/rc-certificates`);
+    revalidatePath(`/admin/clients/${cert.client_id}/rc-preview/${cert.chemical_id}`);
+
+    return { success: true, message: 'Certificate email resent successfully.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

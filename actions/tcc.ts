@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { generateCertificatePdf } from '@/services/pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
+import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { tccApplicationSchema } from '@/lib/validations';
 import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
@@ -474,19 +475,19 @@ export async function sendCertificateEmailAction(certificateId: string) {
     // Get SMTP settings from admin_settings
     const { data: settings } = await adminSupabase
       .from('admin_settings')
-      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default, email')
+      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, cc_emails, bcc_emails')
       .eq('id', 1)
       .single();
 
-    // Build CC list: secondary contacts + default CC
-    const ccList: string[] = [];
-    if (cert.clients.client_contacts) {
-      cert.clients.client_contacts.forEach((c: { email: string }) => {
-        if (c.email) ccList.push(c.email);
-      });
-    }
-    if (settings?.smtp_cc_default) ccList.push(settings.smtp_cc_default);
-    if (settings?.email) ccList.push(settings.email);
+    const contactEmails =
+      cert.clients.client_contacts?.map((c: { email: string }) => c.email).filter(Boolean) || [];
+
+    const recipients = buildCertificateRecipients({
+      primaryEmail: cert.clients.email,
+      contactEmails,
+      adminCcEmails: settings?.cc_emails,
+      adminBccEmails: settings?.bcc_emails,
+    });
 
     // Download PDF from storage for attachment
     const { data: pdfData, error: pdfError } = await adminSupabase.storage
@@ -498,8 +499,9 @@ export async function sendCertificateEmailAction(certificateId: string) {
 
     // Send email
     await sendCertEmail({
-      to: cert.clients.email,
-      cc: ccList,
+      to: recipients.to,
+      cc: recipients.cc,
+      bcc: recipients.bcc,
       subject: `TCC Certificate Approved — ${cert.certificate_number}`,
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
@@ -565,18 +567,19 @@ export async function resendCertificateEmailAction(certificateId: string) {
 
     const { data: settings } = await adminSupabase
       .from('admin_settings')
-      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default, email')
+      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, cc_emails, bcc_emails')
       .eq('id', 1)
       .single();
 
-    const ccList: string[] = [];
-    if (cert.clients.client_contacts) {
-      cert.clients.client_contacts.forEach((c: { email: string }) => {
-        if (c.email) ccList.push(c.email);
-      });
-    }
-    if (settings?.smtp_cc_default) ccList.push(settings.smtp_cc_default);
-    if (settings?.email) ccList.push(settings.email);
+    const contactEmails =
+      cert.clients.client_contacts?.map((c: { email: string }) => c.email).filter(Boolean) || [];
+
+    const recipients = buildCertificateRecipients({
+      primaryEmail: cert.clients.email,
+      contactEmails,
+      adminCcEmails: settings?.cc_emails,
+      adminBccEmails: settings?.bcc_emails,
+    });
 
     const { data: pdfData, error: pdfError } = await adminSupabase.storage
       .from('certificates')
@@ -586,8 +589,9 @@ export async function resendCertificateEmailAction(certificateId: string) {
     const pdfBuffer = Buffer.from(await pdfData.arrayBuffer());
 
     await sendCertEmail({
-      to: cert.clients.email,
-      cc: ccList,
+      to: recipients.to,
+      cc: recipients.cc,
+      bcc: recipients.bcc,
       subject: `TCC Certificate (Resent) — ${cert.certificate_number}`,
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,

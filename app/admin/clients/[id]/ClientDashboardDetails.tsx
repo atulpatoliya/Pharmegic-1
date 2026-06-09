@@ -18,7 +18,6 @@ import {
   deleteInternalNoteAction,
   deleteClientAction,
 } from '@/actions/clients';
-import { issueReachCertificateAction } from '@/actions/reach';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -99,10 +98,41 @@ export default function ClientDashboardDetails({
   const showRcCertificatesSection = viewMode === 'rc-certificates';
   const showAdminExtras = viewMode === 'overview' && currentUserRole !== 'CLIENT';
 
+  const clientChemicals = allClientChemicals.filter((c) => c.status !== 'trashed');
+  const trashedChemicals = allClientChemicals.filter((c) => c.status === 'trashed');
+
   const rcCertificates = useMemo(
     () => (certificates || []).filter((c) => c.type === REACH_CERTIFICATE_TYPE),
     [certificates]
   );
+
+  const rcListRows = useMemo(() => {
+    const issued = rcCertificates.map((cert) => ({ kind: 'issued' as const, cert }));
+    const chemicalIdsWithCert = new Set(
+      issued.map((row) => row.cert.chemical_id).filter(Boolean)
+    );
+    const pending = clientChemicals
+      .filter((cc) => !chemicalIdsWithCert.has(cc.chemical_id))
+      .map((cc) => ({
+        kind: 'pending' as const,
+        chemicalId: cc.chemical_id,
+        chemical: cc.chemicals,
+      }));
+
+    const all = [...issued, ...pending];
+    all.sort((a, b) => {
+      const nameA =
+        a.kind === 'issued'
+          ? a.cert.chemicals?.chemical_name || a.cert.chemical?.chemical_name || ''
+          : a.chemical?.chemical_name || '';
+      const nameB =
+        b.kind === 'issued'
+          ? b.cert.chemicals?.chemical_name || b.cert.chemical?.chemical_name || ''
+          : b.chemical?.chemical_name || '';
+      return nameA.localeCompare(nameB);
+    });
+    return all;
+  }, [rcCertificates, clientChemicals]);
 
   const pageTitle =
     viewMode === 'chemicals'
@@ -112,9 +142,6 @@ export default function ClientDashboardDetails({
         : viewMode === 'rc-certificates'
           ? `${client.company_name} — RC Certificates`
           : `${client.company_name} Details`;
-
-  const clientChemicals = allClientChemicals.filter((c) => c.status !== 'trashed');
-  const trashedChemicals = allClientChemicals.filter((c) => c.status === 'trashed');
 
   const reachByChemical = useMemo(
     () =>
@@ -542,23 +569,6 @@ export default function ClientDashboardDetails({
     });
   };
 
-  const handleIssueReachCertificate = (chemicalId: string, chemicalName: string) => {
-    setModalError('substances', null);
-    startTransition(async () => {
-      const res = await issueReachCertificateAction(client.id, chemicalId);
-      if (res.success) {
-        toast.success(res.message || `REACH certificate issued for ${chemicalName}.`);
-        router.refresh();
-        if (res.certificateId) {
-          router.push(`/admin/certificate-preview/${res.certificateId}`);
-        }
-      } else {
-        setModalError('substances', toErrorMessage(res.error, 'Failed to issue REACH certificate.'));
-        toast.error(typeof res.error === 'string' ? res.error : 'Failed to issue REACH certificate.');
-      }
-    });
-  };
-
   const resolveChemical = (row: { chemicals?: { chemical_name?: string } | null }) =>
     row.chemicals?.chemical_name || 'N/A';
 
@@ -963,15 +973,15 @@ export default function ClientDashboardDetails({
                               {reachStatus === 'expired' ? 'Expired' : 'Not Issued'}
                             </Badge>
                             {currentUserRole !== 'CLIENT' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-[10px] font-bold border-teal-200 text-teal-800 hover:bg-teal-50"
-                                onClick={() => handleIssueReachCertificate(cc.chemical_id, name)}
-                                isLoading={isPending}
-                              >
-                                Issue RC
-                              </Button>
+                              <Link href={`/admin/clients/${client.id}/rc-preview/${cc.chemical_id}`}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] font-bold border-teal-200 text-teal-800 hover:bg-teal-50"
+                                >
+                                  View
+                                </Button>
+                              </Link>
                             )}
                           </div>
                         )}
@@ -1097,14 +1107,45 @@ export default function ClientDashboardDetails({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rcCertificates.length === 0 ? (
+              {rcListRows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-medium">
-                    No RC certificates issued yet. Assign a substance to generate an RC certificate.
+                    No substances assigned yet. Assign a substance to issue an RC certificate.
                   </td>
                 </tr>
               ) : (
-                rcCertificates.map((cert) => {
+                rcListRows.map((row) => {
+                  if (row.kind === 'pending') {
+                    const chemName = row.chemical?.chemical_name || 'Unknown';
+                    const cas = row.chemical?.cas_number || 'N/A';
+
+                    return (
+                      <tr key={`pending-${row.chemicalId}`} className="hover:bg-slate-50/50 transition-colors bg-amber-50/30">
+                        <td className="px-6 py-4 font-mono text-xs text-slate-400">—</td>
+                        <td className="px-6 py-4 text-slate-400">—</td>
+                        <td className="px-6 py-4 font-semibold text-slate-800">{chemName}</td>
+                        <td className="px-6 py-4 font-mono text-[11px] text-slate-600">{cas}</td>
+                        <td className="px-6 py-4 text-slate-400">—</td>
+                        <td className="px-6 py-4 text-slate-400">—</td>
+                        <td className="px-6 py-4 text-center">
+                          <Badge variant="warning" className="text-[10px] uppercase font-bold">
+                            Pending
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {currentUserRole !== 'CLIENT' && (
+                            <Link href={`/admin/clients/${client.id}/rc-preview/${row.chemicalId}`} title="Review certificate">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  const cert = row.cert;
                   const chem = cert.chemicals || cert.chemical;
                   const chemName = chem?.chemical_name || 'Unknown';
                   const cas = chem?.cas_number || 'N/A';
@@ -1137,8 +1178,8 @@ export default function ClientDashboardDetails({
                               </Button>
                             </a>
                           )}
-                          {currentUserRole !== 'CLIENT' && (
-                            <Link href={`/admin/certificate-preview/${cert.id}`} title="Preview certificate">
+                          {currentUserRole !== 'CLIENT' && cert.chemical_id && (
+                            <Link href={`/admin/clients/${client.id}/rc-preview/${cert.chemical_id}`} title="Preview certificate">
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50">
                                 <Eye className="h-4 w-4" />
                               </Button>

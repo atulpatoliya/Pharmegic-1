@@ -19,6 +19,8 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
     .from('certificates')
     .select(`
       id,
+      client_id,
+      chemical_id,
       certificate_number,
       type,
       file_url,
@@ -58,6 +60,10 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
 
   if (error || !cert) {
     redirect('/admin/approvals');
+  }
+
+  if (cert.type === 'REACH' && cert.client_id && cert.chemical_id) {
+    redirect(`/admin/clients/${cert.client_id}/rc-preview/${cert.chemical_id}`);
   }
 
   return <CertificatePreviewClient cert={cert as any} />;

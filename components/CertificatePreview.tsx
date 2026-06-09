@@ -15,6 +15,7 @@ import Link from 'next/link';
 interface CertificatePreviewClientProps {
   cert: {
     id: string;
+    client_id?: string | null;
     certificate_number: string;
     type?: string | null;
     file_url: string;
@@ -58,6 +59,10 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
 
   const isReach = cert.type === 'REACH';
   const chemical = cert.chemicals || cert.tcc_applications?.chemicals;
+  const backHref =
+    isReach && cert.client_id
+      ? `/admin/clients/${cert.client_id}/rc-certificates`
+      : '/admin/approvals';
 
   const totalSent = cert.mail_resend_count + (cert.mail_sent ? 1 : 0);
 
@@ -92,7 +97,7 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link href="/admin/approvals">
+          <Link href={backHref}>
             <Button variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 mr-1.5" /> Back
             </Button>
