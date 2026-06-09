@@ -15,7 +15,8 @@ import {
   addContactAction, 
   deleteContactAction, 
   addInternalNoteAction, 
-  deleteInternalNoteAction 
+  deleteInternalNoteAction,
+  deleteClientAction,
 } from '@/actions/clients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -122,6 +123,7 @@ export default function ClientDashboardDetails({
   });
   const [isNoteModalOpen, setNoteModalOpen] = useState(false);
   const [noteContent, setNoteContent] = useState('');
+  const [isDeleteClientOpen, setDeleteClientOpen] = useState(false);
 
   const [isTccViewOpen, setIsTccViewOpen] = useState(false);
   const [viewTccApp, setViewTccApp] = useState<TccViewApplication | null>(null);
@@ -131,6 +133,7 @@ export default function ClientDashboardDetails({
   const [tccRejectionReason, setTccRejectionReason] = useState('');
   const [tccActionError, setTccActionError] = useState<string | null>(null);
   const canReviewTcc = currentUserRole !== 'CLIENT';
+  const canDeleteClient = currentUserRole === 'MASTER_ADMIN' || currentUserRole === 'SUPER_ADMIN';
 
   type ModalErrorKey = 'email' | 'password' | 'assignChem' | 'editChem' | 'contact' | 'note' | 'security' | 'substances';
   const [modalErrors, setModalErrors] = useState<Record<ModalErrorKey, string | null>>({
@@ -461,6 +464,21 @@ export default function ClientDashboardDetails({
         else toast.error(res.error || 'Error');
       });
     }
+  };
+
+  const handleDeleteClient = () => {
+    startTransition(async () => {
+      const res = await deleteClientAction(client.id);
+      if (res.success) {
+        toast.success(res.message || 'Client deleted successfully.');
+        setDeleteClientOpen(false);
+        router.push('/admin/clients');
+        router.refresh();
+      } else {
+        setModalError('security', res.error || 'Failed to delete client.');
+        toast.error(res.error || 'Failed to delete client.');
+      }
+    });
   };
 
   const resolveChemical = (row: { chemicals?: { chemical_name?: string } | null }) =>
@@ -1052,6 +1070,18 @@ export default function ClientDashboardDetails({
                   {user?.is_disabled ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2 text-slate-400" />}
                   {user?.is_disabled ? 'Enable Login' : 'Disable Login'}
                 </Button>
+                {canDeleteClient && (
+                  <>
+                    <hr className="border-slate-100 my-1" />
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                      onClick={() => { setModalError('security', null); setDeleteClientOpen(true); }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Delete Compliance Account
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -1449,6 +1479,40 @@ export default function ClientDashboardDetails({
                 : tccActionType === 'rejected'
                 ? 'Reject Permit'
                 : 'Send Revision Request'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog isOpen={isDeleteClientOpen} onClose={() => setDeleteClientOpen(false)} title="Confirm Deletion">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 font-medium">
+            Are you sure you want to delete{' '}
+            <span className="font-bold text-slate-800">{client.company_name}</span>?
+          </p>
+          <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg text-xs text-rose-700 font-semibold space-y-1">
+            <p className="font-bold">WARNING: THIS ACTION IS PERMANENT & CANNOT BE UNDONE.</p>
+            <p>
+              Deleting this compliance account will immediately revoke all active certificates, cancel pending TCC permits, erase contact officer profiles, and delete the user credentials.
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteClientOpen(false)}
+              disabled={isPending}
+            >
+              No, Keep Client
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDeleteClient}
+              isLoading={isPending}
+              disabled={isPending}
+              className="bg-rose-600 hover:bg-rose-700 text-white border-rose-600 hover:border-rose-700"
+            >
+              Yes, Delete Permanently
             </Button>
           </div>
         </div>

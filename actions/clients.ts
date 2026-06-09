@@ -335,16 +335,33 @@ export async function archiveClientAction(clientId: string) {
 // ============================================================================
 export async function deleteClientAction(clientId: string) {
   const session = await requireAdmin();
-  if (!session || session.role !== 'SUPER_ADMIN') return { success: false, error: 'Unauthorized. Super Admin only.' };
+  if (!session) return { success: false, error: 'Unauthorized.' };
 
   const adminSupabase = createAdminClient();
   try {
-    // Delete user first (FK constraint)
-    await adminSupabase.from('users').delete().eq('client_id', clientId);
-    await adminSupabase.from('clients').delete().eq('id', clientId);
+    const { data: client, error: fetchError } = await adminSupabase
+      .from('clients')
+      .select('id, company_name')
+      .eq('id', clientId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!client) return { success: false, error: 'Client not found.' };
+
+    // Delete user credentials first (users.client_id FK is SET NULL, not CASCADE)
+    const { error: userError } = await adminSupabase.from('users').delete().eq('client_id', clientId);
+    if (userError) throw userError;
+
+    // Cascades: contacts, chemicals, TCC applications, certificates, notes, activity logs
+    const { error: clientError } = await adminSupabase.from('clients').delete().eq('id', clientId);
+    if (clientError) throw clientError;
 
     revalidatePath('/admin/clients');
-    return { success: true, message: 'Client deleted successfully.' };
+    revalidatePath(`/admin/clients/${clientId}`);
+    return {
+      success: true,
+      message: `${client.company_name} and all associated compliance data deleted permanently.`,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

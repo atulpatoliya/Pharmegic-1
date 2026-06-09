@@ -60,9 +60,10 @@ interface Client {
 interface ClientsDashboardProps {
   initialClients: Client[];
   chemicals: ChemicalOption[];
+  adminRole: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT' | null;
 }
 
-export default function ClientsDashboard({ initialClients, chemicals }: ClientsDashboardProps) {
+export default function ClientsDashboard({ initialClients, chemicals, adminRole }: ClientsDashboardProps) {
   const router = useRouter();
   const supabase = createClient();
   const [isPending, startTransition] = useTransition();
@@ -198,6 +199,8 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
     setSelectedClient(client);
     setIsDeleteOpen(true);
   };
+
+  const canDeleteClient = adminRole === 'MASTER_ADMIN' || adminRole === 'SUPER_ADMIN';
 
   const handleDeleteClient = async () => {
     if (!selectedClient) return;
@@ -366,13 +369,15 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => handleOpenDelete(client)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
-                          title="Delete Client"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canDeleteClient && (
+                          <button
+                            onClick={() => handleOpenDelete(client)}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
+                            title="Delete Client"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
