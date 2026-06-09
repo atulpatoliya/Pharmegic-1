@@ -659,7 +659,7 @@ export default function ClientDashboardDetails({
         <div>
           <h1 className="text-xl font-bold text-teal-900 tracking-tight">{pageTitle}</h1>
           <p className="text-sm text-slate-500 font-medium mt-1">
-            {client.legal_name || 'Pharmaceutical Distributor'} | ID: {client.uuid_number ? client.uuid_number.split('-')[0].toUpperCase() : 'AP-882-2025'}
+            ID: {client.uuid_number ? client.uuid_number.split('-')[0].toUpperCase() : 'AP-882-2025'}
           </p>
         </div>
         <div className="flex items-center gap-3">

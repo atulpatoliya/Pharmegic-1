@@ -19,8 +19,6 @@ interface ChemicalOption {
 interface Client {
   id: string;
   company_name: string;
-  legal_name: string;
-  registration_number: string;
   uuid_number: string | null;
   primary_contact_first_name?: string;
   primary_contact_last_name?: string;
@@ -55,8 +53,6 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
 
   const [editProfile, setEditProfile] = useState({
     company_name: client.company_name || '',
-    legal_name: client.legal_name || '',
-    registration_number: client.registration_number || '',
     uuid_number: client.uuid_number || '',
     primary_contact_first_name: client.primary_contact_first_name || '',
     primary_contact_last_name: client.primary_contact_last_name || '',
@@ -109,12 +105,6 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
             label="Company Name"
             value={editProfile.company_name}
             onChange={(e) => setEditProfile({ ...editProfile, company_name: e.target.value })}
-            required
-          />
-          <Input
-            label="Registration Number"
-            value={editProfile.registration_number}
-            onChange={(e) => setEditProfile({ ...editProfile, registration_number: e.target.value })}
             required
           />
           <Input

@@ -66,8 +66,8 @@ export async function createClientAction(prevState: unknown, data: unknown) {
       .from('clients')
       .insert({
         company_name: profile.company_name,
-        legal_name: profile.legal_name || null,
-        registration_number: profile.registration_number,
+        legal_name: null,
+        registration_number: null,
         uuid_number: profile.uuid_number || null,
         owner_name: profile.owner_name || null,
         email: profile.email.toLowerCase(),
@@ -147,9 +147,15 @@ export async function updateClientAction(clientId: string, profile: Record<strin
 
   const adminSupabase = createAdminClient();
   try {
+    const {
+      legal_name: _legalName,
+      registration_number: _registrationNumber,
+      ...clientProfile
+    } = profile;
+
     const { error } = await adminSupabase
       .from('clients')
-      .update({ ...profile, updated_at: new Date().toISOString() })
+      .update({ ...clientProfile, updated_at: new Date().toISOString() })
       .eq('id', clientId);
 
     if (error) throw error;

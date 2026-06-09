@@ -40,8 +40,8 @@ interface ChemicalOption {
 interface Client {
   id: string;
   company_name: string;
-  legal_name: string;
-  registration_number: string;
+  legal_name?: string | null;
+  registration_number?: string | null;
   uuid_number: string | null;
   email: string;
   owner_name: string;
@@ -82,8 +82,6 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   // Edit form state
   const [editProfile, setEditProfile] = useState({
     company_name: '',
-    legal_name: '',
-    registration_number: '',
     uuid_number: '',
     email: '',
     owner_name: '',
@@ -130,7 +128,6 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
   const filteredClients = clients.filter((c) => {
     const matchesSearch =
       c.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.legal_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (c.owner_name && c.owner_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -145,8 +142,6 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
     setEditError(null);
     setEditProfile({
       company_name: client.company_name || '',
-      legal_name: client.legal_name || '',
-      registration_number: client.registration_number || '',
       uuid_number: client.uuid_number || '',
       email: client.email || '',
       owner_name: client.owner_name || '',
@@ -260,7 +255,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Search by company, legal entity, owner, or email..."
+              placeholder="Search by company, owner, or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 bg-slate-50 border-slate-200 focus:bg-white transition-all"
@@ -320,7 +315,7 @@ export default function ClientsDashboard({ initialClients, chemicals }: ClientsD
                             {client.company_name}
                           </Link>
                           <div className="text-xs text-slate-400 font-medium">
-                            {client.legal_name || 'No legal name provided'}
+                            {client.owner_name || client.email}
                           </div>
                         </div>
                       </div>

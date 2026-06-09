@@ -195,10 +195,6 @@ const TccDocument: React.FC<{ data: CertificateData }> = ({ data }) => {
                 <Text style={styles.gridValue}>{data.companyName}</Text>
               </View>
               <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>Legal Entity Name:</Text>
-                <Text style={styles.gridValue}>{data.legalName}</Text>
-              </View>
-              <View style={styles.gridRow}>
                 <Text style={styles.gridLabel}>Chemical Name:</Text>
                 <Text style={styles.gridValue}>{data.chemicalName}</Text>
               </View>

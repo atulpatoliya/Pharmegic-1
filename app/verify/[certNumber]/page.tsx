@@ -20,7 +20,7 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
       issued_at,
       expires_at,
       status,
-      clients (company_name, registration_number, country),
+      clients (company_name, country),
       tcc_applications (
         quantity_mt,
         chemicals (chemical_name, cas_number, ec_number, tonnage_band)
@@ -94,9 +94,6 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
                   <Building className="h-3.5 w-3.5" /> Certificate Holder
                 </div>
                 <p className="font-bold text-slate-800 text-base">{(cert.clients as any)?.company_name}</p>
-                {(cert.clients as any)?.registration_number && (
-                  <p className="text-xs text-slate-500 font-medium">Reg. No: {(cert.clients as any).registration_number}</p>
-                )}
                 {(cert.clients as any)?.country && (
                   <p className="text-xs text-slate-500 font-medium">{(cert.clients as any).country}</p>
                 )}

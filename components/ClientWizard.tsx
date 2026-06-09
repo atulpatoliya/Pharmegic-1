@@ -21,8 +21,6 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
 
   const [profile, setProfile] = useState({
     company_name: '',
-    legal_name: '',
-    registration_number: '',
     uuid_number: '',
     primary_contact_first_name: '',
     primary_contact_last_name: '',
@@ -80,7 +78,6 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
 
   const validateForm = () => {
     if (!profile.company_name) return 'Company name is required';
-    if (!profile.registration_number) return 'Registration number is required';
     if (!profile.primary_contact_first_name) return 'Primary contact first name is required';
     if (!profile.primary_contact_last_name) return 'Primary contact last name is required';
     if (!profile.email) return 'Primary contact email is required';
@@ -161,19 +158,6 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
             placeholder="Pharmegic Ltd."
             value={profile.company_name}
             onChange={(e) => setProfile({ ...profile, company_name: e.target.value })}
-            required
-          />
-          <Input
-            label="Legal Name"
-            placeholder="Pharmegic Pharmaceuticals Ltd."
-            value={profile.legal_name}
-            onChange={(e) => setProfile({ ...profile, legal_name: e.target.value })}
-          />
-          <Input
-            label="Registration Number"
-            placeholder="REG-123456"
-            value={profile.registration_number}
-            onChange={(e) => setProfile({ ...profile, registration_number: e.target.value })}
             required
           />
           <Input

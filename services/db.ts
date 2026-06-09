@@ -81,8 +81,6 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
 export interface ClientWizardInput {
   profile: {
     company_name: string;
-    legal_name?: string;
-    registration_number: string;
     uuid_number?: string;
     primary_contact_first_name: string;
     primary_contact_last_name: string;
@@ -115,8 +113,8 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
     .from('clients')
     .insert({
       company_name: input.profile.company_name,
-      legal_name: input.profile.legal_name || input.profile.company_name,
-      registration_number: input.profile.registration_number,
+      legal_name: null,
+      registration_number: null,
       uuid_number: input.profile.uuid_number || null,
       primary_contact_first_name: input.profile.primary_contact_first_name,
       primary_contact_last_name: input.profile.primary_contact_last_name,
@@ -184,7 +182,7 @@ export async function getClients(
   }
 
   if (search) {
-    query = query.or(`company_name.ilike.%${search}%,legal_name.ilike.%${search}%,email.ilike.%${search}%`);
+    query = query.or(`company_name.ilike.%${search}%,email.ilike.%${search}%`);
   }
 
   const { data, count, error } = await query

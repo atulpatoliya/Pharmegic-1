@@ -162,12 +162,6 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Company</p>
                 <p className="font-semibold text-slate-800">{cert.clients.company_name}</p>
               </div>
-              {cert.clients.legal_name && (
-                <div>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Legal Name</p>
-                  <p className="font-medium text-slate-600">{cert.clients.legal_name}</p>
-                </div>
-              )}
               <div>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Email</p>
                 <p className="font-medium text-slate-600">{cert.clients.email}</p>

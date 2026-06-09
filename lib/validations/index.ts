@@ -34,8 +34,6 @@ export const contactSchema = z.object({
 
 export const clientProfileSchema = z.object({
   company_name: z.string().min(2, { message: 'Company name is required' }),
-  legal_name: z.string().optional().or(z.literal('')),
-  registration_number: z.string().min(2, { message: 'Registration number is required' }),
   uuid_number: z.string().optional().or(z.literal('')),
   primary_contact_first_name: z.string().min(1, { message: 'First name is required' }),
   primary_contact_last_name: z.string().min(1, { message: 'Last name is required' }),
@@ -81,9 +79,11 @@ export const internalNoteSchema = z.object({
 export const tccApplicationSchema = z.object({
   chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
   quantity_mt: z.coerce.number().positive({ message: 'Quantity must be greater than 0' }),
-  kkdik_reg_no: z.string().optional().or(z.literal('')),
+  kkdik_reg_no: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
   export_date: z.string().min(1, { message: 'Expected export date is required' }),
-  remarks: z.string().optional().or(z.literal('')),
+  remarks: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
 });
 
 // ============================================================================

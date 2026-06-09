@@ -120,7 +120,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100">
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Number</th>
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Certificate Number</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Chemical Substance</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Authorized Weight</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Issuance Date</th>

@@ -28,13 +28,17 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
   const result = tccApplicationSchema.safeParse({
     chemical_id: formData.get('chemical_id'),
     quantity_mt: formData.get('quantity_mt'),
-    kkdik_reg_no: formData.get('kkdik_reg_no'),
+    kkdik_reg_no: formData.get('kkdik_reg_no') ?? '',
     export_date: formData.get('export_date'),
-    remarks: formData.get('remarks') || '',
+    remarks: formData.get('remarks') ?? '',
   });
 
   if (!result.success) {
-    return { success: false, error: result.error.issues[0].message };
+    const issue = result.error.issues[0];
+    return {
+      success: false,
+      error: issue.message || `Invalid ${issue.path.join('.') || 'input'}.`,
+    };
   }
 
   const adminSupabase = createAdminClient();
@@ -292,7 +296,7 @@ export async function processTccAction(
       const pdfBuffer = await generateCertificatePdf({
         certificateNumber: certNumber,
         companyName: app.clients.company_name,
-        legalName: app.clients.legal_name || app.clients.company_name,
+        legalName: app.clients.company_name,
         chemicalName: app.chemicals.chemical_name,
         casNumber: app.chemicals.cas_number,
         ecNumber: app.chemicals.ec_number || '',
