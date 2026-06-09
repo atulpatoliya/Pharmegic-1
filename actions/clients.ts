@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
 import { formatErrorMessage } from '@/lib/format-error';
+import { getTonnageBandMaxQuota } from '@/lib/quota';
 import { clientWizardSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
@@ -421,11 +422,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     }
 
     // Calculate quota based on tonnage band
-    let calcQuota = 0;
-    if (data.tonnage_band === '1-10 tonnes') calcQuota = 10;
-    else if (data.tonnage_band === '10-100 tonnes') calcQuota = 100;
-    else if (data.tonnage_band === '100-1000 tonnes') calcQuota = 1000;
-    else if (data.tonnage_band === '1000+ tonnes') calcQuota = 2000;
+    const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
 
     const { data: existingLink } = await adminSupabase
       .from('client_chemicals')
@@ -599,11 +596,7 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
 
   const adminSupabase = createAdminClient();
   try {
-    let calcQuota = 0;
-    if (data.tonnage_band === '1-10 tonnes') calcQuota = 10;
-    else if (data.tonnage_band === '10-100 tonnes') calcQuota = 100;
-    else if (data.tonnage_band === '100-1000 tonnes') calcQuota = 1000;
-    else if (data.tonnage_band === '1000+ tonnes') calcQuota = 2000;
+    const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
 
     const { error: chemError } = await adminSupabase
       .from('chemicals')

@@ -25,13 +25,16 @@ import { Select } from '@/components/ui/Select';
 import { Dialog } from '@/components/ui/Dialog';
 import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
 import { formatErrorMessage } from '@/lib/format-error';
+import { resolveQuotaConsumption } from '@/lib/quota';
+import { processTccAction } from '@/actions/tcc';
+import { TccApplicationViewDialog, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
 import Link from 'next/link';
 import { 
   Building, Mail, Phone, MapPin, Calendar, CheckCircle, 
   AlertCircle, FileText, User, ShieldAlert, Key, Plus, Trash2,
   FileSignature, Award, Clipboard, StickyNote, History, Lock, Unlock,
-  Download, Filter, Eye, EyeOff, PenLine, RotateCcw
+  Download, Filter, Eye, EyeOff, PenLine, RotateCcw, Clock, XCircle
 } from 'lucide-react';
 import { useLayoutStore } from '@/store/layout';
 import dynamic from 'next/dynamic';
@@ -118,6 +121,15 @@ export default function ClientDashboardDetails({
   });
   const [isNoteModalOpen, setNoteModalOpen] = useState(false);
   const [noteContent, setNoteContent] = useState('');
+
+  const [isTccViewOpen, setIsTccViewOpen] = useState(false);
+  const [viewTccApp, setViewTccApp] = useState<TccViewApplication | null>(null);
+  const [isTccActionOpen, setIsTccActionOpen] = useState(false);
+  const [selectedTccApp, setSelectedTccApp] = useState<TccViewApplication | null>(null);
+  const [tccActionType, setTccActionType] = useState<'approved' | 'rejected' | 'changes_required'>('approved');
+  const [tccRejectionReason, setTccRejectionReason] = useState('');
+  const [tccActionError, setTccActionError] = useState<string | null>(null);
+  const canReviewTcc = currentUserRole !== 'CLIENT';
 
   type ModalErrorKey = 'email' | 'password' | 'assignChem' | 'editChem' | 'contact' | 'note' | 'security' | 'substances';
   const [modalErrors, setModalErrors] = useState<Record<ModalErrorKey, string | null>>({
@@ -456,6 +468,133 @@ export default function ClientDashboardDetails({
   const resolveCertificate = (row: { certificates?: { id?: string; certificate_number?: string; file_url?: string; issued_at?: string; status?: string } | null }) =>
     row.certificates ?? null;
 
+  const buildViewApplication = (app: Record<string, unknown>): TccViewApplication => {
+    const chem = app.chemicals as {
+      chemical_name?: string;
+      cas_number?: string;
+      ec_number?: string | null;
+      tonnage_band?: string | null;
+      validity_date?: string | null;
+      available_quantity?: number;
+    } | null;
+    let cc: { available_quantity: number } | null = null;
+    const rawCc = app.client_chemicals as { available_quantity?: number } | null;
+    if (rawCc?.available_quantity != null) {
+      cc = { available_quantity: Number(rawCc.available_quantity) };
+    } else if (app.chemical_id) {
+      const match = clientChemicals.find((c) => c.chemical_id === app.chemical_id);
+      if (match) cc = { available_quantity: Number(match.available_quantity ?? 0) };
+    }
+    return {
+      id: app.id as string,
+      tracking_id: app.tracking_id as string | undefined,
+      quantity_mt: Number(app.quantity_mt ?? 0),
+      kkdik_reg_no: (app.kkdik_reg_no as string) || '',
+      export_date: (app.export_date as string | null | undefined) ?? null,
+      remarks: app.remarks as string | null | undefined,
+      status: app.status as string,
+      rejection_reason: app.rejection_reason as string | null | undefined,
+      bo_attachment_url: app.bo_attachment_url as string | null | undefined,
+      bo_attachment_name: app.bo_attachment_name as string | null | undefined,
+      created_at: app.created_at as string,
+      updated_at: (app.updated_at as string | undefined) ?? (app.created_at as string),
+      client_chemicals: cc,
+      clients: { company_name: client.company_name, email: client.email },
+      chemicals: {
+        chemical_name: chem?.chemical_name || 'N/A',
+        cas_number: chem?.cas_number || 'N/A',
+        ec_number: chem?.ec_number ?? null,
+        tonnage_band: chem?.tonnage_band ?? null,
+        validity_date: chem?.validity_date ?? null,
+        available_quantity: Number(chem?.available_quantity ?? cc?.available_quantity ?? 0),
+      },
+      certificates: app.certificates as TccViewApplication['certificates'],
+    };
+  };
+
+  const handleOpenTccView = (app: (typeof tccHistory)[number]) => {
+    setViewTccApp(buildViewApplication(app));
+    setIsTccViewOpen(true);
+  };
+
+  const handleOpenTccAction = (
+    app: TccViewApplication,
+    type: 'approved' | 'rejected' | 'changes_required'
+  ) => {
+    setSelectedTccApp(app);
+    setTccActionType(type);
+    setTccRejectionReason('');
+    setTccActionError(null);
+    setIsTccActionOpen(true);
+  };
+
+  const handleTccViewThenAction = (type: 'approved' | 'rejected' | 'changes_required') => {
+    if (!viewTccApp) return;
+    setIsTccViewOpen(false);
+    handleOpenTccAction(viewTccApp, type);
+  };
+
+  const handleProcessTccAction = () => {
+    if (!selectedTccApp) return;
+    setTccActionError(null);
+
+    if (tccActionType !== 'approved' && !tccRejectionReason.trim()) {
+      const msg = 'A reason explanation is required for rejection/modification requests.';
+      setTccActionError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await processTccAction(selectedTccApp.id, tccActionType, tccRejectionReason);
+      if (res.success) {
+        setIsTccActionOpen(false);
+        if (tccActionType === 'approved' && res.certificateId) {
+          toast.success('Certificate generated! Redirecting to preview...');
+          router.push(`/admin/certificate-preview/${res.certificateId}`);
+        } else {
+          toast.success(res.message || 'Application processed.');
+          router.refresh();
+        }
+      } else {
+        setTccActionError(res.error || 'Failed to process application action.');
+        toast.error(res.error || 'Failed to process application action.');
+      }
+    });
+  };
+
+  const getTccStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return (
+          <Badge variant="warning" className="flex items-center gap-1 w-fit">
+            <Clock className="h-3 w-3" /> Pending Review
+          </Badge>
+        );
+      case 'approved':
+        return (
+          <Badge variant="success" className="flex items-center gap-1 w-fit">
+            <CheckCircle className="h-3 w-3" /> Approved
+          </Badge>
+        );
+      case 'rejected':
+        return (
+          <Badge variant="danger" className="flex items-center gap-1 w-fit">
+            <XCircle className="h-3 w-3" /> Rejected
+          </Badge>
+        );
+      case 'changes_required':
+      case 'modification_requested':
+        return (
+          <Badge variant="info" className="flex items-center gap-1 w-fit">
+            <AlertCircle className="h-3 w-3" /> Revision Needed
+          </Badge>
+        );
+      default:
+        return <Badge variant="neutral">{status}</Badge>;
+    }
+  };
+
   const tccStatusDisplay = (status: string) => {
     switch (status) {
       case 'approved':
@@ -463,6 +602,7 @@ export default function ClientDashboardDetails({
       case 'rejected':
         return { label: 'Rejected', className: 'text-rose-600', icon: AlertCircle };
       case 'changes_required':
+      case 'modification_requested':
         return { label: 'Changes Required', className: 'text-amber-600', icon: AlertCircle };
       default:
         return { label: 'Pending Review', className: 'text-amber-600', icon: History };
@@ -483,8 +623,12 @@ export default function ClientDashboardDetails({
       const cas = cc.chemicals?.cas_number || 'N/A';
       const ec = cc.chemicals?.ec_number || 'N/A';
       const band = cc.chemicals?.tonnage_band || 'N/A';
-      const exported = tccHistory.filter(t => t.chemical_id === cc.chemical_id && t.status === 'approved').reduce((sum, t) => sum + Number(t.quantity_mt || 0), 0);
-      const max = Number(cc.available_quantity || 0) + exported;
+      const exportedRaw = tccHistory.filter(t => t.chemical_id === cc.chemical_id && t.status === 'approved').reduce((sum, t) => sum + Number(t.quantity_mt || 0), 0);
+      const { exported, totalQuota: max } = resolveQuotaConsumption(
+        cc.available_quantity,
+        exportedRaw,
+        cc.chemicals?.tonnage_band
+      );
       const validity = cc.validity_date ? new Date(cc.validity_date).toLocaleDateString('en-GB') : 'N/A';
       const status = cc.status === 'active' ? 'Active' : 'Expired';
 
@@ -643,9 +787,12 @@ export default function ClientDashboardDetails({
               ) : (
                 clientChemicals.map((cc) => {
                   const name = cc.chemicals?.chemical_name || 'Unknown';
-                  const exported = tccHistory.filter(t => t.chemical_id === cc.chemical_id && t.status === 'approved').reduce((sum, t) => sum + Number(t.quantity_mt || 0), 0);
-                  const max = Number(cc.available_quantity || 0) + exported;
-                  const pct = max > 0 ? (exported / max) * 100 : 0;
+                  const exportedRaw = tccHistory.filter(t => t.chemical_id === cc.chemical_id && t.status === 'approved').reduce((sum, t) => sum + Number(t.quantity_mt || 0), 0);
+                  const { exported, totalQuota: max, percentUsed: pct } = resolveQuotaConsumption(
+                    cc.available_quantity,
+                    exportedRaw,
+                    cc.chemicals?.tonnage_band
+                  );
                   const isCritical = pct >= 90 || cc.status === 'expired';
                   const isWarning = pct >= 75 && pct < 90;
 
@@ -839,7 +986,7 @@ export default function ClientDashboardDetails({
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <div className="flex justify-center gap-2">
+                        <div className="flex justify-center gap-2 items-center">
                           {app.bo_attachment_url && (
                             <a href={app.bo_attachment_url} target="_blank" rel="noopener noreferrer" title="View BO attachment">
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
@@ -847,31 +994,21 @@ export default function ClientDashboardDetails({
                               </Button>
                             </a>
                           )}
-                          {cert?.id && app.status === 'approved' ? (
-                            <>
-                              <Link
-                                href={
-                                  currentUserRole === 'CLIENT'
-                                    ? '/client/certificates'
-                                    : `/admin/certificate-preview/${cert.id}`
-                                }
-                              >
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                              {cert.file_url && (
-                                <a href={cert.file_url} target="_blank" rel="noopener noreferrer" title="Download certificate PDF">
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </a>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 font-medium px-1">
-                              {app.status === 'pending' ? 'Awaiting review' : '—'}
-                            </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50"
+                            title="View application"
+                            onClick={() => handleOpenTccView(app)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {cert?.file_url && app.status === 'approved' && (
+                            <a href={cert.file_url} target="_blank" rel="noopener noreferrer" title="Download certificate PDF">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </a>
                           )}
                         </div>
                       </td>
@@ -1184,6 +1321,126 @@ export default function ClientDashboardDetails({
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => { setNoteModalOpen(false); setModalError('note', null); }}>Cancel</Button>
             <Button onClick={handleAddNote} isLoading={isPending}>Save Note</Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <TccApplicationViewDialog
+        app={viewTccApp}
+        isOpen={isTccViewOpen}
+        onClose={() => setIsTccViewOpen(false)}
+        allowReview={canReviewTcc}
+        getStatusBadge={getTccStatusBadge}
+        onApprove={() => handleTccViewThenAction('approved')}
+        onReject={() => handleTccViewThenAction('rejected')}
+        onRequestChanges={() => handleTccViewThenAction('changes_required')}
+      />
+
+      <Dialog
+        isOpen={isTccActionOpen}
+        onClose={() => setIsTccActionOpen(false)}
+        title={
+          tccActionType === 'approved'
+            ? 'Confirm Approval & Issue Certificate'
+            : tccActionType === 'rejected'
+            ? 'Reject Application'
+            : 'Request Application Revisions'
+        }
+      >
+        <div className="space-y-4">
+          {tccActionType === 'approved' ? (
+            <>
+              <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                Are you sure you want to approve this application from{' '}
+                <span className="font-bold text-slate-800">{selectedTccApp?.clients.company_name}</span>?
+              </p>
+              <div className="bg-slate-50 border rounded-lg p-3 text-xs space-y-1.5 text-slate-600 font-medium">
+                <div>
+                  <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Substance</span>
+                  <span className="font-bold text-slate-800">{selectedTccApp?.chemicals.chemical_name}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Requested</span>
+                    <span className="font-bold text-slate-800">{selectedTccApp?.quantity_mt} MT</span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Available Quota</span>
+                    <span className="font-bold text-slate-800">
+                      {selectedTccApp?.client_chemicals?.available_quantity ??
+                        selectedTccApp?.chemicals.available_quantity}{' '}
+                      MT
+                    </span>
+                  </div>
+                </div>
+                {selectedTccApp?.bo_attachment_url && (
+                  <a
+                    href={selectedTccApp.bo_attachment_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    View BO: {selectedTccApp.bo_attachment_name || 'Attachment'}
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Approving will deduct client quota, generate the PDF certificate, and store it for download.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600 font-medium">
+                Please specify the reason for this action. This feedback will be sent to the client.
+              </p>
+              <textarea
+                rows={4}
+                value={tccRejectionReason}
+                onChange={(e) => setTccRejectionReason(e.target.value)}
+                placeholder={
+                  tccActionType === 'rejected'
+                    ? 'Reason for rejection…'
+                    : 'Detail the modifications needed…'
+                }
+                className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-medium text-slate-700"
+                required
+              />
+            </>
+          )}
+
+          {tccActionError && (
+            <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-sm font-semibold flex items-start gap-2.5">
+              <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold mb-1">Decision Error</h4>
+                <p className="text-xs leading-relaxed font-medium">{tccActionError}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button type="button" variant="outline" onClick={() => setIsTccActionOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleProcessTccAction}
+              isLoading={isPending}
+              disabled={isPending}
+              className={
+                tccActionType === 'approved'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : tccActionType === 'rejected'
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                  : 'bg-amber-600 hover:bg-amber-700 text-white'
+              }
+            >
+              {tccActionType === 'approved'
+                ? 'Approve & Issue Certificate'
+                : tccActionType === 'rejected'
+                ? 'Reject Permit'
+                : 'Send Revision Request'}
+            </Button>
           </div>
         </div>
       </Dialog>

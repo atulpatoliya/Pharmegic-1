@@ -86,6 +86,7 @@ interface TccApplicationViewDialogProps {
   onReject: () => void;
   onRequestChanges: () => void;
   getStatusBadge: (status: string) => React.ReactNode;
+  allowReview?: boolean;
 }
 
 export function TccApplicationViewDialog({
@@ -96,13 +97,14 @@ export function TccApplicationViewDialog({
   onReject,
   onRequestChanges,
   getStatusBadge,
+  allowReview = true,
 }: TccApplicationViewDialogProps) {
   if (!app) return null;
 
   const cert = resolveCertificate(app);
   const availableQuota =
     app.client_chemicals?.available_quantity ?? app.chemicals.available_quantity;
-  const showActions = canReviewActions(app.status);
+  const showActions = allowReview && canReviewActions(app.status);
   const boUrl = app.bo_attachment_url;
 
   return (

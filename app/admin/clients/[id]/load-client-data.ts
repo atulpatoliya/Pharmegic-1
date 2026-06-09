@@ -36,7 +36,7 @@ export async function loadClientProfileData(clientId: string) {
     adminSupabase.from('client_contacts').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
     adminSupabase
       .from('tcc_applications')
-      .select('*, chemicals(*), certificates(*)')
+      .select('*, chemicals(*), certificates(*), client_chemicals(available_quantity)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false }),
     adminSupabase
@@ -52,10 +52,11 @@ export async function loadClientProfileData(clientId: string) {
       .order('created_at', { ascending: false }),
   ]);
 
-  const tccHistory = (tccHistoryRaw || []).map((row: { chemicals?: unknown; certificates?: unknown }) => ({
+  const tccHistory = (tccHistoryRaw || []).map((row: { chemicals?: unknown; certificates?: unknown; client_chemicals?: unknown }) => ({
     ...row,
     chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
     certificates: Array.isArray(row.certificates) ? row.certificates[0] ?? null : row.certificates,
+    client_chemicals: Array.isArray(row.client_chemicals) ? row.client_chemicals[0] ?? null : row.client_chemicals,
   }));
 
   const internalNotes = (internalNotesData || []).map((note: { id: string; note: string; created_at: string; users?: { email?: string } | null }) => ({
