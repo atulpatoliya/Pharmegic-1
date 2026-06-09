@@ -148,73 +148,107 @@ export default function ClientDashboardDetails({
   const pendingRenewals = clientChemicals.filter(c => c.status === 'expired' || (c.validity_date && new Date(c.validity_date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))).length;
 
   const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const CHART_COLORS = ['#0f766e', '#059669', '#10b981', '#047857', '#14b8a6', '#0d9488', '#34d399', '#065f46'];
+  const CHART_COLORS = [
+    '#0f766e',
+    '#2563eb',
+    '#d97706',
+    '#e11d48',
+    '#7c3aed',
+    '#ea580c',
+    '#0891b2',
+    '#4f46e5',
+    '#65a30d',
+    '#db2777',
+  ];
   const chartYear = new Date().getFullYear();
 
-  const { chartSeries, chartOptions, hasChartData } = useMemo(() => {
+  const { chartSeries, chartOptions, chartLegend } = useMemo(() => {
     const approvedApps = tccHistory.filter((t) => t.status === 'approved');
 
-    const chemicalMap = new Map<string, string>();
+    const chemicalEntries: { id: string; name: string }[] = [];
+    const seen = new Set<string>();
     clientChemicals.forEach((cc) => {
-      if (cc.chemical_id && cc.chemicals?.chemical_name) {
-        chemicalMap.set(cc.chemical_id, cc.chemicals.chemical_name);
+      if (cc.chemical_id && cc.chemicals?.chemical_name && !seen.has(cc.chemical_id)) {
+        seen.add(cc.chemical_id);
+        chemicalEntries.push({ id: cc.chemical_id, name: cc.chemicals.chemical_name });
       }
     });
     approvedApps.forEach((app) => {
       const id = app.chemical_id as string;
       const name = app.chemicals?.chemical_name || 'Unknown substance';
-      if (id) chemicalMap.set(id, name);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        chemicalEntries.push({ id, name });
+      }
     });
 
-    const series = [...chemicalMap.entries()]
-      .map(([chemId, name]) => ({
-        name,
-        data: MONTH_LABELS.map((_, monthIdx) =>
-          approvedApps
-            .filter((app) => app.chemical_id === chemId)
-            .filter((app) => {
-              const d = new Date(app.updated_at || app.created_at);
-              return d.getFullYear() === chartYear && d.getMonth() === monthIdx;
-            })
-            .reduce((sum, app) => sum + Number(app.quantity_mt || 0), 0)
-        ),
-      }))
-      .filter((s) => s.data.some((v) => v > 0));
+    const getActivityDate = (app: { export_date?: string | null; updated_at?: string; created_at?: string }) => {
+      const raw = app.export_date || app.updated_at || app.created_at;
+      return raw ? new Date(raw) : null;
+    };
 
-    const hasData = series.length > 0;
+    const series = chemicalEntries.map(({ id, name }, idx) => ({
+      name,
+      color: CHART_COLORS[idx % CHART_COLORS.length],
+      data: MONTH_LABELS.map((_, monthIdx) =>
+        approvedApps
+          .filter((app) => app.chemical_id === id)
+          .filter((app) => {
+            const d = getActivityDate(app);
+            return d && d.getFullYear() === chartYear && d.getMonth() === monthIdx;
+          })
+          .reduce((sum, app) => sum + Number(app.quantity_mt || 0), 0)
+      ),
+    }));
+
+    const legend = series.map((s, idx) => ({
+      name: s.name,
+      color: CHART_COLORS[idx % CHART_COLORS.length],
+      total: s.data.reduce((a, b) => a + b, 0),
+    }));
+
+    const seriesColors = series.map((s) => s.color);
 
     const options = {
-      chart: { type: 'area' as const, toolbar: { show: false }, zoom: { enabled: false } },
-      dataLabels: { enabled: false },
-      stroke: { curve: 'smooth' as const, width: 2 },
-      colors: CHART_COLORS,
-      fill: {
-        type: 'gradient',
-        gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 90, 100] },
+      chart: {
+        type: 'line' as const,
+        toolbar: { show: false },
+        zoom: { enabled: false },
+        animations: { enabled: true },
       },
-      xaxis: { categories: MONTH_LABELS },
+      dataLabels: { enabled: false },
+      stroke: { curve: 'smooth' as const, width: 3 },
+      colors: seriesColors,
+      markers: {
+        size: 4,
+        strokeWidth: 2,
+        hover: { size: 6 },
+      },
+      xaxis: {
+        categories: MONTH_LABELS,
+        labels: { style: { fontSize: '11px', colors: '#64748b', fontWeight: 600 } },
+      },
       yaxis: {
+        title: { text: 'Exported (MT)', style: { fontSize: '11px', color: '#64748b', fontWeight: 600 } },
         labels: {
-          formatter: (v: number) => `${Number(v).toFixed(0)} MT`,
+          formatter: (v: number) => `${Number(v).toFixed(0)}`,
           style: { fontSize: '10px', colors: '#64748b' },
         },
+        min: 0,
       },
       grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
-      legend: {
-        show: series.length > 0,
-        position: 'bottom' as const,
-        fontSize: '11px',
-        fontWeight: 600,
-      },
+      legend: { show: false },
       tooltip: {
+        shared: true,
+        intersect: false,
         y: { formatter: (v: number) => `${Number(v).toFixed(2)} MT` },
       },
     };
 
     return {
-      chartSeries: series.length > 0 ? series : [{ name: 'No data', data: new Array(12).fill(0) }],
+      chartSeries: series.length > 0 ? series.map(({ name, data }) => ({ name, data })) : [],
       chartOptions: options,
-      hasChartData: hasData,
+      chartLegend: legend,
     };
   }, [tccHistory, clientChemicals, chartYear]);
 
@@ -515,22 +549,50 @@ export default function ClientDashboardDetails({
         </div>
 
         {/* Right Column: Chart */}
-        <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col min-h-[340px]">
-          <div className="flex items-center justify-between mb-1">
+        <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col min-h-[360px]">
+          <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-semibold text-slate-600">Monthly TCC Activity</h3>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Approved export volume by chemical (MT)</p>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                Chemical-wise approved export lines (MT per month)
+              </p>
             </div>
             <span className="px-2 py-1 bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 rounded">
               Year {chartYear}
             </span>
           </div>
+
+          {chartLegend.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-100">
+              {chartLegend.map((item) => (
+                <span
+                  key={item.name}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold border"
+                  style={{
+                    borderColor: item.color,
+                    color: item.color,
+                    backgroundColor: `${item.color}14`,
+                  }}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  {item.name}
+                  <span className="text-slate-400 font-semibold">
+                    · {item.total.toFixed(1)} MT
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="flex-1 w-full h-full min-h-[280px]">
-            {isMounted && hasChartData ? (
-              <ApexChart options={chartOptions} series={chartSeries} type="area" height="100%" width="100%" />
+            {isMounted && chartSeries.length > 0 ? (
+              <ApexChart options={chartOptions} series={chartSeries} type="line" height="100%" width="100%" />
             ) : isMounted ? (
               <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-slate-400 font-medium">
-                No approved TCC exports recorded for {chartYear} yet.
+                Assign chemicals to this client to see activity chart.
               </div>
             ) : null}
           </div>
