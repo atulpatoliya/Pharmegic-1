@@ -50,6 +50,7 @@ interface ClientDashboardDetailsProps {
   internalNotes: any[];
   currentUserId: string;
   currentUserRole: string;
+  viewMode?: 'overview' | 'chemicals' | 'certificates';
 }
 
 export default function ClientDashboardDetails({
@@ -63,7 +64,8 @@ export default function ClientDashboardDetails({
   activityLogs,
   internalNotes,
   currentUserId,
-  currentUserRole
+  currentUserRole,
+  viewMode = 'overview',
 }: ClientDashboardDetailsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -77,9 +79,20 @@ export default function ClientDashboardDetails({
     return () => setCustomBreadcrumb(null);
   }, [client.company_name, setCustomBreadcrumb]);
 
-  // Data Filtering
-  const clientChemicals = allClientChemicals.filter(c => c.status !== 'trashed');
-  const trashedChemicals = allClientChemicals.filter(c => c.status === 'trashed');
+  const showOverview = viewMode === 'overview';
+  const showChemicalsSection = viewMode === 'overview' || viewMode === 'chemicals';
+  const showCertificatesSection = viewMode === 'overview' || viewMode === 'certificates';
+  const showAdminExtras = viewMode === 'overview' && currentUserRole !== 'CLIENT';
+
+  const pageTitle =
+    viewMode === 'chemicals'
+      ? `${client.company_name} — Chemical Inventory`
+      : viewMode === 'certificates'
+        ? `${client.company_name} — Certificates`
+        : `${client.company_name} Details`;
+
+  const clientChemicals = allClientChemicals.filter((c) => c.status !== 'trashed');
+  const trashedChemicals = allClientChemicals.filter((c) => c.status === 'trashed');
 
   // Modals state
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
@@ -411,7 +424,7 @@ export default function ClientDashboardDetails({
       {/* 1. Header Section */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-teal-900 tracking-tight">{client.company_name} Details</h1>
+          <h1 className="text-xl font-bold text-teal-900 tracking-tight">{pageTitle}</h1>
           <p className="text-sm text-slate-500 font-medium mt-1">
             {client.legal_name || 'Pharmaceutical Distributor'} | ID: {client.uuid_number ? client.uuid_number.split('-')[0].toUpperCase() : 'AP-882-2025'}
           </p>
@@ -432,6 +445,7 @@ export default function ClientDashboardDetails({
       </div>
 
       {/* 2. Main Dashboard Layout */}
+      {showOverview && (
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
         {/* Left Column: Stat Cards */}
@@ -487,8 +501,11 @@ export default function ClientDashboardDetails({
           </div>
         </div>
       </div>
+      )}
 
       {/* 3. Export Permissions & Quotas Table */}
+      {showChemicalsSection && (
+      <>
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <h2 className="font-bold text-slate-700 text-sm">Export Permissions</h2>
@@ -652,7 +669,11 @@ export default function ClientDashboardDetails({
         </div>
       )}
 
+      </>
+      )}
+
       {/* 4. TCC Applications & Issued Certificates */}
+      {showCertificatesSection && (
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-8">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white">
           <h2 className="font-bold text-slate-700 text-sm">
@@ -765,8 +786,10 @@ export default function ClientDashboardDetails({
           </table>
         </div>
       </div>
+      )}
+
       {/* 5. Admin Extras (Contacts, Activity, Notes, Actions) - Only visible to Admins, placed at bottom so it doesn't ruin the main dashboard */}
-      {currentUserRole !== 'CLIENT' && (
+      {showAdminExtras && (
         <div className="mt-12 pt-8 border-t border-slate-200">
           <h2 className="text-lg font-bold text-slate-800 mb-6">Administrative Controls</h2>
 

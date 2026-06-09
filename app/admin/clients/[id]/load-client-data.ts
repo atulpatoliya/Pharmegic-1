@@ -1,0 +1,87 @@
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getSession } from '@/lib/auth/session';
+import { redirect } from 'next/navigation';
+
+export async function loadClientProfileData(clientId: string) {
+  const session = await getSession();
+  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
+    redirect('/login');
+  }
+
+  const adminSupabase = createAdminClient();
+
+  const { data: client, error: clientError } = await adminSupabase
+    .from('clients')
+    .select('*')
+    .eq('id', clientId)
+    .single();
+
+  if (clientError || !client) {
+    redirect('/admin/clients');
+  }
+
+  const [
+    { data: user },
+    { data: clientChemicals },
+    { data: allChemicals },
+    { data: contacts },
+    { data: tccHistoryRaw },
+    { data: certificates },
+    { data: activityLogs },
+    { data: internalNotesData },
+  ] = await Promise.all([
+    adminSupabase.from('users').select('*').eq('client_id', clientId).maybeSingle(),
+    adminSupabase.from('client_chemicals').select('*, chemicals(*)').eq('client_id', clientId),
+    adminSupabase.from('chemicals').select('*').eq('status', 'active').order('chemical_name', { ascending: true }),
+    adminSupabase.from('client_contacts').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
+    adminSupabase
+      .from('tcc_applications')
+      .select('*, chemicals(*), certificates(*)')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false }),
+    adminSupabase
+      .from('certificates')
+      .select('*, tcc_applications(*, chemicals(*))')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false }),
+    adminSupabase.from('activity_logs').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
+    adminSupabase
+      .from('internal_notes')
+      .select('*, users!internal_notes_author_id_fkey(email)')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const tccHistory = (tccHistoryRaw || []).map((row: { chemicals?: unknown; certificates?: unknown }) => ({
+    ...row,
+    chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+    certificates: Array.isArray(row.certificates) ? row.certificates[0] ?? null : row.certificates,
+  }));
+
+  const internalNotes = (internalNotesData || []).map((note: { id: string; note: string; created_at: string; users?: { email?: string } | null }) => ({
+    id: note.id,
+    note: note.note,
+    created_at: note.created_at,
+    author_email: note.users?.email || 'System',
+  }));
+
+  const normalizedClientChemicals = (clientChemicals || []).map((row: { chemicals?: unknown }) => ({
+    ...row,
+    chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+  }));
+
+  return {
+    session,
+    client,
+    user,
+    clientChemicals: normalizedClientChemicals,
+    allChemicals: allChemicals || [],
+    contacts: contacts || [],
+    tccHistory,
+    certificates: certificates || [],
+    activityLogs: activityLogs || [],
+    internalNotes,
+  };
+}
+
+export type ClientProfileViewMode = 'overview' | 'chemicals' | 'certificates';

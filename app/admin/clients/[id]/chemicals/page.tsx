@@ -1,9 +1,9 @@
-import ClientDashboardDetails from './ClientDashboardDetails';
-import { loadClientProfileData } from './load-client-data';
+import ClientDashboardDetails from '../ClientDashboardDetails';
+import { loadClientProfileData } from '../load-client-data';
 
 export const revalidate = 0;
 
-export default async function ViewClientPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientChemicalsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await loadClientProfileData(id);
   const { session, ...profile } = data;
@@ -13,7 +13,7 @@ export default async function ViewClientPage({ params }: { params: Promise<{ id:
       {...profile}
       currentUserId={session.userId}
       currentUserRole={session.role}
-      viewMode="overview"
+      viewMode="chemicals"
     />
   );
 }
