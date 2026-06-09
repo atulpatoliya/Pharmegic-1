@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   changeClientEmailAction, 
@@ -31,7 +31,7 @@ import {
   Building, Mail, Phone, MapPin, Calendar, CheckCircle, 
   AlertCircle, FileText, User, ShieldAlert, Key, Plus, Trash2,
   FileSignature, Award, Clipboard, StickyNote, History, Lock, Unlock,
-  Download, Ship, PieChart, TrendingUp, Filter, Eye, EyeOff, PenLine, RotateCcw
+  Download, Filter, Eye, EyeOff, PenLine, RotateCcw
 } from 'lucide-react';
 import { useLayoutStore } from '@/store/layout';
 import dynamic from 'next/dynamic';
@@ -144,29 +144,79 @@ export default function ClientDashboardDetails({
   // -------------------------------------------------------------
   // Data Calculations
   // -------------------------------------------------------------
-  const approvedTccs = tccHistory.filter(t => t.status === 'approved');
-  const totalExported = approvedTccs.reduce((sum, t) => sum + Number(t.quantity_mt || 0), 0);
-
   const activePermissions = clientChemicals.filter(c => c.status === 'active').length;
   const pendingRenewals = clientChemicals.filter(c => c.status === 'expired' || (c.validity_date && new Date(c.validity_date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))).length;
 
-  const totalAllocatedQuota = clientChemicals.reduce((sum, c) => sum + Number(c.available_quantity || 0), 0);
+  const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const CHART_COLORS = ['#0f766e', '#059669', '#10b981', '#047857', '#14b8a6', '#0d9488', '#34d399', '#065f46'];
+  const chartYear = new Date().getFullYear();
 
-  const grandTotalQuota = totalAllocatedQuota + totalExported;
-  const remainingQuotaPercent = grandTotalQuota > 0 ? (totalAllocatedQuota / grandTotalQuota) * 100 : 0;
+  const { chartSeries, chartOptions, hasChartData } = useMemo(() => {
+    const approvedApps = tccHistory.filter((t) => t.status === 'approved');
 
-  // Chart Data
-  const chartOptions = {
-    chart: { type: 'area' as const, toolbar: { show: false }, zoom: { enabled: false } },
-    dataLabels: { enabled: false },
-    stroke: { curve: 'smooth' as const, width: 2 },
-    colors: ['#0f766e'],
-    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.0, stops: [0, 90, 100] } },
-    xaxis: { categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] },
-    yaxis: { show: false },
-    grid: { show: false }
-  };
-  const chartSeries = [{ name: 'Exported (MT)', data: [10, 41, 35, 51, 49, 62, 69, 91, 148, 100, 110, 120] }];
+    const chemicalMap = new Map<string, string>();
+    clientChemicals.forEach((cc) => {
+      if (cc.chemical_id && cc.chemicals?.chemical_name) {
+        chemicalMap.set(cc.chemical_id, cc.chemicals.chemical_name);
+      }
+    });
+    approvedApps.forEach((app) => {
+      const id = app.chemical_id as string;
+      const name = app.chemicals?.chemical_name || 'Unknown substance';
+      if (id) chemicalMap.set(id, name);
+    });
+
+    const series = [...chemicalMap.entries()]
+      .map(([chemId, name]) => ({
+        name,
+        data: MONTH_LABELS.map((_, monthIdx) =>
+          approvedApps
+            .filter((app) => app.chemical_id === chemId)
+            .filter((app) => {
+              const d = new Date(app.updated_at || app.created_at);
+              return d.getFullYear() === chartYear && d.getMonth() === monthIdx;
+            })
+            .reduce((sum, app) => sum + Number(app.quantity_mt || 0), 0)
+        ),
+      }))
+      .filter((s) => s.data.some((v) => v > 0));
+
+    const hasData = series.length > 0;
+
+    const options = {
+      chart: { type: 'area' as const, toolbar: { show: false }, zoom: { enabled: false } },
+      dataLabels: { enabled: false },
+      stroke: { curve: 'smooth' as const, width: 2 },
+      colors: CHART_COLORS,
+      fill: {
+        type: 'gradient',
+        gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 90, 100] },
+      },
+      xaxis: { categories: MONTH_LABELS },
+      yaxis: {
+        labels: {
+          formatter: (v: number) => `${Number(v).toFixed(0)} MT`,
+          style: { fontSize: '10px', colors: '#64748b' },
+        },
+      },
+      grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
+      legend: {
+        show: series.length > 0,
+        position: 'bottom' as const,
+        fontSize: '11px',
+        fontWeight: 600,
+      },
+      tooltip: {
+        y: { formatter: (v: number) => `${Number(v).toFixed(2)} MT` },
+      },
+    };
+
+    return {
+      chartSeries: series.length > 0 ? series : [{ name: 'No data', data: new Array(12).fill(0) }],
+      chartOptions: options,
+      hasChartData: hasData,
+    };
+  }, [tccHistory, clientChemicals, chartYear]);
 
   // -------------------------------------------------------------
   // Handlers
@@ -452,19 +502,6 @@ export default function ClientDashboardDetails({
         <div className="space-y-4 lg:col-span-1">
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between h-[120px]">
             <div className="flex justify-between items-start">
-              <span className="text-sm font-semibold text-slate-500">Total Exported</span>
-              <Ship className="h-5 w-5 text-teal-700" />
-            </div>
-            <div>
-              <div className="text-2xl font-black text-slate-800">{totalExported.toFixed(1)} <span className="text-sm text-slate-500 font-semibold">MT</span></div>
-              <div className="text-xs font-semibold text-teal-600 flex items-center gap-1 mt-1">
-                <TrendingUp className="h-3 w-3" /> +12% from last year
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between h-[120px]">
-            <div className="flex justify-between items-start">
               <span className="text-sm font-semibold text-slate-500">Active Permissions</span>
               <CheckCircle className="h-5 w-5 text-teal-700" />
             </div>
@@ -475,29 +512,27 @@ export default function ClientDashboardDetails({
               </div>
             </div>
           </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between h-[120px]">
-            <div className="flex justify-between items-start">
-              <span className="text-sm font-semibold text-slate-500">Remaining Quota</span>
-              <PieChart className="h-5 w-5 text-teal-700" />
-            </div>
-            <div>
-              <div className="text-2xl font-black text-slate-800">{remainingQuotaPercent.toFixed(1)} <span className="text-sm text-slate-500 font-semibold">%</span></div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2.5">
-                <div className="bg-teal-700 h-1.5 rounded-full" style={{ width: `${Math.min(100, remainingQuotaPercent)}%` }}></div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Right Column: Chart */}
-        <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col min-h-[300px]">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-slate-600">Monthly Export Activity</h3>
-            <span className="px-2 py-1 bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 rounded">Year 2024</span>
+        <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col min-h-[340px]">
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-600">Monthly TCC Activity</h3>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Approved export volume by chemical (MT)</p>
+            </div>
+            <span className="px-2 py-1 bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 rounded">
+              Year {chartYear}
+            </span>
           </div>
-          <div className="flex-1 w-full h-full min-h-[250px]">
-            {isMounted && <ApexChart options={chartOptions} series={chartSeries} type="area" height="100%" width="100%" />}
+          <div className="flex-1 w-full h-full min-h-[280px]">
+            {isMounted && hasChartData ? (
+              <ApexChart options={chartOptions} series={chartSeries} type="area" height="100%" width="100%" />
+            ) : isMounted ? (
+              <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-slate-400 font-medium">
+                No approved TCC exports recorded for {chartYear} yet.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
