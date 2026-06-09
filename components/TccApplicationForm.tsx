@@ -19,6 +19,7 @@ import {
   Paperclip,
 } from 'lucide-react';
 import { ModalErrorBox } from './ui/ModalErrorBox';
+import { FormLabel } from './ui/FormLabel';
 
 interface Substance {
   id: string;
@@ -157,9 +158,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
               <form onSubmit={handleApply} className="space-y-4">
                 {/* Substance Selection */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                    Chemical Substance
-                  </label>
+                  <FormLabel required>Chemical Substance</FormLabel>
                   <Select
                     value={chemicalId}
                     onChange={(e) => handleChemicalChange(e.target.value)}
@@ -184,9 +183,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
                 {/* Tonnage Quantity */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                    Export Tonnage (Metric Tons - MT)
-                  </label>
+                  <FormLabel required>Export Tonnage (Metric Tons - MT)</FormLabel>
                   <Input
                     type="number"
                     step="0.01"
@@ -217,9 +214,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
                 {/* Export date */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                    Expected Export Shipment Date
-                  </label>
+                  <FormLabel required>Expected Export Shipment Date</FormLabel>
                   <Input
                     type="date"
                     value={exportDate}
@@ -229,9 +224,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                    BO Attachment *
-                  </label>
+                  <FormLabel required>BO Attachment</FormLabel>
                   <div className="flex flex-col gap-2">
                     <label className="flex items-center gap-2 h-10 px-3 border border-slate-200 rounded-md bg-white cursor-pointer hover:bg-slate-50 text-sm text-slate-600">
                       <Paperclip className="h-4 w-4 text-slate-400 shrink-0" />

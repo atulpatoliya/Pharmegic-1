@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { FormLabel } from './FormLabel';
 
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
@@ -9,16 +10,13 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 }
 
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, error, options, ...props }, ref) => {
+  ({ className, label, error, options, required, ...props }, ref) => {
     return (
       <div className="w-full flex flex-col gap-1.5">
-        {label && (
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-            {label}
-          </label>
-        )}
+        {label && <FormLabel required={required}>{label}</FormLabel>}
         <select
           ref={ref}
+          required={required}
           className={twMerge(
             clsx(
               'flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors cursor-pointer',

@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Dialog } from '@/components/ui/Dialog';
 import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
+import { FormLabel } from '@/components/ui/FormLabel';
 import { formatErrorMessage } from '@/lib/format-error';
 import { resolveQuotaConsumption, sumApprovedExports, getRemainingQuota } from '@/lib/quota';
 import { processTccAction } from '@/actions/tcc';
@@ -1197,22 +1198,22 @@ export default function ClientDashboardDetails({
         <div className="p-2 space-y-4">
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-semibold mb-1 block">Substance Name *</label>
-              <Input placeholder="e.g. Methanol" value={assignChemData.chemical_name} onChange={(e) => setAssignChemData({ ...assignChemData, chemical_name: e.target.value })} />
+              <FormLabel required className="text-sm normal-case mb-1 block">Substance Name</FormLabel>
+              <Input placeholder="e.g. Methanol" value={assignChemData.chemical_name} onChange={(e) => setAssignChemData({ ...assignChemData, chemical_name: e.target.value })} required />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold mb-1 block">CAS Number *</label>
+                <FormLabel required className="text-sm normal-case mb-1 block">CAS Number</FormLabel>
                 <Input placeholder="e.g. 67-56-1" value={assignChemData.cas_number} onChange={(e) => setAssignChemData({ ...assignChemData, cas_number: e.target.value })} required />
               </div>
               <div>
-                <label className="text-sm font-semibold mb-1 block">EC Number</label>
+                <FormLabel className="text-sm normal-case mb-1 block">EC Number</FormLabel>
                 <Input placeholder="e.g. 200-659-6" value={assignChemData.ec_number} onChange={(e) => setAssignChemData({ ...assignChemData, ec_number: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold mb-1 block">Allocated Quota (MT)</label>
+                <FormLabel className="text-sm normal-case mb-1 block">Allocated Quota (MT)</FormLabel>
                 <Select 
                   value={assignChemData.tonnage_band}
                   onChange={(e) => setAssignChemData({ ...assignChemData, tonnage_band: e.target.value })}
@@ -1226,7 +1227,7 @@ export default function ClientDashboardDetails({
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold mb-1 block">Validity Date</label>
+                <FormLabel className="text-sm normal-case mb-1 block">Validity Date</FormLabel>
                 <Input type="date" value={assignChemData.validity_date} onChange={(e) => setAssignChemData({ ...assignChemData, validity_date: e.target.value })} />
               </div>
             </div>
@@ -1243,16 +1244,17 @@ export default function ClientDashboardDetails({
         <div className="p-2 space-y-4">
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-semibold mb-1 block">Substance Name *</label>
+              <FormLabel required className="text-sm normal-case mb-1 block">Substance Name</FormLabel>
               <Input
                 placeholder="e.g. Methanol"
                 value={editChemData.chemical_name}
                 onChange={(e) => setEditChemData({ ...editChemData, chemical_name: e.target.value })}
+                required
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold mb-1 block">CAS Number</label>
+                <FormLabel className="text-sm normal-case mb-1 block">CAS Number</FormLabel>
                 <Input
                   placeholder="e.g. 67-56-1"
                   value={editChemData.cas_number}
@@ -1260,7 +1262,7 @@ export default function ClientDashboardDetails({
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold mb-1 block">EC Number</label>
+                <FormLabel className="text-sm normal-case mb-1 block">EC Number</FormLabel>
                 <Input
                   placeholder="e.g. 200-659-6"
                   value={editChemData.ec_number}
@@ -1270,7 +1272,7 @@ export default function ClientDashboardDetails({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold mb-1 block">Allocated Quota (MT)</label>
+                <FormLabel className="text-sm normal-case mb-1 block">Allocated Quota (MT)</FormLabel>
                 <Select 
                   value={editChemData.tonnage_band}
                   onChange={(e) => setEditChemData({ ...editChemData, tonnage_band: e.target.value })}
@@ -1284,7 +1286,7 @@ export default function ClientDashboardDetails({
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold mb-1 block">Validity Date</label>
+                <FormLabel className="text-sm normal-case mb-1 block">Validity Date</FormLabel>
                 <Input type="date" value={editChemData.validity_date} onChange={(e) => setEditChemData({ ...editChemData, validity_date: e.target.value })} />
               </div>
             </div>

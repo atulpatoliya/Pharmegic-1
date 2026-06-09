@@ -6,6 +6,7 @@ import { Input } from './ui/Input';
 import { toast } from '@/store/toast';
 import { Lock, Mail } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
+import { FormLabel } from './ui/FormLabel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -80,9 +81,9 @@ export default function LoginForm() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="w-full flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+          <FormLabel required className="flex items-center gap-1.5 normal-case">
             <Mail className="h-3.5 w-3.5 text-slate-400" /> Corporate Email
-          </label>
+          </FormLabel>
           <input
             type="email"
             id="login-email"
@@ -96,9 +97,9 @@ export default function LoginForm() {
         </div>
 
         <div className="w-full flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+          <FormLabel required className="flex items-center gap-1.5 normal-case">
             <Lock className="h-3.5 w-3.5 text-slate-400" /> Password
-          </label>
+          </FormLabel>
           <input
             type="password"
             id="login-password"

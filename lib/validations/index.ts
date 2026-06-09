@@ -34,7 +34,7 @@ export const contactSchema = z.object({
 
 export const clientProfileSchema = z.object({
   company_name: z.string().min(2, { message: 'Company name is required' }),
-  uuid_number: z.string().optional().or(z.literal('')),
+  uuid_number: z.string().min(1, { message: 'UUID number is required' }),
   primary_contact_first_name: z.string().min(1, { message: 'First name is required' }),
   primary_contact_last_name: z.string().min(1, { message: 'Last name is required' }),
   email: z.string().email({ message: 'Invalid primary contact email' }),
@@ -43,11 +43,11 @@ export const clientProfileSchema = z.object({
   phone: z.string().optional().or(z.literal('')),
   cc_emails: z.string().optional().or(z.literal('')),
   cc_phones: z.string().optional().or(z.literal('')),
-  address: z.string().optional().or(z.literal('')),
-  city: z.string().optional().or(z.literal('')),
-  state: z.string().optional().or(z.literal('')),
-  country: z.string().optional().or(z.literal('')),
-  postal_code: z.string().optional().or(z.literal('')),
+  address: z.string().min(1, { message: 'Address is required' }),
+  city: z.string().min(1, { message: 'City is required' }),
+  state: z.string().min(1, { message: 'State is required' }),
+  country: z.string().min(1, { message: 'Country is required' }),
+  postal_code: z.string().min(1, { message: 'Postal code is required' }),
   status: z.enum(['active', 'inactive', 'pending']).default('pending'),
 });
 

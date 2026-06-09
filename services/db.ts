@@ -81,7 +81,7 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
 export interface ClientWizardInput {
   profile: {
     company_name: string;
-    uuid_number?: string;
+    uuid_number: string;
     primary_contact_first_name: string;
     primary_contact_last_name: string;
     email: string;
@@ -115,7 +115,7 @@ export async function createClientWizard(supabase: SupabaseClient, input: Client
       company_name: input.profile.company_name,
       legal_name: null,
       registration_number: null,
-      uuid_number: input.profile.uuid_number || null,
+      uuid_number: input.profile.uuid_number.trim(),
       primary_contact_first_name: input.profile.primary_contact_first_name,
       primary_contact_last_name: input.profile.primary_contact_last_name,
       email: input.profile.email,

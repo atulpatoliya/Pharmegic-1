@@ -5,6 +5,7 @@ import { formatErrorMessage } from '@/lib/format-error';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { ModalErrorBox } from './ui/ModalErrorBox';
+import { FormLabel } from './ui/FormLabel';
 import { toast } from '@/store/toast';
 import { Eye, EyeOff, Plus, Trash2, Save, User } from 'lucide-react';
 import { useState, useTransition } from 'react';
@@ -77,13 +78,19 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
   });
 
   const validateForm = () => {
-    if (!profile.company_name) return 'Company name is required';
+    if (!profile.company_name.trim()) return 'Company name is required';
+    if (!profile.uuid_number.trim()) return 'UUID number is required';
     if (!profile.primary_contact_first_name) return 'Primary contact first name is required';
     if (!profile.primary_contact_last_name) return 'Primary contact last name is required';
     if (!profile.email) return 'Primary contact email is required';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) return 'Invalid email format';
     if (!profile.password || profile.password.length < 6) return 'Password must be at least 6 characters';
     if (!profile.phone) return 'Primary contact mobile number is required';
+    if (!profile.address.trim()) return 'Address is required';
+    if (!profile.city.trim()) return 'City is required';
+    if (!profile.state.trim()) return 'State is required';
+    if (!profile.postal_code.trim()) return 'Postal code is required';
+    if (!profile.country.trim()) return 'Country is required';
     return null;
   };
 
@@ -162,9 +169,10 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
           />
           <Input
             label="UUID Number"
-            placeholder="Auto-generated if left blank"
+            placeholder="e.g. AP-882-2025"
             value={profile.uuid_number}
             onChange={(e) => setProfile({ ...profile, uuid_number: e.target.value })}
+            required
           />
           <Input
             label="Owner / Company Representative"
@@ -228,7 +236,7 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
             )}
           </div>
           <div className="w-full flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Password <span className="text-rose-500">*</span></label>
+            <FormLabel required>Password</FormLabel>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -344,6 +352,7 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
               placeholder="100 Compliance Boulevard, Suite 50"
               value={profile.address}
               onChange={(e) => setProfile({ ...profile, address: e.target.value })}
+              required
             />
           </div>
           <Input
@@ -351,24 +360,28 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
             placeholder="Istanbul"
             value={profile.city}
             onChange={(e) => setProfile({ ...profile, city: e.target.value })}
+            required
           />
           <Input
             label="State"
             placeholder="Marmara"
             value={profile.state}
             onChange={(e) => setProfile({ ...profile, state: e.target.value })}
+            required
           />
           <Input
             label="Postal Code"
             placeholder="34000"
             value={profile.postal_code}
             onChange={(e) => setProfile({ ...profile, postal_code: e.target.value })}
+            required
           />
           <Input
             label="Country"
             placeholder="Turkey"
             value={profile.country}
             onChange={(e) => setProfile({ ...profile, country: e.target.value })}
+            required
           />
         </div>
       </section>

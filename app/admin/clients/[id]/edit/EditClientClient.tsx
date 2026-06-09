@@ -77,6 +77,35 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
     e.preventDefault();
     setEditError(null);
 
+    if (!editProfile.company_name.trim()) {
+      setEditError('Company name is required.');
+      return;
+    }
+    if (!editProfile.uuid_number.trim()) {
+      setEditError('UUID number is required.');
+      return;
+    }
+    if (!editProfile.address.trim()) {
+      setEditError('Address is required.');
+      return;
+    }
+    if (!editProfile.city.trim()) {
+      setEditError('City is required.');
+      return;
+    }
+    if (!editProfile.state.trim()) {
+      setEditError('State is required.');
+      return;
+    }
+    if (!editProfile.postal_code.trim()) {
+      setEditError('Postal code is required.');
+      return;
+    }
+    if (!editProfile.country.trim()) {
+      setEditError('Country is required.');
+      return;
+    }
+
     startTransition(async () => {
       const res = await updateClientAction(client.id, editProfile, editChemicalIds);
       if (res.success) {
@@ -105,6 +134,13 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
             label="Company Name"
             value={editProfile.company_name}
             onChange={(e) => setEditProfile({ ...editProfile, company_name: e.target.value })}
+            required
+          />
+          <Input
+            label="UUID Number"
+            placeholder="e.g. AP-882-2025"
+            value={editProfile.uuid_number}
+            onChange={(e) => setEditProfile({ ...editProfile, uuid_number: e.target.value })}
             required
           />
           <Input
@@ -142,37 +178,39 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
             onChange={(e) => setEditProfile({ ...editProfile, cc_phones: e.target.value })}
           />
           <div className="md:col-span-2">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Address Details</h3>
+          </div>
+          <div className="md:col-span-2">
             <Input
               label="Company Address"
               value={editProfile.address}
               onChange={(e) => setEditProfile({ ...editProfile, address: e.target.value })}
+              required
             />
           </div>
           <Input
             label="City"
             value={editProfile.city}
             onChange={(e) => setEditProfile({ ...editProfile, city: e.target.value })}
+            required
           />
           <Input
             label="State"
             value={editProfile.state}
             onChange={(e) => setEditProfile({ ...editProfile, state: e.target.value })}
+            required
           />
           <Input
             label="Postal Code"
             value={editProfile.postal_code}
             onChange={(e) => setEditProfile({ ...editProfile, postal_code: e.target.value })}
+            required
           />
           <Input
             label="Country"
             value={editProfile.country}
             onChange={(e) => setEditProfile({ ...editProfile, country: e.target.value })}
-          />
-          <Input
-            label="UUID Number"
-            placeholder="Auto-generated if left blank"
-            value={editProfile.uuid_number}
-            onChange={(e) => setEditProfile({ ...editProfile, uuid_number: e.target.value })}
+            required
           />
         </div>
 
