@@ -2,7 +2,7 @@
 
 import { useLayoutStore } from '@/store/layout';
 import { logout } from '@/actions/auth';
-import { Menu, LogOut, User } from 'lucide-react';
+import { Menu, User } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import type { NotificationRow } from '@/lib/notifications';
 import { useRouter } from 'next/navigation';
@@ -81,13 +81,13 @@ export default function TopNavbar({
           </div>
         </div>
 
-        {/* Logout */}
         <button
+          type="button"
           onClick={handleLogout}
           title="Sign out of portal"
-          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+          className="inline-flex items-center gap-3 rounded-lg text-sm font-medium transition-all px-4 py-2.5 bg-accent text-accent-foreground shadow-xs hover:bg-accent-hover cursor-pointer"
         >
-          <LogOut className="h-5 w-5" />
+          Log Out
         </button>
       </div>
     </header>
