@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
 import { formatErrorMessage } from '@/lib/format-error';
-import { getTonnageBandMaxQuota } from '@/lib/quota';
+import { getTonnageBandMaxQuota, sumApprovedExports, computeAssignableQuota } from '@/lib/quota';
 import { clientWizardSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
@@ -17,6 +17,21 @@ async function requireAdmin() {
     return null;
   }
   return session;
+}
+
+async function getClientYearExportedMt(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  chemicalId: string
+) {
+  const { data } = await adminSupabase
+    .from('tcc_applications')
+    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+    .eq('client_id', clientId)
+    .eq('chemical_id', chemicalId)
+    .eq('status', 'approved');
+
+  return sumApprovedExports(data || [], chemicalId);
 }
 
 // ============================================================================
@@ -421,8 +436,13 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         .eq('id', chemicalId);
     }
 
-    // Calculate quota based on tonnage band
+    // Calculate quota based on tonnage band minus certificates already issued this year
     const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
+    const exportedMt = chemicalId ? await getClientYearExportedMt(adminSupabase, clientId, chemicalId) : 0;
+    const { assignable, error: quotaError } = computeAssignableQuota(calcQuota, exportedMt);
+    if (quotaError) {
+      return { success: false, error: quotaError };
+    }
 
     const { data: existingLink } = await adminSupabase
       .from('client_chemicals')
@@ -439,7 +459,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       const { error: restoreErr } = await adminSupabase
         .from('client_chemicals')
         .update({
-          available_quantity: calcQuota,
+          available_quantity: assignable,
           validity_date: data.validity_date || null,
           status: 'active',
           assigned_by: session.userId,
@@ -451,7 +471,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       const { error: assignErr } = await adminSupabase.from('client_chemicals').insert({
         client_id: clientId,
         chemical_id: chemicalId,
-        available_quantity: calcQuota,
+        available_quantity: assignable,
         validity_date: data.validity_date || null,
         status: 'active',
         assigned_by: session.userId,
@@ -597,6 +617,11 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
   const adminSupabase = createAdminClient();
   try {
     const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
+    const exportedMt = await getClientYearExportedMt(adminSupabase, clientId, chemicalId);
+    const { assignable, error: quotaError } = computeAssignableQuota(calcQuota, exportedMt);
+    if (quotaError) {
+      return { success: false, error: quotaError };
+    }
 
     const { error: chemError } = await adminSupabase
       .from('chemicals')
@@ -613,7 +638,7 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
     const { error } = await adminSupabase
       .from('client_chemicals')
       .update({
-        available_quantity: calcQuota,
+        available_quantity: assignable,
         validity_date: data.validity_date || null,
       })
       .eq('client_id', clientId)

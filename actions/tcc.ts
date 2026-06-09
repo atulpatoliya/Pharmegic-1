@@ -9,6 +9,7 @@ import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments'
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
 import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
+import { getRemainingQuota, getTonnageBandMaxQuota, sumApprovedExports } from '@/lib/quota';
 
 // ============================================================================
 // APPLY FOR TCC (Client Action)
@@ -42,7 +43,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     // 1. Verify chemical is authorized for this client
     const { data: authChem } = await adminSupabase
       .from('client_chemicals')
-      .select('id, available_quantity, status')
+      .select('id, available_quantity, status, chemicals(tonnage_band)')
       .eq('client_id', clientId)
       .eq('chemical_id', result.data.chemical_id)
       .eq('status', 'active')
@@ -52,7 +53,17 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       return { success: false, error: 'This chemical is not authorized for your company. Contact your administrator.' };
     }
 
-    const clientQuota = Number(authChem.available_quantity ?? 0);
+    const { data: approvedForChem } = await adminSupabase
+      .from('tcc_applications')
+      .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+      .eq('client_id', clientId)
+      .eq('chemical_id', result.data.chemical_id)
+      .eq('status', 'approved');
+
+    const exportedMt = sumApprovedExports(approvedForChem || [], result.data.chemical_id);
+    const chem = Array.isArray(authChem.chemicals) ? authChem.chemicals[0] : authChem.chemicals;
+    const tonnageBand = (chem as { tonnage_band?: string | null } | null)?.tonnage_band ?? null;
+    const clientQuota = getRemainingQuota(Number(authChem.available_quantity ?? 0), exportedMt, tonnageBand);
     if (clientQuota < result.data.quantity_mt) {
       return {
         success: false,
@@ -89,7 +100,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
         chemical_id: result.data.chemical_id,
         client_chemical_id: authChem.id,
         quantity_mt: result.data.quantity_mt,
-        kkdik_reg_no: result.data.kkdik_reg_no,
+        kkdik_reg_no: result.data.kkdik_reg_no || null,
         export_date: result.data.export_date,
         remarks: result.data.remarks || null,
         status: 'pending',
@@ -160,6 +171,27 @@ export async function processTccAction(
 
     if (fetchError || !app) throw new Error('Application not found');
 
+    if (status === 'approved') {
+      const { data: approvedForChem } = await adminSupabase
+        .from('tcc_applications')
+        .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+        .eq('client_id', app.client_id)
+        .eq('chemical_id', app.chemical_id)
+        .eq('status', 'approved')
+        .neq('id', applicationId);
+
+      const exportedMt = sumApprovedExports(approvedForChem || [], app.chemical_id);
+      const bandMax = getTonnageBandMaxQuota(app.chemicals.tonnage_band);
+      const requested = Number(app.quantity_mt);
+
+      if (bandMax != null && exportedMt + requested > bandMax) {
+        return {
+          success: false,
+          error: `Cannot approve: ${exportedMt} MT already issued this year. Limit is ${bandMax} MT — only ${Math.max(0, bandMax - exportedMt)} MT remaining.`,
+        };
+      }
+    }
+
     // 2. Update application status
     const { error: updateError } = await adminSupabase
       .from('tcc_applications')
@@ -175,22 +207,52 @@ export async function processTccAction(
 
     if (status === 'approved') {
       // 3. Deduct client-assigned quota (admin allocation on client_chemicals)
-      if (app.client_chemical_id) {
+      let clientChemId = app.client_chemical_id as string | null;
+      let clientChemAvailable: number | null = null;
+
+      if (clientChemId) {
         const { data: clientChem } = await adminSupabase
           .from('client_chemicals')
           .select('available_quantity')
-          .eq('id', app.client_chemical_id)
+          .eq('id', clientChemId)
           .single();
-
+        if (clientChem) clientChemAvailable = Number(clientChem.available_quantity);
+      } else {
+        const { data: clientChem } = await adminSupabase
+          .from('client_chemicals')
+          .select('id, available_quantity')
+          .eq('client_id', app.client_id)
+          .eq('chemical_id', app.chemical_id)
+          .eq('status', 'active')
+          .maybeSingle();
         if (clientChem) {
-          const newClientAvailable = Math.max(
-            0,
-            Number(clientChem.available_quantity) - Number(app.quantity_mt)
-          );
+          clientChemId = clientChem.id;
+          clientChemAvailable = Number(clientChem.available_quantity);
+        }
+      }
+
+      if (clientChemId && clientChemAvailable != null) {
+        const tonnageBand = app.chemicals.tonnage_band as string | null;
+        const { data: allApproved } = await adminSupabase
+          .from('tcc_applications')
+          .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+          .eq('client_id', app.client_id)
+          .eq('chemical_id', app.chemical_id)
+          .eq('status', 'approved');
+
+        const exportedAfter = sumApprovedExports(allApproved || [], app.chemical_id);
+        const syncedAvailable = getRemainingQuota(0, exportedAfter, tonnageBand);
+
+        await adminSupabase
+          .from('client_chemicals')
+          .update({ available_quantity: syncedAvailable })
+          .eq('id', clientChemId);
+
+        if (!app.client_chemical_id) {
           await adminSupabase
-            .from('client_chemicals')
-            .update({ available_quantity: newClientAvailable })
-            .eq('id', app.client_chemical_id);
+            .from('tcc_applications')
+            .update({ client_chemical_id: clientChemId })
+            .eq('id', applicationId);
         }
       }
 

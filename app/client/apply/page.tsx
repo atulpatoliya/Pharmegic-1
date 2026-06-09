@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 
 export const revalidate = 0;
 
+import { getRemainingQuota, sumApprovedExports } from '@/lib/quota';
+
 export default async function ApplyPage() {
   const session = await getSession();
   if (!session || session.role !== 'CLIENT') redirect('/login');
@@ -20,21 +22,30 @@ export default async function ApplyPage() {
 
   const adminSupabase = createAdminClient();
 
-  // Fetch only authorized + active chemicals for this client
-  const { data: mappings } = await adminSupabase
-    .from('client_chemicals')
-    .select('chemical_id, available_quantity, validity_date, chemicals(*)')
-    .eq('client_id', clientId)
-    .eq('status', 'active');
+  const [{ data: mappings }, { data: approvedTccs }] = await Promise.all([
+    adminSupabase
+      .from('client_chemicals')
+      .select('chemical_id, available_quantity, validity_date, chemicals(*)')
+      .eq('client_id', clientId)
+      .eq('status', 'active'),
+    adminSupabase
+      .from('tcc_applications')
+      .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+      .eq('client_id', clientId)
+      .eq('status', 'approved'),
+  ]);
 
   const authorizedSubstances = (mappings || [])
-    .map((m: any) => {
+    .map((m: { chemical_id: string; available_quantity?: number; validity_date?: string | null; chemicals?: unknown }) => {
       const chem = Array.isArray(m.chemicals) ? m.chemicals[0] : m.chemicals;
-      if (!chem || chem.status !== 'active') return null;
+      if (!chem || (chem as { status?: string }).status !== 'active') return null;
+      const tonnageBand = (chem as { tonnage_band?: string | null }).tonnage_band ?? null;
+      const exported = sumApprovedExports(approvedTccs || [], m.chemical_id);
       return {
         ...chem,
-        available_quantity: Number(m.available_quantity ?? 0),
-        validity_date: m.validity_date ?? chem.validity_date ?? null,
+        id: m.chemical_id,
+        available_quantity: getRemainingQuota(Number(m.available_quantity ?? 0), exported, tonnageBand),
+        validity_date: m.validity_date ?? (chem as { validity_date?: string | null }).validity_date ?? null,
       };
     })
     .filter(Boolean);

@@ -41,7 +41,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
   const [chemicalId, setChemicalId] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [kkdikRegNo, setKkdikRegNo] = useState('');
   const [exportDate, setExportDate] = useState('');
   const [boFile, setBoFile] = useState<File | null>(null);
 
@@ -64,11 +63,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
     if (selectedSubstance && Number(quantity) > selectedSubstance.available_quantity) {
       setError(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
-      return;
-    }
-
-    if (!kkdikRegNo.trim()) {
-      setError('KKDIK registration number is required.');
       return;
     }
 
@@ -96,7 +90,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       const payload = new FormData();
       payload.append('chemical_id', chemicalId);
       payload.append('quantity_mt', quantity);
-      payload.append('kkdik_reg_no', kkdikRegNo);
       payload.append('export_date', exportDate);
       payload.append('bo_attachment', boFile);
 
@@ -168,19 +161,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                     placeholder="e.g. 25.50"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
-                    required
-                  />
-                </div>
-
-                {/* KKDIK Registration Number */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                    KKDIK Registration Number
-                  </label>
-                  <Input
-                    placeholder="e.g. 05-2114885232-44-0000"
-                    value={kkdikRegNo}
-                    onChange={(e) => setKkdikRegNo(e.target.value)}
                     required
                   />
                 </div>

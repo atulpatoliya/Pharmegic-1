@@ -25,7 +25,7 @@ import { Select } from '@/components/ui/Select';
 import { Dialog } from '@/components/ui/Dialog';
 import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
 import { formatErrorMessage } from '@/lib/format-error';
-import { resolveQuotaConsumption } from '@/lib/quota';
+import { resolveQuotaConsumption, sumApprovedExports, getRemainingQuota } from '@/lib/quota';
 import { processTccAction } from '@/actions/tcc';
 import { TccApplicationViewDialog, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
@@ -485,6 +485,11 @@ export default function ClientDashboardDetails({
       const match = clientChemicals.find((c) => c.chemical_id === app.chemical_id);
       if (match) cc = { available_quantity: Number(match.available_quantity ?? 0) };
     }
+    const chemicalId = app.chemical_id as string | undefined;
+    const exportedRaw = chemicalId ? sumApprovedExports(tccHistory, chemicalId, chartYear) : 0;
+    const tonnageBand = chem?.tonnage_band ?? null;
+    const remainingQuota = getRemainingQuota(Number(cc?.available_quantity ?? 0), exportedRaw, tonnageBand);
+    cc = { available_quantity: remainingQuota };
     return {
       id: app.id as string,
       tracking_id: app.tracking_id as string | undefined,
@@ -506,7 +511,7 @@ export default function ClientDashboardDetails({
         ec_number: chem?.ec_number ?? null,
         tonnage_band: chem?.tonnage_band ?? null,
         validity_date: chem?.validity_date ?? null,
-        available_quantity: Number(chem?.available_quantity ?? cc?.available_quantity ?? 0),
+        available_quantity: remainingQuota,
       },
       certificates: app.certificates as TccViewApplication['certificates'],
     };
@@ -623,11 +628,11 @@ export default function ClientDashboardDetails({
       const cas = cc.chemicals?.cas_number || 'N/A';
       const ec = cc.chemicals?.ec_number || 'N/A';
       const band = cc.chemicals?.tonnage_band || 'N/A';
-      const exportedRaw = tccHistory.filter(t => t.chemical_id === cc.chemical_id && t.status === 'approved').reduce((sum, t) => sum + Number(t.quantity_mt || 0), 0);
+      const exportedRaw = sumApprovedExports(tccHistory, cc.chemical_id, chartYear);
       const { exported, totalQuota: max } = resolveQuotaConsumption(
-        cc.available_quantity,
         exportedRaw,
-        cc.chemicals?.tonnage_band
+        cc.chemicals?.tonnage_band,
+        cc.available_quantity
       );
       const validity = cc.validity_date ? new Date(cc.validity_date).toLocaleDateString('en-GB') : 'N/A';
       const status = cc.status === 'active' ? 'Active' : 'Expired';
@@ -744,12 +749,12 @@ export default function ClientDashboardDetails({
       </div>
       )}
 
-      {/* 3. Export Permissions & Quotas Table */}
+      {/* 3. Substance Details & Quotas Table */}
       {showChemicalsSection && (
       <>
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <h2 className="font-bold text-slate-700 text-sm">Export Permissions</h2>
+          <h2 className="font-bold text-slate-700 text-sm">Substance Details</h2>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500"><Filter className="h-4 w-4" /></Button>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500" onClick={handleExportCSV} title="Export CSV">
@@ -775,7 +780,7 @@ export default function ClientDashboardDetails({
                 <th className="px-6 py-4">CAS Number</th>
                 <th className="px-6 py-4">EC Number</th>
                 <th className="px-6 py-4 text-center">Tonnage Band</th>
-                <th className="px-6 py-4">Quota Consumption</th>
+                <th className="px-6 py-4">Quantity</th>
                 <th className="px-6 py-4">Validity</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 {currentUserRole !== 'CLIENT' && <th className="px-6 py-4 text-right"></th>}
@@ -787,14 +792,14 @@ export default function ClientDashboardDetails({
               ) : (
                 clientChemicals.map((cc) => {
                   const name = cc.chemicals?.chemical_name || 'Unknown';
-                  const exportedRaw = tccHistory.filter(t => t.chemical_id === cc.chemical_id && t.status === 'approved').reduce((sum, t) => sum + Number(t.quantity_mt || 0), 0);
-                  const { exported, totalQuota: max, percentUsed: pct } = resolveQuotaConsumption(
-                    cc.available_quantity,
+                  const exportedRaw = sumApprovedExports(tccHistory, cc.chemical_id, chartYear);
+                  const { exported, totalQuota: max, percentUsed: pct, isExceeded } = resolveQuotaConsumption(
                     exportedRaw,
-                    cc.chemicals?.tonnage_band
+                    cc.chemicals?.tonnage_band,
+                    cc.available_quantity
                   );
-                  const isCritical = pct >= 90 || cc.status === 'expired';
-                  const isWarning = pct >= 75 && pct < 90;
+                  const isCritical = isExceeded || pct >= 90 || cc.status === 'expired';
+                  const isWarning = !isExceeded && pct >= 75 && pct < 90;
 
                   return (
                     <tr key={cc.id} className="hover:bg-slate-50/50 transition-colors">
@@ -819,19 +824,21 @@ export default function ClientDashboardDetails({
                           <span className="font-medium text-slate-500">of {max.toFixed(0)} MT</span>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-1.5 flex overflow-hidden">
-                          <div className={`h-full ${isCritical ? 'bg-red-600' : isWarning ? 'bg-emerald-600' : 'bg-teal-700'}`} style={{ width: `${Math.max(5, pct)}%` }}></div>
+                          <div className={`h-full ${isExceeded || isCritical ? 'bg-red-600' : isWarning ? 'bg-emerald-600' : 'bg-teal-700'}`} style={{ width: `${Math.min(100, Math.max(5, pct))}%` }}></div>
                           {isWarning && <div className="h-full bg-red-500" style={{ width: '10%' }}></div>}
                         </div>
-                        {(isCritical || isWarning) && (
-                          <div className="text-[10px] font-bold text-red-600 text-right mt-1">{isCritical ? 'Critical' : 'Limit Warning'}</div>
+                        {(isExceeded || isCritical || isWarning) && (
+                          <div className="text-[10px] font-bold text-red-600 text-right mt-1">
+                            {isExceeded ? 'QTY Exceeded' : isCritical ? 'Critical' : 'Limit Warning'}
+                          </div>
                         )}
                       </td>
                       <td className="px-6 py-4 font-medium" suppressHydrationWarning>
                         {cc.validity_date ? new Date(cc.validity_date).toLocaleDateString('en-GB') : 'N/A'}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <Badge variant={cc.status === 'active' && !isCritical ? 'success' : 'danger'} className={`text-[10px] uppercase font-bold py-1 ${isCritical ? 'bg-red-100 text-red-700' : 'bg-lime-300 text-lime-900'}`}>
-                          {isCritical ? 'Pending Renewal' : 'Active'}
+                        <Badge variant={isExceeded ? 'danger' : cc.status === 'active' && !isCritical ? 'success' : 'danger'} className={`text-[10px] uppercase font-bold py-1 ${isExceeded ? 'bg-red-100 text-red-700' : isCritical ? 'bg-red-100 text-red-700' : 'bg-lime-300 text-lime-900'}`}>
+                          {isExceeded ? 'QTY Exceeded' : cc.status === 'expired' ? 'Expired' : isCritical ? 'Critical' : 'Active'}
                         </Badge>
                       </td>
                       {currentUserRole !== 'CLIENT' && (
