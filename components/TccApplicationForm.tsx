@@ -47,6 +47,28 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
   // Selected chemical info for preview
   const selectedSubstance = authorizedSubstances.find((s) => s.id === chemicalId);
 
+  const initialQuota = selectedSubstance ? Number(selectedSubstance.available_quantity) : 0;
+  const requestedAmt = Number(quantity) || 0;
+  const finalQuota = initialQuota - requestedAmt;
+  const quotaExceeded = requestedAmt > 0 && requestedAmt > initialQuota;
+  const noQuotaLeft = selectedSubstance != null && initialQuota <= 0;
+
+  const handleChemicalChange = (value: string) => {
+    setChemicalId(value);
+    setError(null);
+    const substance = authorizedSubstances.find((s) => s.id === value);
+    if (substance && quantity && Number(quantity) > Number(substance.available_quantity)) {
+      setQuantity('');
+    }
+  };
+
+  const handleQuantityChange = (value: string) => {
+    setQuantity(value);
+    if (error?.includes('quota') || error?.includes('Quantity exceeds')) {
+      setError(null);
+    }
+  };
+
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -58,6 +80,11 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
     if (!quantity || Number(quantity) <= 0) {
       setError('Please specify a positive quantity in metric tons (MT).');
+      return;
+    }
+
+    if (noQuotaLeft) {
+      setError('No remaining quota for this substance. Contact your administrator.');
       return;
     }
 
@@ -103,10 +130,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
     });
   };
 
-  // Calculate dynamic quota preview
-  const initialQuota = selectedSubstance ? Number(selectedSubstance.available_quantity) : 0;
-  const requestedAmt = Number(quantity) || 0;
-  const finalQuota = Math.max(0, initialQuota - requestedAmt);
+  // Calculate dynamic quota preview (finalQuota computed above)
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-slide-in">
@@ -138,13 +162,21 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   </label>
                   <Select
                     value={chemicalId}
-                    onChange={(e) => setChemicalId(e.target.value)}
+                    onChange={(e) => handleChemicalChange(e.target.value)}
                     options={[
                       { value: '', label: 'Select authorized substance...' },
-                      ...authorizedSubstances.map((s) => ({
-                        value: s.id,
-                        label: `${s.chemical_name} (CAS: ${s.cas_number})`,
-                      })),
+                      ...authorizedSubstances.map((s) => {
+                        const remaining = Number(s.available_quantity);
+                        const label =
+                          remaining <= 0
+                            ? `${s.chemical_name} (CAS: ${s.cas_number}) — No quota left`
+                            : `${s.chemical_name} (CAS: ${s.cas_number}) — ${remaining} MT available`;
+                        return {
+                          value: s.id,
+                          label,
+                          disabled: remaining <= 0,
+                        };
+                      }),
                     ]}
                     required
                   />
@@ -158,11 +190,29 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   <Input
                     type="number"
                     step="0.01"
-                    placeholder="e.g. 25.50"
+                    min="0.01"
+                    max={selectedSubstance ? selectedSubstance.available_quantity : undefined}
+                    placeholder={
+                      selectedSubstance
+                        ? `Max ${selectedSubstance.available_quantity} MT`
+                        : 'e.g. 25.50'
+                    }
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
+                    onChange={(e) => handleQuantityChange(e.target.value)}
+                    disabled={noQuotaLeft}
                     required
                   />
+                  {selectedSubstance && (
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      Maximum you can apply for: <span className="font-bold text-slate-700">{initialQuota} MT</span>
+                    </p>
+                  )}
+                  {quotaExceeded && (
+                    <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      Request exceeds available quota by {(requestedAmt - initialQuota).toFixed(2)} MT.
+                    </p>
+                  )}
                 </div>
 
                 {/* Export date */}
@@ -210,7 +260,11 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" isLoading={isPending} disabled={isPending}>
+                  <Button
+                    type="submit"
+                    isLoading={isPending}
+                    disabled={isPending || quotaExceeded || noQuotaLeft || !quantity || Number(quantity) <= 0}
+                  >
                     Submit Application <ArrowRight className="h-4 w-4 ml-1.5" />
                   </Button>
                 </div>
@@ -262,22 +316,49 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                         <span className="font-bold">- {requestedAmt} MT</span>
                       </div>
                       <div className="border-t border-dashed border-slate-200 my-2" />
-                      <div className="flex justify-between font-bold text-primary">
+                      <div className={`flex justify-between font-bold ${quotaExceeded ? 'text-rose-600' : 'text-primary'}`}>
                         <span>Projected Balance:</span>
-                        <span>{finalQuota} MT</span>
+                        <span>{quotaExceeded ? 'Quota exceeded' : `${Math.max(0, finalQuota)} MT`}</span>
                       </div>
+                      {quotaExceeded && (
+                        <p className="text-[10px] text-rose-600 font-semibold">
+                          Only {initialQuota} MT remaining — reduce requested tonnage to continue.
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
-                    <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                    <div>
-                      <p>Validity Period Verified</p>
-                      <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">
-                        This substance is authorized for export compliance until {selectedSubstance.validity_date ? new Date(selectedSubstance.validity_date).toLocaleDateString() : 'N/A'}.
-                      </p>
+                  {quotaExceeded ? (
+                    <div className="p-3 bg-rose-50 text-rose-700 border border-rose-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p>Quota Limit Exceeded</p>
+                        <p className="text-[10px] text-rose-600 mt-0.5 font-medium">
+                          You cannot request more than {initialQuota} MT for {selectedSubstance.chemical_name} this year.
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : noQuotaLeft ? (
+                    <div className="p-3 bg-amber-50 text-amber-800 border border-amber-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p>No Quota Remaining</p>
+                        <p className="text-[10px] text-amber-700 mt-0.5 font-medium">
+                          Annual tonnage limit fully used. Contact your administrator to renew allocation.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
+                      <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p>Validity Period Verified</p>
+                        <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">
+                          This substance is authorized for export compliance until {selectedSubstance.validity_date ? new Date(selectedSubstance.validity_date).toLocaleDateString() : 'N/A'}.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-8 text-slate-400 font-semibold text-xs flex flex-col items-center justify-center gap-2">
