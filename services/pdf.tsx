@@ -149,9 +149,262 @@ interface CertificateData {
   accentColor?: string;
 }
 
+const rcStyles = StyleSheet.create({
+  page: {
+    paddingTop: 36,
+    paddingBottom: 40,
+    paddingHorizontal: 42,
+    fontSize: 9.5,
+    color: '#1a1a1a',
+    fontFamily: 'Helvetica',
+    lineHeight: 1.45,
+  },
+  outerFrame: {
+    border: '1.5 solid #064e3b',
+    padding: 28,
+    minHeight: '92%',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  letterhead: {
+    alignItems: 'center',
+    marginBottom: 18,
+    paddingBottom: 14,
+    borderBottom: '1 solid #cbd5e1',
+  },
+  logo: {
+    height: 42,
+    width: 160,
+    marginBottom: 8,
+    alignSelf: 'center',
+  },
+  orgName: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#064e3b',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  mainTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#064e3b',
+    textAlign: 'center',
+    marginTop: 14,
+    marginBottom: 4,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  templateRef: {
+    fontSize: 8,
+    color: '#64748b',
+    textAlign: 'center',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 16,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    paddingBottom: 10,
+    borderBottom: '0.5 solid #e2e8f0',
+  },
+  metaBlock: {
+    width: '48%',
+  },
+  metaLabel: {
+    fontSize: 7.5,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  metaValue: {
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: '#0f172a',
+  },
+  sectionHeading: {
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    color: '#064e3b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingBottom: 4,
+    borderBottom: '0.5 solid #064e3b',
+  },
+  salutation: {
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#0f172a',
+  },
+  paragraph: {
+    fontSize: 9.5,
+    textAlign: 'justify',
+    marginBottom: 8,
+    color: '#334155',
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+    paddingLeft: 4,
+  },
+  bullet: {
+    width: 12,
+    fontSize: 9.5,
+    color: '#064e3b',
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 9.5,
+    color: '#334155',
+  },
+  holderBox: {
+    backgroundColor: '#f8fafc',
+    border: '0.5 solid #cbd5e1',
+    padding: 10,
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  holderLabel: {
+    fontSize: 7.5,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  holderValue: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#0f172a',
+  },
+  table: {
+    border: '0.5 solid #94a3b8',
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#064e3b',
+    borderBottom: '0.5 solid #064e3b',
+  },
+  tableHeaderCell: {
+    flex: 1,
+    padding: 6,
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    textAlign: 'center',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottom: '0.5 solid #e2e8f0',
+  },
+  tableRowAlt: {
+    flexDirection: 'row',
+    borderBottom: '0.5 solid #e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  tableCellLabel: {
+    width: '32%',
+    padding: 7,
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    color: '#475569',
+    borderRight: '0.5 solid #e2e8f0',
+  },
+  tableCellValue: {
+    width: '68%',
+    padding: 7,
+    fontSize: 9,
+    color: '#0f172a',
+  },
+  validityNote: {
+    fontSize: 8.5,
+    fontStyle: 'italic',
+    color: '#475569',
+    marginTop: 6,
+    marginBottom: 14,
+    padding: 8,
+    backgroundColor: '#ecfdf5',
+    border: '0.5 solid #a7f3d0',
+  },
+  footerSection: {
+    marginTop: 'auto',
+    paddingTop: 16,
+    borderTop: '0.5 solid #cbd5e1',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  qrBlock: {
+    alignItems: 'center',
+    width: 90,
+  },
+  qrImage: {
+    width: 72,
+    height: 72,
+    marginBottom: 4,
+  },
+  qrCaption: {
+    fontSize: 6.5,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  signBlock: {
+    alignItems: 'center',
+    width: 180,
+  },
+  signImage: {
+    height: 40,
+    width: 110,
+    marginBottom: 4,
+  },
+  signLine: {
+    borderTop: '0.5 solid #64748b',
+    width: '100%',
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  signName: {
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  signTitle: {
+    fontSize: 7,
+    color: '#64748b',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pageFooter: {
+    fontSize: 6.5,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+});
+
+function formatCertDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
 interface ReachCertificateData {
   certificateNumber: string;
+  registrationNumber: string;
   companyName: string;
+  companyAddress?: string;
+  uuidNumber?: string;
   chemicalName: string;
   casNumber: string;
   ecNumber: string;
@@ -269,90 +522,132 @@ const TccDocument: React.FC<{ data: CertificateData }> = ({ data }) => {
 };
 
 const ReachDocument: React.FC<{ data: ReachCertificateData }> = ({ data }) => {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-    `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify/${data.certificateNumber}`
-  )}`;
+  const accent = data.accentColor || '#064e3b';
+  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify/${data.certificateNumber}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verifyUrl)}`;
+
+  const tableRows: { label: string; value: string }[] = [
+    { label: 'Substance Name', value: data.chemicalName },
+    { label: 'CAS Number', value: data.casNumber },
+    { label: 'EC Number', value: data.ecNumber || 'Not Classified' },
+    { label: 'Registration Number', value: data.registrationNumber },
+    { label: 'Tonnage Band', value: data.tonnageBand },
+    { label: 'Issued Date', value: formatCertDate(data.issueDate) },
+    { label: 'Validated Until', value: formatCertDate(data.expiryDate) },
+  ];
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.border}>
-          <View style={styles.header}>
+      <Page size="A4" style={rcStyles.page}>
+        <View style={rcStyles.outerFrame}>
+          {/* Letterhead */}
+          <View style={rcStyles.letterhead}>
             {data.logoUrl ? (
-              <Image src={data.logoUrl} style={styles.logoPlaceholder} />
+              <Image src={data.logoUrl} style={rcStyles.logo} />
             ) : (
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: data.accentColor || '#064e3b', marginBottom: 10 }}>
-                PHARMEGIC HEALTHCARE
-              </Text>
+              <Text style={[rcStyles.orgName, { color: accent }]}>Pharmegic Healthcare</Text>
             )}
-            <Text style={[styles.title, data.accentColor ? { color: data.accentColor } : {}]}>
-              REACH COMPLIANCE CERTIFICATE
-            </Text>
-            <Text style={styles.subtitle}>EU REACH REGISTRATION COMPLIANCE — CT 2026</Text>
+            <Text style={[rcStyles.mainTitle, { color: accent }]}>REACH Compliance Certificate</Text>
+            <Text style={rcStyles.templateRef}>Document Template CT-2026 · RC Certificate</Text>
           </View>
 
-          <View style={styles.certNumberContainer}>
-            <Text style={styles.certNumberLabel}>Certificate Registration No.</Text>
-            <Text style={styles.certNumber}>{data.certificateNumber}</Text>
-          </View>
-
-          <View style={styles.body}>
-            <Text style={styles.statement}>
-              This document certifies that the chemical substance specified below is registered and compliant with
-              EU REACH (Registration, Evaluation, Authorisation and Restriction of Chemicals) requirements. A valid
-              REACH Compliance Certificate is mandatory before applying for a Tonnage Compliance Certificate (TCC).
-              This certificate remains valid for one (1) year from the date of issuance.
-            </Text>
-
-            <View style={styles.grid}>
-              <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>Authorized Holder:</Text>
-                <Text style={styles.gridValue}>{data.companyName}</Text>
-              </View>
-              <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>Chemical Name:</Text>
-                <Text style={styles.gridValue}>{data.chemicalName}</Text>
-              </View>
-              <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>CAS Registry Number:</Text>
-                <Text style={styles.gridValue}>{data.casNumber}</Text>
-              </View>
-              <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>EC Number:</Text>
-                <Text style={styles.gridValue}>{data.ecNumber || 'Not Classified'}</Text>
-              </View>
-              <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>Tonnage Band:</Text>
-                <Text style={styles.gridValue}>{data.tonnageBand}</Text>
-              </View>
-              <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>Date of Issuance:</Text>
-                <Text style={styles.gridValue}>{data.issueDate}</Text>
-              </View>
-              <View style={styles.gridRow}>
-                <Text style={styles.gridLabel}>Valid Until (1 Year):</Text>
-                <Text style={styles.gridValue}>{data.expiryDate}</Text>
-              </View>
+          {/* Certificate meta */}
+          <View style={rcStyles.metaRow}>
+            <View style={rcStyles.metaBlock}>
+              <Text style={rcStyles.metaLabel}>Certificate Reference No.</Text>
+              <Text style={rcStyles.metaValue}>{data.certificateNumber}</Text>
+              {data.uuidNumber ? (
+                <>
+                  <Text style={[rcStyles.metaLabel, { marginTop: 6 }]}>Client UUID</Text>
+                  <Text style={rcStyles.metaValue}>{data.uuidNumber}</Text>
+                </>
+              ) : null}
+            </View>
+            <View style={rcStyles.metaBlock}>
+              <Text style={rcStyles.metaLabel}>Issue Date</Text>
+              <Text style={rcStyles.metaValue}>{formatCertDate(data.issueDate)}</Text>
+              <Text style={[rcStyles.metaLabel, { marginTop: 6 }]}>Validated Until</Text>
+              <Text style={rcStyles.metaValue}>{formatCertDate(data.expiryDate)}</Text>
             </View>
           </View>
 
-          <View style={styles.signatureSection}>
-            <Image src={qrUrl} style={styles.qrCode} />
-            <View style={styles.signatureBox}>
+          <Text style={rcStyles.salutation}>TO WHOM IT MAY CONCERN</Text>
+
+          <Text style={rcStyles.paragraph}>
+            This REACH Compliance Certificate (RC Certificate) is issued to confirm that the chemical substance
+            identified herein is registered and compliant with the applicable chemical safety and registration
+            requirements. This document is issued under Pharmegic Healthcare compliance authority and serves as
+            mandatory prerequisite documentation before application for a Tonnage Compliance Certificate (TCC).
+          </Text>
+
+          <View style={rcStyles.bulletRow}>
+            <Text style={rcStyles.bullet}>•</Text>
+            <Text style={rcStyles.bulletText}>
+              Regulation (EC) No 1907/2006 — Registration, Evaluation, Authorisation and Restriction of Chemicals (REACH)
+            </Text>
+          </View>
+          <View style={rcStyles.bulletRow}>
+            <Text style={rcStyles.bullet}>•</Text>
+            <Text style={rcStyles.bulletText}>
+              Turkish KKDIK Regulation on Registration, Evaluation, Authorisation and Restriction of Chemicals
+            </Text>
+          </View>
+
+          <Text style={rcStyles.sectionHeading}>Authorized Holder</Text>
+          <View style={rcStyles.holderBox}>
+            <Text style={rcStyles.holderLabel}>Company Name</Text>
+            <Text style={rcStyles.holderValue}>{data.companyName}</Text>
+            {data.companyAddress ? (
+              <>
+                <Text style={[rcStyles.holderLabel, { marginTop: 6 }]}>Registered Address</Text>
+                <Text style={{ fontSize: 9, color: '#334155' }}>{data.companyAddress}</Text>
+              </>
+            ) : null}
+          </View>
+
+          <Text style={rcStyles.sectionHeading}>Substance Registration Details</Text>
+          <View style={rcStyles.table}>
+            {tableRows.map((row, idx) => (
+              <View key={row.label} style={idx % 2 === 0 ? rcStyles.tableRow : rcStyles.tableRowAlt}>
+                <Text style={rcStyles.tableCellLabel}>{row.label}</Text>
+                <Text style={rcStyles.tableCellValue}>{row.value}</Text>
+              </View>
+            ))}
+          </View>
+
+          <Text style={rcStyles.validityNote}>
+            This RC Certificate is valid from the Issued Date until the Validated Until date stated above.
+            Export and TCC permit applications may only be submitted for substances covered by an active,
+            non-expired RC Certificate. Renewal is required upon expiry.
+          </Text>
+
+          <Text style={rcStyles.paragraph}>
+            The authorized holder named above is confirmed as the downstream user for the registered substance.
+            Pharmegic Healthcare verifies registration status at the time of issuance. The customer remains
+            responsible for ensuring continued compliance with all applicable regulatory requirements.
+          </Text>
+
+          {/* Signature & verification */}
+          <View style={rcStyles.footerSection}>
+            <View style={rcStyles.qrBlock}>
+              <Image src={qrUrl} style={rcStyles.qrImage} />
+              <Text style={rcStyles.qrCaption}>Scan to verify authenticity</Text>
+            </View>
+            <View style={rcStyles.signBlock}>
               {data.signatureUrl ? (
-                <Image src={data.signatureUrl} style={styles.signatureImage} />
+                <Image src={data.signatureUrl} style={rcStyles.signImage} />
               ) : (
-                <View style={{ height: 45 }} />
+                <View style={{ height: 40 }} />
               )}
-              <View style={styles.signatureLine} />
-              <Text style={{ fontSize: 9, fontWeight: 'bold' }}>Authorized Compliance Director</Text>
-              <Text style={styles.signatoryTitle}>Pharmegic Healthcare</Text>
+              <View style={rcStyles.signLine} />
+              <Text style={rcStyles.signName}>Authorized Compliance Director</Text>
+              <Text style={rcStyles.signTitle}>Pharmegic Healthcare</Text>
             </View>
           </View>
 
-          <Text style={styles.footer}>
+          <Text style={rcStyles.pageFooter}>
             {data.footerText ||
-              'Pharmegic Healthcare REACH Compliance Registry. Scan the QR code to verify authenticity. Validity: 1 year.'}
+              'Pharmegic Healthcare Compliance Division · RC Certificate Registry · Template CT-2026 · This document is electronically generated and valid without physical stamp when verified via QR code.'}
           </Text>
         </View>
       </Page>

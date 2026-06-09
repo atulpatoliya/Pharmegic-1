@@ -180,6 +180,7 @@ CREATE TABLE IF NOT EXISTS public.certificates (
     client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
     chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL,
     type TEXT DEFAULT 'TCC',
+    registration_number TEXT,
     file_url TEXT,
     issued_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE,
@@ -281,6 +282,7 @@ ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_url T
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_name TEXT;
 
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;
 
 -- Allow trashed status on client_chemicals (existing DBs may have old constraint)
 ALTER TABLE public.client_chemicals DROP CONSTRAINT IF EXISTS client_chemicals_status_check;

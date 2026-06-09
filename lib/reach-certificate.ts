@@ -53,3 +53,16 @@ export function addOneYear(from: Date = new Date()): Date {
   expiry.setFullYear(expiry.getFullYear() + 1);
   return expiry;
 }
+
+/** YYYY-MM-DD for December 31 of the given year (defaults to current year). */
+export function getLastDateOfYear(year: number = new Date().getFullYear()): string {
+  return `${year}-12-31`;
+}
+
+/** YYYY-MM-DD for today (local date). */
+export function getTodayDateString(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}

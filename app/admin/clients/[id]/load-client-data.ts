@@ -66,6 +66,14 @@ export async function loadClientProfileData(clientId: string) {
     author_email: note.users?.email || 'System',
   }));
 
+  const normalizedCertificates = (certificates || []).map((row: { chemicals?: unknown; tcc_applications?: unknown }) => ({
+    ...row,
+    chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+    tcc_applications: Array.isArray(row.tcc_applications)
+      ? row.tcc_applications[0] ?? null
+      : row.tcc_applications,
+  }));
+
   const normalizedClientChemicals = (clientChemicals || []).map((row: { chemicals?: unknown }) => ({
     ...row,
     chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
@@ -79,10 +87,10 @@ export async function loadClientProfileData(clientId: string) {
     allChemicals: allChemicals || [],
     contacts: contacts || [],
     tccHistory,
-    certificates: certificates || [],
+    certificates: normalizedCertificates,
     activityLogs: activityLogs || [],
     internalNotes,
   };
 }
 
-export type ClientProfileViewMode = 'overview' | 'chemicals' | 'certificates';
+export type ClientProfileViewMode = 'overview' | 'chemicals' | 'certificates' | 'rc-certificates';

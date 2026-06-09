@@ -14,7 +14,7 @@ export const loginSchema = z.object({
 export const chemicalSchema = z.object({
   chemical_name: z.string().min(2, { message: 'Chemical name is required' }),
   cas_number: z.string().regex(/^\d{2,7}-\d{2}-\d$/, { message: 'Invalid CAS number format (e.g. 110-80-5)' }),
-  ec_number: z.string().optional().or(z.literal('')),
+  ec_number: z.string().min(1, { message: 'EC number is required' }),
   tonnage_band: z.string().min(1, { message: 'Tonnage band is required' }),
   validity_date: z.string().min(1, { message: 'Validity date is required' }),
   available_quantity: z.coerce.number().min(0, { message: 'Quantity must be non-negative' }),

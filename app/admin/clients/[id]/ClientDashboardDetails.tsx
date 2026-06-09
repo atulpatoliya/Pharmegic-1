@@ -34,6 +34,8 @@ import {
   mapLatestReachByChemical,
   REACH_CERTIFICATE_TYPE,
   getReachCertificateStatus,
+  getLastDateOfYear,
+  getTodayDateString,
 } from '@/lib/reach-certificate';
 import { processTccAction } from '@/actions/tcc';
 import { TccApplicationViewDialog, type TccViewApplication } from '@/components/TccApplicationViewDialog';
@@ -62,7 +64,7 @@ interface ClientDashboardDetailsProps {
   internalNotes: any[];
   currentUserId: string;
   currentUserRole: string;
-  viewMode?: 'overview' | 'chemicals' | 'certificates';
+  viewMode?: 'overview' | 'chemicals' | 'certificates' | 'rc-certificates';
 }
 
 export default function ClientDashboardDetails({
@@ -94,14 +96,22 @@ export default function ClientDashboardDetails({
   const showOverview = viewMode === 'overview';
   const showChemicalsSection = viewMode === 'overview' || viewMode === 'chemicals';
   const showCertificatesSection = viewMode === 'overview' || viewMode === 'certificates';
+  const showRcCertificatesSection = viewMode === 'rc-certificates';
   const showAdminExtras = viewMode === 'overview' && currentUserRole !== 'CLIENT';
+
+  const rcCertificates = useMemo(
+    () => (certificates || []).filter((c) => c.type === REACH_CERTIFICATE_TYPE),
+    [certificates]
+  );
 
   const pageTitle =
     viewMode === 'chemicals'
       ? `${client.company_name} — Chemical Inventory`
       : viewMode === 'certificates'
         ? `${client.company_name} — Certificates`
-        : `${client.company_name} Details`;
+        : viewMode === 'rc-certificates'
+          ? `${client.company_name} — RC Certificates`
+          : `${client.company_name} Details`;
 
   const clientChemicals = allClientChemicals.filter((c) => c.status !== 'trashed');
   const trashedChemicals = allClientChemicals.filter((c) => c.status === 'trashed');
@@ -121,10 +131,23 @@ export default function ClientDashboardDetails({
   const [newPassword, setNewPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const emptyAssignChemData = () => {
+    const endOfYear = getLastDateOfYear();
+    return {
+      chemical_name: '',
+      cas_number: '',
+      ec_number: '',
+      tonnage_band: '',
+      available_quantity: '',
+      registration_number: '',
+      issued_date: getTodayDateString(),
+      validated_date: endOfYear,
+      validity_date: endOfYear,
+    };
+  };
+
   const [isAssignChemModalOpen, setAssignChemModalOpen] = useState(false);
-  const [assignChemData, setAssignChemData] = useState({
-    chemical_name: '', cas_number: '', ec_number: '', tonnage_band: '', available_quantity: '', validity_date: ''
-  });
+  const [assignChemData, setAssignChemData] = useState(emptyAssignChemData);
   
   const [isEditChemModalOpen, setEditChemModalOpen] = useState(false);
   const [activeEditChemId, setActiveEditChemId] = useState('');
@@ -342,14 +365,33 @@ export default function ClientDashboardDetails({
       setModalError('assignChem', 'CAS number is required.');
       return;
     }
+    if (!assignChemData.ec_number.trim()) {
+      setModalError('assignChem', 'EC number is required.');
+      return;
+    }
+    if (!assignChemData.registration_number.trim()) {
+      setModalError('assignChem', 'Registration number is required.');
+      return;
+    }
+    if (!assignChemData.issued_date) {
+      setModalError('assignChem', 'Issued date is required.');
+      return;
+    }
+    if (!assignChemData.validated_date) {
+      setModalError('assignChem', 'Validated date is required.');
+      return;
+    }
     setModalError('assignChem', null);
     startTransition(async () => {
       const res = await addNewChemicalToClientAction(client.id, assignChemData);
       if (res.success) {
-        toast.success('Substance assigned.');
+        toast.success(res.message || 'Substance assigned and RC Certificate issued.');
         setAssignChemModalOpen(false);
-        setAssignChemData({ chemical_name: '', cas_number: '', ec_number: '', tonnage_band: '', available_quantity: '', validity_date: '' });
+        setAssignChemData(emptyAssignChemData());
         router.refresh();
+        if (res.certificateId) {
+          router.push(`/admin/certificate-preview/${res.certificateId}`);
+        }
       } else {
         setModalError('assignChem', toErrorMessage(res.error, 'Failed to assign substance.'));
       }
@@ -372,6 +414,10 @@ export default function ClientDashboardDetails({
   const handleEditChemical = () => {
     if (!editChemData.chemical_name.trim()) {
       setModalError('editChem', 'Substance name is required.');
+      return;
+    }
+    if (!editChemData.ec_number.trim()) {
+      setModalError('editChem', 'EC number is required.');
       return;
     }
     setModalError('editChem', null);
@@ -812,7 +858,7 @@ export default function ClientDashboardDetails({
               <Download className="h-4 w-4" />
             </Button>
             {currentUserRole !== 'CLIENT' && (
-              <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800 ml-2" onClick={() => { setModalError('assignChem', null); setAssignChemModalOpen(true); }}>
+              <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800 ml-2" onClick={() => { setModalError('assignChem', null); setAssignChemData(emptyAssignChemData()); setAssignChemModalOpen(true); }}>
                 + Assign Sub.
               </Button>
             )}
@@ -833,7 +879,7 @@ export default function ClientDashboardDetails({
                 <th className="px-6 py-4 text-center">Tonnage Band</th>
                 <th className="px-6 py-4">Quantity</th>
                 <th className="px-6 py-4">Validity</th>
-                <th className="px-6 py-4">REACH Certificate</th>
+                <th className="px-6 py-4">RC Certificate</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 {currentUserRole !== 'CLIENT' && <th className="px-6 py-4 text-right"></th>}
               </tr>
@@ -924,7 +970,7 @@ export default function ClientDashboardDetails({
                                 onClick={() => handleIssueReachCertificate(cc.chemical_id, name)}
                                 isLoading={isPending}
                               >
-                                Issue REACH
+                                Issue RC
                               </Button>
                             )}
                           </div>
@@ -1015,6 +1061,99 @@ export default function ClientDashboardDetails({
       )}
 
       </>
+      )}
+
+      {/* RC Certificates List */}
+      {showRcCertificatesSection && (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <h2 className="font-bold text-slate-700 text-sm">RC Compliance Certificates</h2>
+          {currentUserRole !== 'CLIENT' && (
+            <Button
+              size="sm"
+              className="h-8 bg-teal-700 hover:bg-teal-800"
+              onClick={() => {
+                setModalError('assignChem', null);
+                setAssignChemData(emptyAssignChemData());
+                setAssignChemModalOpen(true);
+              }}
+            >
+              + Assign Substance &amp; Issue RC
+            </Button>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-white text-slate-500 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-4">Certificate No.</th>
+                <th className="px-6 py-4">Registration No.</th>
+                <th className="px-6 py-4">Chemical</th>
+                <th className="px-6 py-4">CAS Number</th>
+                <th className="px-6 py-4">Issued Date</th>
+                <th className="px-6 py-4">Validated Date</th>
+                <th className="px-6 py-4 text-center">Status</th>
+                <th className="px-6 py-4 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rcCertificates.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-medium">
+                    No RC certificates issued yet. Assign a substance to generate an RC certificate.
+                  </td>
+                </tr>
+              ) : (
+                rcCertificates.map((cert) => {
+                  const chem = cert.chemicals || cert.chemical;
+                  const chemName = chem?.chemical_name || 'Unknown';
+                  const cas = chem?.cas_number || 'N/A';
+                  const isValid = isActiveReachCertificate(cert);
+                  const status = getReachCertificateStatus(cert);
+
+                  return (
+                    <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4 font-mono font-bold text-teal-900 text-xs">{cert.certificate_number}</td>
+                      <td className="px-6 py-4 font-medium text-slate-700">{cert.registration_number || '—'}</td>
+                      <td className="px-6 py-4 font-semibold text-slate-800">{chemName}</td>
+                      <td className="px-6 py-4 font-mono text-[11px] text-slate-600">{cas}</td>
+                      <td className="px-6 py-4 text-slate-600" suppressHydrationWarning>
+                        {cert.issued_at ? new Date(cert.issued_at).toLocaleDateString('en-GB') : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600" suppressHydrationWarning>
+                        {cert.expires_at ? new Date(cert.expires_at).toLocaleDateString('en-GB') : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <Badge variant={isValid ? 'success' : status === 'expired' ? 'warning' : 'neutral'} className="text-[10px] uppercase font-bold">
+                          {isValid ? 'Valid' : status === 'expired' ? 'Expired' : cert.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex justify-center gap-2">
+                          {cert.file_url && (
+                            <a href={cert.file_url} target="_blank" rel="noopener noreferrer" title="Download PDF">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          )}
+                          {currentUserRole !== 'CLIENT' && (
+                            <Link href={`/admin/certificate-preview/${cert.id}`} title="Preview certificate">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
       )}
 
       {/* 4. TCC Applications & Issued Certificates */}
@@ -1312,11 +1451,20 @@ export default function ClientDashboardDetails({
                 <Input placeholder="e.g. 67-56-1" value={assignChemData.cas_number} onChange={(e) => setAssignChemData({ ...assignChemData, cas_number: e.target.value })} required />
               </div>
               <div>
-                <FormLabel className="text-sm normal-case mb-1 block">EC Number</FormLabel>
-                <Input placeholder="e.g. 200-659-6" value={assignChemData.ec_number} onChange={(e) => setAssignChemData({ ...assignChemData, ec_number: e.target.value })} />
+                <FormLabel required className="text-sm normal-case mb-1 block">EC Number</FormLabel>
+                <Input placeholder="e.g. 200-659-6" value={assignChemData.ec_number} onChange={(e) => setAssignChemData({ ...assignChemData, ec_number: e.target.value })} required />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
+              <div>
+                <FormLabel required className="text-sm normal-case mb-1 block">Registration Number</FormLabel>
+                <Input
+                  placeholder="e.g. REG-2026-001"
+                  value={assignChemData.registration_number}
+                  onChange={(e) => setAssignChemData({ ...assignChemData, registration_number: e.target.value })}
+                  required
+                />
+              </div>
               <div>
                 <FormLabel className="text-sm normal-case mb-1 block">Allocated Quota (MT)</FormLabel>
                 <Select 
@@ -1331,9 +1479,25 @@ export default function ClientDashboardDetails({
                   ]}
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <FormLabel className="text-sm normal-case mb-1 block">Validity Date</FormLabel>
-                <Input type="date" value={assignChemData.validity_date} onChange={(e) => setAssignChemData({ ...assignChemData, validity_date: e.target.value })} />
+                <FormLabel required className="text-sm normal-case mb-1 block">Issued Date</FormLabel>
+                <Input
+                  type="date"
+                  value={assignChemData.issued_date}
+                  onChange={(e) => setAssignChemData({ ...assignChemData, issued_date: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <FormLabel required className="text-sm normal-case mb-1 block">Validated Date</FormLabel>
+                <Input
+                  type="date"
+                  value={assignChemData.validated_date}
+                  onChange={(e) => setAssignChemData({ ...assignChemData, validated_date: e.target.value, validity_date: e.target.value })}
+                  required
+                />
               </div>
             </div>
           </div>
@@ -1367,11 +1531,12 @@ export default function ClientDashboardDetails({
                 />
               </div>
               <div>
-                <FormLabel className="text-sm normal-case mb-1 block">EC Number</FormLabel>
+                <FormLabel required className="text-sm normal-case mb-1 block">EC Number</FormLabel>
                 <Input
                   placeholder="e.g. 200-659-6"
                   value={editChemData.ec_number}
                   onChange={(e) => setEditChemData({ ...editChemData, ec_number: e.target.value })}
+                  required
                 />
               </div>
             </div>

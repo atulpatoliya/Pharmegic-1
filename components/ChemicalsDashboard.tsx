@@ -250,12 +250,17 @@ export default function ChemicalsDashboard({
       toast.error('Invalid CAS number format (must match e.g. 110-80-5).');
       return;
     }
+    if (!formData.ec_number.trim()) {
+      setFormError('EC number is required.');
+      toast.error('EC number is required.');
+      return;
+    }
 
     startTransition(async () => {
       const res = await updateChemicalAction(selectedChemical.id, {
         chemical_name: formData.chemical_name,
         cas_number: formData.cas_number,
-        ec_number: formData.ec_number || null,
+        ec_number: formData.ec_number.trim(),
         tonnage_band: formData.tonnage_band,
         validity_date: formData.validity_date,
         available_quantity: Number(formData.available_quantity),
@@ -650,6 +655,7 @@ export default function ChemicalsDashboard({
               placeholder="e.g. 200-679-5"
               value={formData.ec_number}
               onChange={(e) => setFormData({ ...formData, ec_number: e.target.value })}
+              required
             />
           </div>
           <div className="grid gap-4 grid-cols-2">
@@ -738,6 +744,7 @@ export default function ChemicalsDashboard({
               label="EC Number"
               value={formData.ec_number}
               onChange={(e) => setFormData({ ...formData, ec_number: e.target.value })}
+              required
             />
           </div>
           <div className="grid gap-4 grid-cols-2">

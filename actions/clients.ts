@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
 import { formatErrorMessage } from '@/lib/format-error';
 import { getTonnageBandMaxQuota, sumApprovedExports, computeAssignableQuota } from '@/lib/quota';
+import { createReachCertificate } from '@/actions/reach';
 import { clientWizardSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
@@ -422,6 +423,15 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
   const casNumber = data.cas_number?.trim();
   if (!casNumber) return { success: false, error: 'CAS number is required.' };
 
+  const registrationNumber = data.registration_number?.trim();
+  if (!registrationNumber) return { success: false, error: 'Registration number is required.' };
+
+  const ecNumber = data.ec_number?.trim();
+  if (!ecNumber) return { success: false, error: 'EC number is required.' };
+
+  if (!data.issued_date?.trim()) return { success: false, error: 'Issued date is required.' };
+  if (!data.validated_date?.trim()) return { success: false, error: 'Validated date is required.' };
+
   const adminSupabase = createAdminClient();
   try {
     // 1. Reuse existing chemical by CAS, or create new
@@ -439,7 +449,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         .insert({
           chemical_name: data.chemical_name.trim(),
           cas_number: casNumber,
-          ec_number: data.ec_number?.trim() || null,
+          ec_number: ecNumber,
           tonnage_band: data.tonnage_band || null,
           status: 'active',
         })
@@ -453,7 +463,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         .from('chemicals')
         .update({
           chemical_name: data.chemical_name.trim(),
-          ec_number: data.ec_number?.trim() || null,
+          ec_number: ecNumber,
           tonnage_band: data.tonnage_band || null,
         })
         .eq('id', chemicalId);
@@ -483,7 +493,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         .from('client_chemicals')
         .update({
           available_quantity: assignable,
-          validity_date: data.validity_date || null,
+          validity_date: data.validated_date || data.validity_date || null,
           status: 'active',
           assigned_by: session.userId,
         })
@@ -495,7 +505,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         client_id: clientId,
         chemical_id: chemicalId,
         available_quantity: assignable,
-        validity_date: data.validity_date || null,
+        validity_date: data.validated_date || data.validity_date || null,
         status: 'active',
         assigned_by: session.userId,
       });
@@ -512,8 +522,31 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       description: `Added and assigned new substance: ${data.chemical_name}`,
     });
 
+    const rcResult = await createReachCertificate({
+      clientId,
+      chemicalId,
+      userId: session.userId,
+      registrationNumber,
+      issuedDate: data.issued_date.trim(),
+      validatedDate: data.validated_date.trim(),
+    });
+
+    if (!rcResult.success) {
+      await adminSupabase
+        .from('client_chemicals')
+        .update({ status: 'trashed' })
+        .eq('client_id', clientId)
+        .eq('chemical_id', chemicalId);
+      return { success: false, error: rcResult.error };
+    }
+
     revalidatePath(`/admin/clients/${clientId}`);
-    return { success: true, message: 'New substance added and assigned.' };
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+    return {
+      success: true,
+      message: 'Substance assigned and RC Certificate issued.',
+      certificateId: rcResult.certificateId,
+    };
   } catch (err) {
     console.error('[ASSIGN CHEMICAL ERROR]:', err);
     return { success: false, error: formatErrorMessage(err) };
@@ -637,6 +670,10 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
     return { success: false, error: 'Chemical name is required.' };
   }
 
+  if (!data.ec_number?.trim()) {
+    return { success: false, error: 'EC number is required.' };
+  }
+
   const adminSupabase = createAdminClient();
   try {
     const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
@@ -651,7 +688,7 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
       .update({
         chemical_name: data.chemical_name.trim(),
         cas_number: data.cas_number || null,
-        ec_number: data.ec_number || null,
+        ec_number: data.ec_number.trim(),
         tonnage_band: data.tonnage_band || null,
       })
       .eq('id', chemicalId);
