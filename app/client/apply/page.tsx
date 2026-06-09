@@ -6,6 +6,12 @@ import { redirect } from 'next/navigation';
 export const revalidate = 0;
 
 import { getRemainingQuota, sumApprovedExports } from '@/lib/quota';
+import {
+  isActiveReachCertificate,
+  mapLatestReachByChemical,
+  REACH_CERTIFICATE_TYPE,
+  getReachCertificateStatus,
+} from '@/lib/reach-certificate';
 
 export default async function ApplyPage() {
   const session = await getSession();
@@ -22,7 +28,7 @@ export default async function ApplyPage() {
 
   const adminSupabase = createAdminClient();
 
-  const [{ data: mappings }, { data: approvedTccs }] = await Promise.all([
+  const [{ data: mappings }, { data: approvedTccs }, { data: reachCerts }] = await Promise.all([
     adminSupabase
       .from('client_chemicals')
       .select('chemical_id, available_quantity, validity_date, chemicals(*)')
@@ -33,7 +39,15 @@ export default async function ApplyPage() {
       .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
       .eq('client_id', clientId)
       .eq('status', 'approved'),
+    adminSupabase
+      .from('certificates')
+      .select('id, chemical_id, certificate_number, issued_at, expires_at, status, type, file_url')
+      .eq('client_id', clientId)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .order('issued_at', { ascending: false }),
   ]);
+
+  const reachByChemical = mapLatestReachByChemical(reachCerts || []);
 
   const authorizedSubstances = (mappings || [])
     .map((m: { chemical_id: string; available_quantity?: number; validity_date?: string | null; chemicals?: unknown }) => {
@@ -41,11 +55,24 @@ export default async function ApplyPage() {
       if (!chem || (chem as { status?: string }).status !== 'active') return null;
       const tonnageBand = (chem as { tonnage_band?: string | null }).tonnage_band ?? null;
       const exported = sumApprovedExports(approvedTccs || [], m.chemical_id);
+      const reachCert = reachByChemical.get(m.chemical_id) ?? null;
+      const reachStatus = getReachCertificateStatus(reachCert);
+      const hasValidReach = isActiveReachCertificate(reachCert);
       return {
         ...chem,
         id: m.chemical_id,
         available_quantity: getRemainingQuota(Number(m.available_quantity ?? 0), exported, tonnageBand),
         validity_date: m.validity_date ?? (chem as { validity_date?: string | null }).validity_date ?? null,
+        reach_certificate: reachCert
+          ? {
+              id: reachCert.id,
+              certificate_number: reachCert.certificate_number,
+              expires_at: reachCert.expires_at,
+              file_url: reachCert.file_url,
+              status: reachStatus,
+            }
+          : null,
+        has_valid_reach: hasValidReach,
       };
     })
     .filter(Boolean);

@@ -76,7 +76,7 @@ export default async function ClientDashboardPage() {
   // 7. Fetch Certificates
   const { data: certificates } = await adminSupabase
     .from('certificates')
-    .select('*, tcc_applications(*, chemicals(*))')
+    .select('*, chemicals(chemical_name, cas_number, ec_number, tonnage_band), tcc_applications(*, chemicals(*))')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false });
 

@@ -178,6 +178,7 @@ CREATE TABLE IF NOT EXISTS public.certificates (
     certificate_number TEXT UNIQUE NOT NULL,
     tcc_application_id UUID REFERENCES public.tcc_applications(id) ON DELETE CASCADE UNIQUE,
     client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+    chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL,
     type TEXT DEFAULT 'TCC',
     file_url TEXT,
     issued_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -279,6 +280,8 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS login_password TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_url TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_name TEXT;
 
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
+
 -- Allow trashed status on client_chemicals (existing DBs may have old constraint)
 ALTER TABLE public.client_chemicals DROP CONSTRAINT IF EXISTS client_chemicals_status_check;
 ALTER TABLE public.client_chemicals
@@ -305,6 +308,7 @@ CREATE INDEX IF NOT EXISTS idx_tcc_applications_client_id ON public.tcc_applicat
 CREATE INDEX IF NOT EXISTS idx_tcc_applications_status ON public.tcc_applications(status);
 CREATE INDEX IF NOT EXISTS idx_certificates_client_id ON public.certificates(client_id);
 CREATE INDEX IF NOT EXISTS idx_certificates_number ON public.certificates(certificate_number);
+CREATE INDEX IF NOT EXISTS idx_certificates_reach ON public.certificates(client_id, chemical_id, type);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id, read);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_client ON public.activity_logs(client_id);
 CREATE INDEX IF NOT EXISTS idx_quota_transactions_client ON public.quota_transactions(client_id);

@@ -21,7 +21,7 @@ export default async function CertificatesPage() {
   const adminSupabase = createAdminClient();
   const { data: certificates } = await adminSupabase
     .from('certificates')
-    .select('*, tcc_applications(quantity_mt, chemicals(chemical_name, cas_number))')
+    .select('*, chemicals(chemical_name, cas_number, ec_number), tcc_applications(quantity_mt, chemicals(chemical_name, cas_number))')
     .eq('client_id', clientId)
     .order('issued_at', { ascending: false });
 

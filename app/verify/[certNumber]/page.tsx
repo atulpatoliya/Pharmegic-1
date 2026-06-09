@@ -17,10 +17,12 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
     .select(`
       id,
       certificate_number,
+      type,
       issued_at,
       expires_at,
       status,
       clients (company_name, country),
+      chemicals (chemical_name, cas_number, ec_number, tonnage_band),
       tcc_applications (
         quantity_mt,
         chemicals (chemical_name, cas_number, ec_number, tonnage_band)
@@ -32,6 +34,11 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
   const now = new Date();
   const isExpired = cert?.expires_at ? new Date(cert.expires_at) < now : false;
   const verificationStatus = !cert ? 'invalid' : isExpired ? 'expired' : cert.status === 'revoked' ? 'revoked' : 'valid';
+
+  const isReach = cert?.type === 'REACH';
+  const chemicalInfo =
+    (cert?.chemicals as { chemical_name?: string; cas_number?: string; ec_number?: string; tonnage_band?: string } | null) ||
+    (cert?.tcc_applications as { quantity_mt?: number; chemicals?: { chemical_name?: string; cas_number?: string; ec_number?: string } } | null)?.chemicals;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/30 to-slate-100 flex flex-col items-center justify-center p-6">
@@ -60,16 +67,26 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
             )}
             <div>
               <h1 className="text-2xl font-black text-white tracking-tight">
-                {verificationStatus === 'valid' ? 'Certificate Valid & Active' :
-                 verificationStatus === 'expired' ? 'Certificate Expired' :
-                 verificationStatus === 'revoked' ? 'Certificate Revoked' :
-                 'Certificate Not Found'}
+                {verificationStatus === 'valid'
+                  ? isReach
+                    ? 'REACH Certificate Valid & Active'
+                    : 'Certificate Valid & Active'
+                  : verificationStatus === 'expired'
+                    ? 'Certificate Expired'
+                    : verificationStatus === 'revoked'
+                      ? 'Certificate Revoked'
+                      : 'Certificate Not Found'}
               </h1>
               <p className="text-white/80 text-sm font-medium mt-1">
-                {verificationStatus === 'valid' ? 'This Tonnage Compliance Certificate is authentic and currently valid.' :
-                 verificationStatus === 'expired' ? 'This certificate was valid but has passed its expiry date.' :
-                 verificationStatus === 'revoked' ? 'This certificate has been revoked by the issuing authority.' :
-                 'No certificate matching this number exists in the registry.'}
+                {verificationStatus === 'valid'
+                  ? isReach
+                    ? 'This REACH Compliance Certificate is authentic and currently valid (1-year validity).'
+                    : 'This Tonnage Compliance Certificate is authentic and currently valid.'
+                  : verificationStatus === 'expired'
+                    ? 'This certificate was valid but has passed its expiry date.'
+                    : verificationStatus === 'revoked'
+                      ? 'This certificate has been revoked by the issuing authority.'
+                      : 'No certificate matching this number exists in the registry.'}
               </p>
             </div>
           </div>
@@ -101,19 +118,30 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
               </div>
 
               {/* Chemical */}
-              {(cert.tcc_applications as any)?.chemicals && (
+              {chemicalInfo && (
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                     <FlaskConical className="h-3.5 w-3.5" /> Substance Details
                   </div>
-                  <p className="font-bold text-slate-800">{(cert.tcc_applications as any).chemicals.chemical_name}</p>
+                  <p className="font-bold text-slate-800">{chemicalInfo.chemical_name}</p>
                   <p className="text-xs text-slate-500 font-medium font-mono">
-                    CAS: {(cert.tcc_applications as any).chemicals.cas_number}
-                    {(cert.tcc_applications as any).chemicals.ec_number && ` • EC: ${(cert.tcc_applications as any).chemicals.ec_number}`}
+                    CAS: {chemicalInfo.cas_number}
+                    {chemicalInfo.ec_number && ` • EC: ${chemicalInfo.ec_number}`}
                   </p>
-                  <p className="text-sm font-bold text-slate-700 mt-1">
-                    {(cert.tcc_applications as any).quantity_mt} Metric Tons (MT)
-                  </p>
+                  {!isReach && (() => {
+                    const tccApp = Array.isArray(cert?.tcc_applications)
+                      ? cert.tcc_applications[0]
+                      : cert?.tcc_applications;
+                    if (tccApp?.quantity_mt == null) return null;
+                    return (
+                      <p className="text-sm font-bold text-slate-700 mt-1">
+                        {tccApp.quantity_mt} Metric Tons (MT)
+                      </p>
+                    );
+                  })()}
+                  {isReach && (
+                    <p className="text-xs font-semibold text-emerald-700 mt-1">REACH Compliance — 1 Year Validity</p>
+                  )}
                 </div>
               )}
 

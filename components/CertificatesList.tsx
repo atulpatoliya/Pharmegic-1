@@ -24,13 +24,17 @@ interface Certificate {
   issued_at: string;
   expires_at: string | null;
   status: 'active' | 'expired' | 'revoked';
-  tcc_applications: {
+  chemicals?: {
+    chemical_name: string;
+    cas_number: string;
+  } | null;
+  tcc_applications?: {
     quantity_mt: number;
     chemicals: {
       chemical_name: string;
       cas_number: string;
     };
-  };
+  } | null;
 }
 
 interface CertificatesListProps {
@@ -42,10 +46,19 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
   const [statusFilter, setStatusFilter] = useState('all');
 
   const filteredCertificates = initialCertificates.filter((cert) => {
+    const chemName =
+      cert.chemicals?.chemical_name ||
+      cert.tcc_applications?.chemicals?.chemical_name ||
+      '';
+    const cas =
+      cert.chemicals?.cas_number ||
+      cert.tcc_applications?.chemicals?.cas_number ||
+      '';
+
     const matchesSearch =
       cert.certificate_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cert.tcc_applications?.chemicals.chemical_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cert.tcc_applications?.chemicals.cas_number.toLowerCase().includes(searchTerm.toLowerCase());
+      chemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cas.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || cert.status === statusFilter;
 
@@ -83,7 +96,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
       <div>
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Compliance Certificates</h1>
         <p className="text-sm text-slate-500 font-medium">
-          Search and download officially registered Tonnage Compliance Certificates issued to your organization.
+          Search and download REACH Compliance Certificates and Tonnage Compliance Certificates (TCC) issued to your organization.
         </p>
       </div>
 
@@ -120,6 +133,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100">
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Certificate Number</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Chemical Substance</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Authorized Weight</th>
@@ -132,13 +146,29 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredCertificates.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
                     No issued certificates match your search query.
                   </td>
                 </tr>
               ) : (
-                filteredCertificates.map((cert) => (
+                filteredCertificates.map((cert) => {
+                  const chemName =
+                    cert.chemicals?.chemical_name ||
+                    cert.tcc_applications?.chemicals?.chemical_name ||
+                    'Substance registry deletion';
+                  const casNumber =
+                    cert.chemicals?.cas_number ||
+                    cert.tcc_applications?.chemicals?.cas_number ||
+                    'N/A';
+                  const isReach = cert.type === 'REACH';
+
+                  return (
                   <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4">
+                      <Badge variant={isReach ? 'info' : 'success'} className="text-[10px] uppercase font-bold">
+                        {isReach ? 'REACH' : 'TCC'}
+                      </Badge>
+                    </td>
                     <td className="p-4 font-mono font-bold text-slate-800">
                       <div className="flex items-center gap-2">
                         <Award className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -149,17 +179,15 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
                       <div className="flex items-center gap-2.5">
                         <FlaskConical className="h-4 w-4 text-slate-400 shrink-0" />
                         <div>
-                          <div className="font-bold text-slate-700">
-                            {cert.tcc_applications?.chemicals?.chemical_name || 'Substance registry deletion'}
-                          </div>
+                          <div className="font-bold text-slate-700">{chemName}</div>
                           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                            CAS No: {cert.tcc_applications?.chemicals?.cas_number || 'N/A'}
+                            CAS No: {casNumber}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="p-4 font-extrabold text-slate-800">
-                      {cert.tcc_applications?.quantity_mt} MT
+                      {isReach ? '—' : `${cert.tcc_applications?.quantity_mt ?? '—'} MT`}
                     </td>
                     <td className="p-4 text-slate-500 font-medium">
                       <div className="flex items-center gap-1.5 text-xs">
@@ -196,7 +224,8 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -18,6 +18,7 @@ import {
   deleteInternalNoteAction,
   deleteClientAction,
 } from '@/actions/clients';
+import { issueReachCertificateAction } from '@/actions/reach';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -28,6 +29,12 @@ import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
 import { FormLabel } from '@/components/ui/FormLabel';
 import { formatErrorMessage } from '@/lib/format-error';
 import { resolveQuotaConsumption, sumApprovedExports, getRemainingQuota } from '@/lib/quota';
+import {
+  isActiveReachCertificate,
+  mapLatestReachByChemical,
+  REACH_CERTIFICATE_TYPE,
+  getReachCertificateStatus,
+} from '@/lib/reach-certificate';
 import { processTccAction } from '@/actions/tcc';
 import { TccApplicationViewDialog, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
@@ -36,7 +43,7 @@ import {
   Building, Mail, Phone, MapPin, Calendar, CheckCircle, 
   AlertCircle, FileText, User, ShieldAlert, Key, Plus, Trash2,
   FileSignature, Award, Clipboard, StickyNote, History, Lock, Unlock,
-  Download, Filter, Eye, EyeOff, PenLine, RotateCcw, Clock, XCircle
+  Download, Filter, Eye, EyeOff, PenLine, RotateCcw, Clock, XCircle, ShieldCheck
 } from 'lucide-react';
 import { useLayoutStore } from '@/store/layout';
 import dynamic from 'next/dynamic';
@@ -98,6 +105,14 @@ export default function ClientDashboardDetails({
 
   const clientChemicals = allClientChemicals.filter((c) => c.status !== 'trashed');
   const trashedChemicals = allClientChemicals.filter((c) => c.status === 'trashed');
+
+  const reachByChemical = useMemo(
+    () =>
+      mapLatestReachByChemical(
+        (certificates || []).filter((c) => c.type === REACH_CERTIFICATE_TYPE)
+      ),
+    [certificates]
+  );
 
   // Modals state
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
@@ -481,6 +496,23 @@ export default function ClientDashboardDetails({
     });
   };
 
+  const handleIssueReachCertificate = (chemicalId: string, chemicalName: string) => {
+    setModalError('substances', null);
+    startTransition(async () => {
+      const res = await issueReachCertificateAction(client.id, chemicalId);
+      if (res.success) {
+        toast.success(res.message || `REACH certificate issued for ${chemicalName}.`);
+        router.refresh();
+        if (res.certificateId) {
+          router.push(`/admin/certificate-preview/${res.certificateId}`);
+        }
+      } else {
+        setModalError('substances', toErrorMessage(res.error, 'Failed to issue REACH certificate.'));
+        toast.error(typeof res.error === 'string' ? res.error : 'Failed to issue REACH certificate.');
+      }
+    });
+  };
+
   const resolveChemical = (row: { chemicals?: { chemical_name?: string } | null }) =>
     row.chemicals?.chemical_name || 'N/A';
 
@@ -801,13 +833,14 @@ export default function ClientDashboardDetails({
                 <th className="px-6 py-4 text-center">Tonnage Band</th>
                 <th className="px-6 py-4">Quantity</th>
                 <th className="px-6 py-4">Validity</th>
+                <th className="px-6 py-4">REACH Certificate</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 {currentUserRole !== 'CLIENT' && <th className="px-6 py-4 text-right"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {clientChemicals.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-medium">No substances assigned.</td></tr>
+                <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-medium">No substances assigned.</td></tr>
               ) : (
                 clientChemicals.map((cc) => {
                   const name = cc.chemicals?.chemical_name || 'Unknown';
@@ -819,6 +852,9 @@ export default function ClientDashboardDetails({
                   );
                   const isCritical = isExceeded || pct >= 90 || cc.status === 'expired';
                   const isWarning = !isExceeded && pct >= 75 && pct < 90;
+                  const reachCert = reachByChemical.get(cc.chemical_id) ?? null;
+                  const reachValid = isActiveReachCertificate(reachCert);
+                  const reachStatus = getReachCertificateStatus(reachCert);
 
                   return (
                     <tr key={cc.id} className="hover:bg-slate-50/50 transition-colors">
@@ -854,6 +890,45 @@ export default function ClientDashboardDetails({
                       </td>
                       <td className="px-6 py-4 font-medium" suppressHydrationWarning>
                         {cc.validity_date ? new Date(cc.validity_date).toLocaleDateString('en-GB') : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4">
+                        {reachValid ? (
+                          <div className="space-y-1">
+                            <Badge variant="success" className="text-[10px] uppercase font-bold flex items-center gap-1 w-fit">
+                              <ShieldCheck className="h-3 w-3" /> Valid
+                            </Badge>
+                            <div className="text-[10px] text-slate-500 font-medium" suppressHydrationWarning>
+                              Until {reachCert?.expires_at ? new Date(reachCert.expires_at).toLocaleDateString('en-GB') : 'N/A'}
+                            </div>
+                            {reachCert?.file_url && (
+                              <a
+                                href={reachCert.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] font-bold text-teal-700 hover:underline"
+                              >
+                                View PDF
+                              </a>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <Badge variant={reachStatus === 'expired' ? 'warning' : 'neutral'} className="text-[10px] uppercase font-bold">
+                              {reachStatus === 'expired' ? 'Expired' : 'Not Issued'}
+                            </Badge>
+                            {currentUserRole !== 'CLIENT' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[10px] font-bold border-teal-200 text-teal-800 hover:bg-teal-50"
+                                onClick={() => handleIssueReachCertificate(cc.chemical_id, name)}
+                                isLoading={isPending}
+                              >
+                                Issue REACH
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <Badge variant={isExceeded ? 'danger' : cc.status === 'active' && !isCritical ? 'success' : 'danger'} className={`text-[10px] uppercase font-bold py-1 ${isExceeded ? 'bg-red-100 text-red-700' : isCritical ? 'bg-red-100 text-red-700' : 'bg-lime-300 text-lime-900'}`}>

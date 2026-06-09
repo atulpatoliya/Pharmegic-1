@@ -149,6 +149,21 @@ interface CertificateData {
   accentColor?: string;
 }
 
+interface ReachCertificateData {
+  certificateNumber: string;
+  companyName: string;
+  chemicalName: string;
+  casNumber: string;
+  ecNumber: string;
+  tonnageBand: string;
+  issueDate: string;
+  expiryDate: string;
+  logoUrl?: string | null;
+  signatureUrl?: string | null;
+  footerText?: string | null;
+  accentColor?: string;
+}
+
 // React component representing the PDF document layout
 const TccDocument: React.FC<{ data: CertificateData }> = ({ data }) => {
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
@@ -253,9 +268,107 @@ const TccDocument: React.FC<{ data: CertificateData }> = ({ data }) => {
   );
 };
 
+const ReachDocument: React.FC<{ data: ReachCertificateData }> = ({ data }) => {
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+    `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify/${data.certificateNumber}`
+  )}`;
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <View style={styles.border}>
+          <View style={styles.header}>
+            {data.logoUrl ? (
+              <Image src={data.logoUrl} style={styles.logoPlaceholder} />
+            ) : (
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: data.accentColor || '#064e3b', marginBottom: 10 }}>
+                PHARMEGIC HEALTHCARE
+              </Text>
+            )}
+            <Text style={[styles.title, data.accentColor ? { color: data.accentColor } : {}]}>
+              REACH COMPLIANCE CERTIFICATE
+            </Text>
+            <Text style={styles.subtitle}>EU REACH REGISTRATION COMPLIANCE — CT 2026</Text>
+          </View>
+
+          <View style={styles.certNumberContainer}>
+            <Text style={styles.certNumberLabel}>Certificate Registration No.</Text>
+            <Text style={styles.certNumber}>{data.certificateNumber}</Text>
+          </View>
+
+          <View style={styles.body}>
+            <Text style={styles.statement}>
+              This document certifies that the chemical substance specified below is registered and compliant with
+              EU REACH (Registration, Evaluation, Authorisation and Restriction of Chemicals) requirements. A valid
+              REACH Compliance Certificate is mandatory before applying for a Tonnage Compliance Certificate (TCC).
+              This certificate remains valid for one (1) year from the date of issuance.
+            </Text>
+
+            <View style={styles.grid}>
+              <View style={styles.gridRow}>
+                <Text style={styles.gridLabel}>Authorized Holder:</Text>
+                <Text style={styles.gridValue}>{data.companyName}</Text>
+              </View>
+              <View style={styles.gridRow}>
+                <Text style={styles.gridLabel}>Chemical Name:</Text>
+                <Text style={styles.gridValue}>{data.chemicalName}</Text>
+              </View>
+              <View style={styles.gridRow}>
+                <Text style={styles.gridLabel}>CAS Registry Number:</Text>
+                <Text style={styles.gridValue}>{data.casNumber}</Text>
+              </View>
+              <View style={styles.gridRow}>
+                <Text style={styles.gridLabel}>EC Number:</Text>
+                <Text style={styles.gridValue}>{data.ecNumber || 'Not Classified'}</Text>
+              </View>
+              <View style={styles.gridRow}>
+                <Text style={styles.gridLabel}>Tonnage Band:</Text>
+                <Text style={styles.gridValue}>{data.tonnageBand}</Text>
+              </View>
+              <View style={styles.gridRow}>
+                <Text style={styles.gridLabel}>Date of Issuance:</Text>
+                <Text style={styles.gridValue}>{data.issueDate}</Text>
+              </View>
+              <View style={styles.gridRow}>
+                <Text style={styles.gridLabel}>Valid Until (1 Year):</Text>
+                <Text style={styles.gridValue}>{data.expiryDate}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.signatureSection}>
+            <Image src={qrUrl} style={styles.qrCode} />
+            <View style={styles.signatureBox}>
+              {data.signatureUrl ? (
+                <Image src={data.signatureUrl} style={styles.signatureImage} />
+              ) : (
+                <View style={{ height: 45 }} />
+              )}
+              <View style={styles.signatureLine} />
+              <Text style={{ fontSize: 9, fontWeight: 'bold' }}>Authorized Compliance Director</Text>
+              <Text style={styles.signatoryTitle}>Pharmegic Healthcare</Text>
+            </View>
+          </View>
+
+          <Text style={styles.footer}>
+            {data.footerText ||
+              'Pharmegic Healthcare REACH Compliance Registry. Scan the QR code to verify authenticity. Validity: 1 year.'}
+          </Text>
+        </View>
+      </Page>
+    </Document>
+  );
+};
+
 // Main function compiling the React PDF component to a binary buffer
 export async function generateCertificatePdf(data: CertificateData): Promise<Buffer> {
   const doc = React.createElement(TccDocument, { data });
+  const pdfBuffer = await renderToBuffer(doc as any);
+  return pdfBuffer;
+}
+
+export async function generateReachCertificatePdf(data: ReachCertificateData): Promise<Buffer> {
+  const doc = React.createElement(ReachDocument, { data });
   const pdfBuffer = await renderToBuffer(doc as any);
   return pdfBuffer;
 }

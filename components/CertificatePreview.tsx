@@ -16,6 +16,7 @@ interface CertificatePreviewClientProps {
   cert: {
     id: string;
     certificate_number: string;
+    type?: string | null;
     file_url: string;
     issued_at: string;
     expires_at: string;
@@ -30,7 +31,13 @@ interface CertificatePreviewClientProps {
       email: string;
       registration_number: string | null;
     };
-    tcc_applications: {
+    chemicals?: {
+      chemical_name: string;
+      cas_number: string;
+      ec_number: string | null;
+      tonnage_band: string | null;
+    } | null;
+    tcc_applications?: {
       quantity_mt: number;
       kkdik_reg_no: string | null;
       export_date: string | null;
@@ -48,6 +55,9 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
   const router = useRouter();
   const [isSending, startSendTransition] = useTransition();
   const [isResending, startResendTransition] = useTransition();
+
+  const isReach = cert.type === 'REACH';
+  const chemical = cert.chemicals || cert.tcc_applications?.chemicals;
 
   const totalSent = cert.mail_resend_count + (cert.mail_sent ? 1 : 0);
 
@@ -89,10 +99,14 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
           </Link>
           <div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-              Certificate Preview
+              {isReach ? 'REACH Certificate Preview' : 'Certificate Preview'}
               <span className="font-mono text-primary text-base">{cert.certificate_number}</span>
             </h1>
-            <p className="text-sm text-slate-500 font-medium">Review and send the certificate to the client</p>
+            <p className="text-sm text-slate-500 font-medium">
+              {isReach
+                ? 'REACH Compliance Certificate — valid for 1 year. Required before TCC application.'
+                : 'Review and send the certificate to the client'}
+            </p>
           </div>
         </div>
 
@@ -107,29 +121,31 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
             <Download className="h-4 w-4" /> Download PDF
           </a>
 
-          {/* Send / Resend */}
-          {!cert.mail_sent ? (
-            <Button onClick={handleSendMail} isLoading={isSending} disabled={isSending} className="gap-1.5">
-              <Mail className="h-4 w-4" /> Send Mail To Client
-            </Button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <span className="text-xs font-bold text-emerald-700">
-                  Sent {totalSent > 1 ? `(${totalSent}x)` : ''}
-                </span>
-              </div>
-              <Button variant="outline" onClick={handleResendMail} isLoading={isResending} disabled={isResending} size="sm" className="gap-1.5">
-                <RefreshCw className="h-4 w-4" /> Resend Mail
+          {/* Send / Resend — TCC only */}
+          {!isReach && (
+            !cert.mail_sent ? (
+              <Button onClick={handleSendMail} isLoading={isSending} disabled={isSending} className="gap-1.5">
+                <Mail className="h-4 w-4" /> Send Mail To Client
               </Button>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs font-bold text-emerald-700">
+                    Sent {totalSent > 1 ? `(${totalSent}x)` : ''}
+                  </span>
+                </div>
+                <Button variant="outline" onClick={handleResendMail} isLoading={isResending} disabled={isResending} size="sm" className="gap-1.5">
+                  <RefreshCw className="h-4 w-4" /> Resend Mail
+                </Button>
+              </div>
+            )
           )}
         </div>
       </div>
 
       {/* Email History */}
-      {cert.mail_sent && (
+      {cert.mail_sent && !isReach && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
           <div className="text-xs font-medium text-blue-700 space-y-0.5">
@@ -170,37 +186,49 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
           </div>
 
           {/* Chemical Info */}
-          {cert.tcc_applications && (
+          {chemical && (
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
               <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
                 <FlaskConical className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-bold text-slate-800">Chemical & Application</h3>
+                <h3 className="text-sm font-bold text-slate-800">
+                  {isReach ? 'REACH Substance Details' : 'Chemical & Application'}
+                </h3>
               </div>
               <div className="space-y-3 text-sm">
                 <div>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Substance</p>
-                  <p className="font-semibold text-slate-800">{cert.tcc_applications.chemicals.chemical_name}</p>
+                  <p className="font-semibold text-slate-800">{chemical.chemical_name}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">CAS Number</p>
-                    <p className="font-mono font-semibold text-slate-700">{cert.tcc_applications.chemicals.cas_number}</p>
+                    <p className="font-mono font-semibold text-slate-700">{chemical.cas_number}</p>
                   </div>
-                  {cert.tcc_applications.chemicals.ec_number && (
+                  {chemical.ec_number && (
                     <div>
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">EC Number</p>
-                      <p className="font-mono font-semibold text-slate-700">{cert.tcc_applications.chemicals.ec_number}</p>
+                      <p className="font-mono font-semibold text-slate-700">{chemical.ec_number}</p>
                     </div>
                   )}
                 </div>
-                <div>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Quantity</p>
-                  <p className="text-lg font-black text-slate-800">{cert.tcc_applications.quantity_mt} MT</p>
-                </div>
-                {cert.tcc_applications.kkdik_reg_no && (
+                {!isReach && cert.tcc_applications && (
+                  <>
+                    <div>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Quantity</p>
+                      <p className="text-lg font-black text-slate-800">{cert.tcc_applications.quantity_mt} MT</p>
+                    </div>
+                    {cert.tcc_applications.kkdik_reg_no && (
+                      <div>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">KKDIK Reg. No</p>
+                        <p className="font-mono font-semibold text-slate-700">{cert.tcc_applications.kkdik_reg_no}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+                {isReach && chemical.tonnage_band && (
                   <div>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">KKDIK Reg. No</p>
-                    <p className="font-mono font-semibold text-slate-700">{cert.tcc_applications.kkdik_reg_no}</p>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Tonnage Band</p>
+                    <p className="font-semibold text-slate-700">{chemical.tonnage_band}</p>
                   </div>
                 )}
               </div>

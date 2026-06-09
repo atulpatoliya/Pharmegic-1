@@ -10,6 +10,7 @@ import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
 import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
 import { getRemainingQuota, getTonnageBandMaxQuota, sumApprovedExports } from '@/lib/quota';
+import { isActiveReachCertificate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 
 // ============================================================================
 // APPLY FOR TCC (Client Action)
@@ -55,6 +56,36 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
 
     if (!authChem) {
       return { success: false, error: 'This chemical is not authorized for your company. Contact your administrator.' };
+    }
+
+    const { data: reachCert } = await adminSupabase
+      .from('certificates')
+      .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
+      .eq('client_id', clientId)
+      .eq('chemical_id', result.data.chemical_id)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .eq('status', 'active')
+      .order('issued_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!isActiveReachCertificate(reachCert)) {
+      return {
+        success: false,
+        error:
+          'A valid REACH Compliance Certificate is required before applying for TCC. Contact your administrator to issue one for this substance.',
+      };
+    }
+
+    if (result.data.export_date && reachCert?.expires_at) {
+      const exportD = new Date(result.data.export_date);
+      const reachExpiry = new Date(reachCert.expires_at);
+      if (exportD > reachExpiry) {
+        return {
+          success: false,
+          error: `Expected export date exceeds REACH Compliance Certificate validity (${reachExpiry.toLocaleDateString()}).`,
+        };
+      }
     }
 
     const { data: approvedForChem } = await adminSupabase

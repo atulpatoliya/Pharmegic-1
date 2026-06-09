@@ -20,6 +20,7 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
     .select(`
       id,
       certificate_number,
+      type,
       file_url,
       issued_at,
       expires_at,
@@ -33,6 +34,12 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
         legal_name,
         email,
         registration_number
+      ),
+      chemicals (
+        chemical_name,
+        cas_number,
+        ec_number,
+        tonnage_band
       ),
       tcc_applications (
         quantity_mt,

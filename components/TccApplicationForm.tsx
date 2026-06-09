@@ -21,6 +21,14 @@ import {
 import { ModalErrorBox } from './ui/ModalErrorBox';
 import { FormLabel } from './ui/FormLabel';
 
+interface ReachCertificateInfo {
+  id: string;
+  certificate_number: string;
+  expires_at: string | null;
+  file_url?: string | null;
+  status: 'valid' | 'expired' | 'revoked' | 'missing';
+}
+
 interface Substance {
   id: string;
   chemical_name: string;
@@ -29,6 +37,8 @@ interface Substance {
   tonnage_band: string | null;
   validity_date: string | null;
   available_quantity: number;
+  has_valid_reach?: boolean;
+  reach_certificate?: ReachCertificateInfo | null;
 }
 
 interface TccApplicationFormProps {
@@ -53,6 +63,10 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
   const finalQuota = initialQuota - requestedAmt;
   const quotaExceeded = requestedAmt > 0 && requestedAmt > initialQuota;
   const noQuotaLeft = selectedSubstance != null && initialQuota <= 0;
+  const noValidReach = selectedSubstance != null && !selectedSubstance.has_valid_reach;
+  const eligibleSubstances = authorizedSubstances.filter(
+    (s) => s.has_valid_reach && Number(s.available_quantity) > 0
+  );
 
   const handleChemicalChange = (value: string) => {
     setChemicalId(value);
@@ -89,6 +103,13 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       return;
     }
 
+    if (noValidReach) {
+      setError(
+        'A valid REACH Compliance Certificate is required for this substance. Contact your administrator to issue one before applying for TCC.'
+      );
+      return;
+    }
+
     if (selectedSubstance && Number(quantity) > selectedSubstance.available_quantity) {
       setError(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
       return;
@@ -110,6 +131,17 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       const shipment = new Date(exportDate);
       if (shipment > expiry) {
         setError(`The expected export date exceeds the substance validity date (${expiry.toLocaleDateString()}).`);
+        return;
+      }
+    }
+
+    if (selectedSubstance?.reach_certificate?.expires_at) {
+      const reachExpiry = new Date(selectedSubstance.reach_certificate.expires_at);
+      const shipment = new Date(exportDate);
+      if (shipment > reachExpiry) {
+        setError(
+          `The expected export date exceeds the REACH Compliance Certificate validity (${reachExpiry.toLocaleDateString()}).`
+        );
         return;
       }
     }
@@ -139,9 +171,21 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       <div>
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Tonnage Compliance Declaration</h1>
         <p className="text-sm text-slate-500 font-medium">
-          Apply for an official TCC permit. Declare substance specifications, registration numbers, and shipment timelines.
+          Apply for an official TCC permit. A valid REACH Compliance Certificate (1-year validity) is required per substance before TCC application.
         </p>
       </div>
+
+      {eligibleSubstances.length === 0 && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900 font-medium flex gap-3 items-start">
+          <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">REACH Compliance Certificate Required</p>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              No substances are eligible for TCC application. Each chemical must have an active REACH Compliance Certificate issued by your administrator (valid for 1 year).
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-8 grid-cols-1 md:grid-cols-5">
         {/* Form panel */}
@@ -166,14 +210,19 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                       { value: '', label: 'Select authorized substance...' },
                       ...authorizedSubstances.map((s) => {
                         const remaining = Number(s.available_quantity);
-                        const label =
-                          remaining <= 0
-                            ? `${s.chemical_name} (CAS: ${s.cas_number}) — No quota left`
-                            : `${s.chemical_name} (CAS: ${s.cas_number}) — ${remaining} MT available`;
+                        const reachOk = s.has_valid_reach;
+                        let label = `${s.chemical_name} (CAS: ${s.cas_number})`;
+                        if (!reachOk) {
+                          label += ' — REACH certificate required';
+                        } else if (remaining <= 0) {
+                          label += ' — No quota left';
+                        } else {
+                          label += ` — ${remaining} MT available`;
+                        }
                         return {
                           value: s.id,
                           label,
-                          disabled: remaining <= 0,
+                          disabled: !reachOk || remaining <= 0,
                         };
                       }),
                     ]}
@@ -256,7 +305,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   <Button
                     type="submit"
                     isLoading={isPending}
-                    disabled={isPending || quotaExceeded || noQuotaLeft || !quantity || Number(quantity) <= 0}
+                    disabled={isPending || quotaExceeded || noQuotaLeft || noValidReach || !quantity || Number(quantity) <= 0}
                   >
                     Submit Application <ArrowRight className="h-4 w-4 ml-1.5" />
                   </Button>
@@ -321,7 +370,19 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                     </div>
                   </div>
 
-                  {quotaExceeded ? (
+                  {noValidReach ? (
+                    <div className="p-3 bg-amber-50 text-amber-800 border border-amber-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p>REACH Certificate Required</p>
+                        <p className="text-[10px] text-amber-700 mt-0.5 font-medium">
+                          {selectedSubstance.reach_certificate?.status === 'expired'
+                            ? `REACH certificate expired on ${selectedSubstance.reach_certificate.expires_at ? new Date(selectedSubstance.reach_certificate.expires_at).toLocaleDateString() : 'N/A'}. Request renewal from your administrator.`
+                            : 'No valid REACH Compliance Certificate for this substance. Your administrator must issue one before TCC application.'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : quotaExceeded ? (
                     <div className="p-3 bg-rose-50 text-rose-700 border border-rose-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
                       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                       <div>
@@ -345,9 +406,16 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                     <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
                       <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
                       <div>
-                        <p>Validity Period Verified</p>
+                        <p>REACH &amp; Substance Verified</p>
                         <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">
-                          This substance is authorized for export compliance until {selectedSubstance.validity_date ? new Date(selectedSubstance.validity_date).toLocaleDateString() : 'N/A'}.
+                          REACH certificate valid until{' '}
+                          {selectedSubstance.reach_certificate?.expires_at
+                            ? new Date(selectedSubstance.reach_certificate.expires_at).toLocaleDateString()
+                            : 'N/A'}
+                          . Substance authorized until{' '}
+                          {selectedSubstance.validity_date
+                            ? new Date(selectedSubstance.validity_date).toLocaleDateString()
+                            : 'N/A'}.
                         </p>
                       </div>
                     </div>
