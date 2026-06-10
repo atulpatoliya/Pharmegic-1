@@ -97,7 +97,39 @@ const { data, error } = await supabase.auth.signUp({
 
 ---
 
-## 4. Running the Application locally
+## 4. RC Certificate PDF conversion (production server)
+
+The RC certificate **preview** works in the browser (DOCX template). To **issue** certificates and attach **PDF** files to emails, the server needs a document converter.
+
+### Option A — LibreOffice (recommended on Linux/VPS)
+
+```bash
+# Ubuntu / Debian
+sudo apt-get update && sudo apt-get install -y libreoffice-writer
+
+# Verify
+soffice --version
+```
+
+Restart the app after install.
+
+### Option B — Gotenberg (Docker)
+
+Run [Gotenberg](https://gotenberg.dev/) and set in `.env`:
+
+```env
+GOTENBERG_URL=http://localhost:3000
+```
+
+### Windows development
+
+Microsoft Word or LibreOffice on the machine is used automatically for PDF generation.
+
+> Place `CT_Draftr.docx` in the project root and run `node scripts/prepare-reach-template.mjs` to refresh `templates/CT_2026.docx`.
+
+---
+
+## 5. Running the Application locally
 
 1. Install project dependencies:
    ```bash

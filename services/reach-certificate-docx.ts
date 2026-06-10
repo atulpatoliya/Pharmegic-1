@@ -135,6 +135,10 @@ export function generateReachCertificateDocx(data: ReachCertificateDocxData): Bu
 
 const LIBREOFFICE_PATHS = [
   'soffice',
+  'libreoffice',
+  '/usr/bin/soffice',
+  '/usr/bin/libreoffice',
+  '/snap/bin/libreoffice',
   'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
   'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
 ];
@@ -188,6 +192,25 @@ try { $word.Quit() } catch {}
   });
 }
 
+async function convertWithGotenberg(docxBuffer: Buffer): Promise<Buffer> {
+  const baseUrl = process.env.GOTENBERG_URL?.replace(/\/$/, '');
+  if (!baseUrl) throw new Error('Gotenberg not configured.');
+
+  const formData = new FormData();
+  formData.append('files', new Blob([new Uint8Array(docxBuffer)]), 'certificate.docx');
+
+  const res = await fetch(`${baseUrl}/forms/libreoffice/convert`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Gotenberg conversion failed (${res.status}).`);
+  }
+
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
   const id = randomUUID();
   const workDir = path.join(tmpdir(), `reach-${id}`);
@@ -207,14 +230,31 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
     try {
       return await convertWithLibreOfficeConvert(docxBuffer);
     } catch {
-      // try Microsoft Word COM on Windows
+      // try Gotenberg or Word COM
     }
 
-    await convertWithWordCom(docxPath, pdfPath);
-    if (!fs.existsSync(pdfPath)) {
-      throw new Error('PDF conversion failed. Install LibreOffice or Microsoft Word on the server.');
+    if (process.env.GOTENBERG_URL) {
+      try {
+        return await convertWithGotenberg(docxBuffer);
+      } catch {
+        // fall through
+      }
     }
-    return fs.readFileSync(pdfPath);
+
+    if (process.platform === 'win32') {
+      try {
+        await convertWithWordCom(docxPath, pdfPath);
+        if (fs.existsSync(pdfPath)) {
+          return fs.readFileSync(pdfPath);
+        }
+      } catch {
+        // fall through
+      }
+    }
+
+    throw new Error(
+      'PDF conversion is not available on this server. Install LibreOffice (recommended: apt install libreoffice-writer) or set GOTENBERG_URL for document conversion.'
+    );
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
   }

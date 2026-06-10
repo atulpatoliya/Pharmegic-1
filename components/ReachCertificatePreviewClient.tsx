@@ -22,6 +22,7 @@ import {
   RefreshCw,
   CheckCircle2,
 } from 'lucide-react';
+import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 type ReachCertificatePreviewClientProps = {
   clientId: string;
   chemicalId: string;
@@ -85,7 +86,7 @@ export default function ReachCertificatePreviewClient({
   const [issuedDate, setIssuedDate] = useState(defaults.issuedDate);
   const [validatedDate, setValidatedDate] = useState(defaults.validatedDate);
 
-  const pdfSrc = useMemo(() => {
+  const docxPreviewUrl = useMemo(() => {
     const params = new URLSearchParams({
       clientId,
       chemicalId,
@@ -93,8 +94,11 @@ export default function ReachCertificatePreviewClient({
       issuedDate,
       validatedDate,
     });
-    return `/api/reach-certificate/pdf?${params.toString()}`;
+    return `/api/reach-certificate/docx?${params.toString()}`;
   }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate]);
+
+  const downloadHref = cert?.file_url || docxPreviewUrl;
+  const downloadLabel = cert?.file_url ? 'Download PDF' : 'Download DOCX';
 
   const backHref = `/admin/clients/${clientId}/rc-certificates`;
 
@@ -176,17 +180,19 @@ export default function ReachCertificatePreviewClient({
           </div>
         </div>
 
-        {!isPending && cert && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <a
-              href={pdfSrc}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
-            >
-              <Download className="h-4 w-4" /> Download PDF
-            </a>
+        <div className="flex items-center gap-2 flex-wrap">
+          <a
+            href={downloadHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            download
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+          >
+            <Download className="h-4 w-4" /> {downloadLabel}
+          </a>
 
+          {!isPending && cert && (
+            <>
             {!cert.mail_sent ? (
               <Button onClick={handleSendMail} isLoading={isSending} disabled={isSending} className="gap-1.5">
                 <Mail className="h-4 w-4" /> Send Mail To Client
@@ -211,8 +217,9 @@ export default function ReachCertificatePreviewClient({
                 </Button>
               </div>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {cert?.mail_sent && mailRecipients && (
@@ -274,13 +281,7 @@ export default function ReachCertificatePreviewClient({
           <FileText className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold text-slate-800">REACH Compliance Certificate (CT-2026)</h3>
         </div>
-        <iframe
-          key={pdfSrc}
-          src={pdfSrc}
-          className="w-full bg-slate-50"
-          style={{ height: '820px', border: 'none' }}
-          title="REACH Certificate Preview"
-        />
+        <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
       </div>
 
       {isPending && (
