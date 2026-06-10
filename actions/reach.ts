@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
-import { generateReachPdfForClientChemical } from '@/lib/reach-pdf-data';
+import { buildReachCertificateStoredFile } from '@/lib/reach-pdf-data';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
@@ -106,23 +106,25 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
   const certNumber = `RC-${issueDate.getFullYear()}-${randStr}`;
 
-  const pdfBuffer = await generateReachPdfForClientChemical(client, chemical, {
+  const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
     registrationNumber: registrationNumber.trim(),
     issuedDate,
     validatedDate,
   });
 
   await ensureCertificatesBucket(adminSupabase);
-  const fileName = `${certNumber}.pdf`;
   const { error: uploadError } = await adminSupabase.storage
     .from(CERTIFICATES_BUCKET)
-    .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true });
+    .upload(certFile.fileName, certFile.buffer, {
+      contentType: certFile.contentType,
+      upsert: true,
+    });
 
   if (uploadError) throw new Error(`PDF upload failed: ${uploadError.message}`);
 
   const {
     data: { publicUrl },
-  } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(fileName);
+  } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
 
   const { data: cert, error: certError } = await adminSupabase
     .from('certificates')
@@ -211,23 +213,25 @@ export async function regenerateReachCertificateFile(certId: string) {
     return { success: false as const, error: 'Missing certificate data for regeneration.' };
   }
 
-  const pdfBuffer = await generateReachPdfForClientChemical(client, chemical, {
+  const certFile = await buildReachCertificateStoredFile(client, chemical, cert.certificate_number, {
     registrationNumber: cert.registration_number,
     issuedDate: cert.issued_at.split('T')[0],
     validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),
   });
 
   await ensureCertificatesBucket(adminSupabase);
-  const fileName = `${cert.certificate_number}.pdf`;
   const { error: uploadError } = await adminSupabase.storage
     .from(CERTIFICATES_BUCKET)
-    .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true });
+    .upload(certFile.fileName, certFile.buffer, {
+      contentType: certFile.contentType,
+      upsert: true,
+    });
 
   if (uploadError) return { success: false as const, error: uploadError.message };
 
   const {
     data: { publicUrl },
-  } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(fileName);
+  } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
 
   await adminSupabase.from('certificates').update({ file_url: publicUrl }).eq('id', certId);
 
@@ -353,21 +357,48 @@ async function fetchReachCertificateMailContext(certificateId: string) {
     adminBccEmails: settings?.bcc_emails,
   });
 
-  const { data: pdfData, error: pdfError } = await adminSupabase.storage
-    .from(CERTIFICATES_BUCKET)
-    .download(`${cert.certificate_number}.pdf`);
-
-  if (pdfError || !pdfData) throw new Error('Could not retrieve certificate PDF from storage.');
-
-  const pdfBuffer = Buffer.from(await pdfData.arrayBuffer());
+  const attachment = await downloadReachCertificateAttachment(
+    adminSupabase,
+    cert.certificate_number
+  );
 
   return {
     cert,
     settings,
     recipients,
-    pdfBuffer,
+    attachment,
     chemicalName: cert.chemicals?.chemical_name || 'N/A',
   };
+}
+
+async function downloadReachCertificateAttachment(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  certificateNumber: string
+) {
+  const candidates = [
+    { fileName: `${certificateNumber}.pdf`, contentType: 'application/pdf' },
+    {
+      fileName: `${certificateNumber}.docx`,
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    },
+  ];
+
+  for (const candidate of candidates) {
+    const { data, error } = await adminSupabase.storage
+      .from(CERTIFICATES_BUCKET)
+      .download(candidate.fileName);
+
+    if (!error && data) {
+      return {
+        buffer: Buffer.from(await data.arrayBuffer()),
+        fileName: candidate.fileName,
+        contentType: candidate.contentType,
+      };
+    }
+  }
+
+  throw new Error('Could not retrieve certificate file from storage.');
 }
 
 export async function sendReachCertificateEmailAction(certificateId: string) {
@@ -377,7 +408,7 @@ export async function sendReachCertificateEmailAction(certificateId: string) {
   const adminSupabase = createAdminClient();
 
   try {
-    const { cert, settings, recipients, pdfBuffer, chemicalName } =
+    const { cert, settings, recipients, attachment, chemicalName } =
       await fetchReachCertificateMailContext(certificateId);
 
     await sendCertEmail({
@@ -388,8 +419,9 @@ export async function sendReachCertificateEmailAction(certificateId: string) {
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
       chemicalName,
-      pdfBuffer,
-      pdfFileName: `${cert.certificate_number}.pdf`,
+      pdfBuffer: attachment.buffer,
+      pdfFileName: attachment.fileName,
+      attachmentContentType: attachment.contentType,
       smtpConfig: settings || undefined,
       certificateType: 'REACH',
     });
@@ -434,7 +466,7 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
   const adminSupabase = createAdminClient();
 
   try {
-    const { cert, settings, recipients, pdfBuffer, chemicalName } =
+    const { cert, settings, recipients, attachment, chemicalName } =
       await fetchReachCertificateMailContext(certificateId);
 
     if (!cert.mail_sent) {
@@ -449,8 +481,9 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
       chemicalName,
-      pdfBuffer,
-      pdfFileName: `${cert.certificate_number}.pdf`,
+      pdfBuffer: attachment.buffer,
+      pdfFileName: attachment.fileName,
+      attachmentContentType: attachment.contentType,
       smtpConfig: settings || undefined,
       certificateType: 'REACH',
     });

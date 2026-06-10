@@ -82,6 +82,7 @@ interface SendCertificateEmailOptions {
   chemicalName: string;
   pdfBuffer: Buffer;
   pdfFileName: string;
+  attachmentContentType?: string;
   smtpConfig?: SmtpConfig;
   certificateType?: 'TCC' | 'REACH';
 }
@@ -96,6 +97,7 @@ export async function sendCertificateEmail({
   chemicalName,
   pdfBuffer,
   pdfFileName,
+  attachmentContentType = 'application/pdf',
   smtpConfig,
   certificateType = 'TCC',
 }: SendCertificateEmailOptions) {
@@ -119,7 +121,7 @@ export async function sendCertificateEmail({
           {
             filename: pdfFileName,
             content: pdfBuffer,
-            contentType: 'application/pdf',
+            contentType: attachmentContentType,
           },
         ],
       });
