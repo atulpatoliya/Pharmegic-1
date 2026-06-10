@@ -23,6 +23,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import { buildReachCertificatePdfDownloadUrl, buildReachCertificatePdfPreviewUrl } from '@/lib/reach-certificate-download';
 type ReachCertificatePreviewClientProps = {
   clientId: string;
   chemicalId: string;
@@ -97,8 +98,16 @@ export default function ReachCertificatePreviewClient({
     return `/api/reach-certificate/docx?${params.toString()}`;
   }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate]);
 
-  const downloadHref = cert?.file_url || docxPreviewUrl;
-  const downloadLabel = cert?.file_url ? 'Download PDF' : 'Download DOCX';
+  const downloadHref = cert
+    ? buildReachCertificatePdfDownloadUrl(cert.id)
+    : buildReachCertificatePdfPreviewUrl({
+        clientId,
+        chemicalId,
+        registrationNumber: registrationNumber.trim() || '—',
+        issuedDate,
+        validatedDate,
+      });
+  const downloadLabel = 'Download PDF';
 
   const backHref = `/admin/clients/${clientId}/rc-certificates`;
 

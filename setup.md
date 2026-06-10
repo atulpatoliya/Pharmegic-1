@@ -79,14 +79,14 @@ To log in as the first administrator, you must create a Supabase Auth user with 
 -- 1. Create a user via Supabase Auth Dashboard or sign up form, then run this to elevate their role:
 UPDATE auth.users
 SET raw_user_meta_data = jsonb_build_object('role', 'MASTER_ADMIN')
-WHERE email = 'admin@pharmegic.com';
+WHERE email = 'directoratulpatoliya@gmail.com';
 ```
 
 Alternatively, you can sign up a user using the Supabase client-side API inside a scratch script, passing the role metadata:
 ```typescript
 const { data, error } = await supabase.auth.signUp({
-  email: 'admin@pharmegic.com',
-  password: 'securepassword123',
+  email: 'directoratulpatoliya@gmail.com',
+  password: 'Admin@1234',
   options: {
     data: {
       role: 'MASTER_ADMIN'

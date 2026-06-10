@@ -93,7 +93,7 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
           },
           {
             href: `/admin/clients/${clientProfileId}/certificates`,
-            label: 'Certificates',
+            label: 'TCC Certificates',
             icon: Award,
             isSub: true,
           },

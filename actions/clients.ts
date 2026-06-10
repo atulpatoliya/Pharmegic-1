@@ -580,6 +580,8 @@ export async function removeChemicalFromClientAction(clientId: string, chemicalI
     });
 
     revalidatePath(`/admin/clients/${clientId}`);
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+    revalidatePath(`/admin/clients/${clientId}/chemicals`);
     return { success: true, message: 'Substance moved to trash.' };
   } catch (err) {
     return { success: false, error: formatErrorMessage(err) };

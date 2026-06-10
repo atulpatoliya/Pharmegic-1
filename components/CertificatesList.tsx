@@ -15,6 +15,7 @@ import {
   ExternalLink,
   FlaskConical
 } from 'lucide-react';
+import { resolveReachCertificateDownloadUrl } from '@/lib/reach-certificate-download';
 
 interface Certificate {
   id: string;
@@ -205,7 +206,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
                     <td className="p-4 text-right">
                       <div className="inline-flex items-center gap-2">
                         <a
-                          href={cert.file_url}
+                          href={resolveReachCertificateDownloadUrl(cert)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-lg transition-colors border border-emerald-100"

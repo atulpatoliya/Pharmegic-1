@@ -658,7 +658,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
                   <Input
                     type="email"
                     label="Default CC Email (Admin)"
-                    placeholder="admin@pharmegic.com"
+                    placeholder="directoratulpatoliya@gmail.com"
                     value={smtp.smtp_cc_default}
                     onChange={(e) => setSmtp({ ...smtp, smtp_cc_default: e.target.value })}
                   />

@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth/session';
 import { buildReachCertificateStoredFile } from '@/lib/reach-pdf-data';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
+import { resolveReachCertificatePdfBuffer } from '@/lib/reach-certificate-pdf';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
@@ -326,11 +327,17 @@ async function fetchReachCertificateMailContext(certificateId: string) {
       .from('certificates')
       .select(`
         *,
-        chemicals (chemical_name),
+        chemicals (id, chemical_name, cas_number, ec_number, tonnage_band),
         clients (
           id,
           company_name,
           email,
+          uuid_number,
+          address,
+          city,
+          state,
+          postal_code,
+          country,
           client_contacts (email)
         )
       `)
@@ -357,10 +364,7 @@ async function fetchReachCertificateMailContext(certificateId: string) {
     adminBccEmails: settings?.bcc_emails,
   });
 
-  const attachment = await downloadReachCertificateAttachment(
-    adminSupabase,
-    cert.certificate_number
-  );
+  const attachment = await downloadReachCertificateAttachment(adminSupabase, cert);
 
   return {
     cert,
@@ -373,32 +377,47 @@ async function fetchReachCertificateMailContext(certificateId: string) {
 
 async function downloadReachCertificateAttachment(
   adminSupabase: ReturnType<typeof createAdminClient>,
-  certificateNumber: string
-) {
-  const candidates = [
-    { fileName: `${certificateNumber}.pdf`, contentType: 'application/pdf' },
-    {
-      fileName: `${certificateNumber}.docx`,
-      contentType:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    },
-  ];
-
-  for (const candidate of candidates) {
-    const { data, error } = await adminSupabase.storage
-      .from(CERTIFICATES_BUCKET)
-      .download(candidate.fileName);
-
-    if (!error && data) {
-      return {
-        buffer: Buffer.from(await data.arrayBuffer()),
-        fileName: candidate.fileName,
-        contentType: candidate.contentType,
-      };
-    }
+  cert: {
+    certificate_number: string;
+    registration_number: string | null;
+    issued_at: string;
+    expires_at: string | null;
+    clients: {
+      company_name: string;
+      uuid_number?: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postal_code?: string | null;
+      country?: string | null;
+    };
+    chemicals: {
+      chemical_name: string;
+      cas_number: string;
+      ec_number?: string | null;
+      tonnage_band?: string | null;
+    };
   }
+) {
+  const issuedDate = cert.issued_at ? cert.issued_at.split('T')[0] : getTodayDateString();
+  const validatedDate = cert.expires_at
+    ? cert.expires_at.split('T')[0]
+    : getLastDateOfYear();
 
-  throw new Error('Could not retrieve certificate file from storage.');
+  const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
+    certificateNumber: cert.certificate_number,
+    registrationNumber: cert.registration_number?.trim() || '—',
+    issuedDate,
+    validatedDate,
+    client: cert.clients,
+    chemical: cert.chemicals,
+  });
+
+  return {
+    buffer: pdfBuffer,
+    fileName: `${cert.certificate_number}.pdf`,
+    contentType: 'application/pdf',
+  };
 }
 
 export async function sendReachCertificateEmailAction(certificateId: string) {
@@ -511,6 +530,62 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
     revalidatePath(`/admin/clients/${cert.client_id}/rc-preview/${cert.chemical_id}`);
 
     return { success: true, message: 'Certificate email resent successfully.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteReachCertificateAction(certificateId: string, clientId: string) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+
+  try {
+    const { data: cert, error } = await adminSupabase
+      .from('certificates')
+      .select('id, certificate_number, chemical_id, client_id, type, chemicals(chemical_name)')
+      .eq('id', certificateId)
+      .eq('client_id', clientId)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .single();
+
+    if (error || !cert) {
+      return { success: false, error: 'RC certificate not found.' };
+    }
+
+    const storageFiles = [`${cert.certificate_number}.pdf`, `${cert.certificate_number}.docx`];
+    await adminSupabase.storage.from(CERTIFICATES_BUCKET).remove(storageFiles);
+
+    const { error: deleteError } = await adminSupabase
+      .from('certificates')
+      .delete()
+      .eq('id', certificateId);
+
+    if (deleteError) throw deleteError;
+
+    const chemicalName =
+      (cert.chemicals as { chemical_name?: string } | null)?.chemical_name || 'Unknown';
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'REACH_CERTIFICATE_DELETED',
+      entity_type: 'certificates',
+      entity_id: certificateId,
+      description: `RC Certificate ${cert.certificate_number} deleted for ${chemicalName}`,
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+    revalidatePath(`/admin/clients/${clientId}/chemicals`);
+    revalidatePath('/client');
+
+    return {
+      success: true,
+      message: `RC Certificate ${cert.certificate_number} deleted.`,
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

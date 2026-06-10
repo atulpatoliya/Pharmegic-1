@@ -239,7 +239,7 @@ export default function SuperAdminDashboard({ initialAdmins }: SuperAdminDashboa
           <Input
             type="email"
             label="Email Address"
-            placeholder="admin@pharmegic.com"
+            placeholder="directoratulpatoliya@gmail.com"
             value={newAdminEmail}
             onChange={(e) => setNewAdminEmail(e.target.value)}
           />

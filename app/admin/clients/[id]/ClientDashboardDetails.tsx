@@ -36,6 +36,11 @@ import {
   getLastDateOfYear,
   getTodayDateString,
 } from '@/lib/reach-certificate';
+import { deleteReachCertificateAction } from '@/actions/reach';
+import {
+  buildReachCertificatePdfDownloadUrl,
+  buildReachCertificatePdfPreviewUrl,
+} from '@/lib/reach-certificate-download';
 import { processTccAction } from '@/actions/tcc';
 import { TccApplicationViewDialog, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
@@ -138,7 +143,7 @@ export default function ClientDashboardDetails({
     viewMode === 'chemicals'
       ? `${client.company_name} — Chemical Inventory`
       : viewMode === 'certificates'
-        ? `${client.company_name} — Certificates`
+        ? `${client.company_name} — TCC Certificates`
         : viewMode === 'rc-certificates'
           ? `${client.company_name} — RC Certificates`
           : `${client.company_name} Details`;
@@ -189,6 +194,11 @@ export default function ClientDashboardDetails({
   const [isNoteModalOpen, setNoteModalOpen] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [isDeleteClientOpen, setDeleteClientOpen] = useState(false);
+  const [rcDeleteTarget, setRcDeleteTarget] = useState<
+    | { kind: 'issued'; id: string; certificate_number: string; chemical_name: string }
+    | { kind: 'pending'; chemicalId: string; chemical_name: string }
+    | null
+  >(null);
 
   const [isTccViewOpen, setIsTccViewOpen] = useState(false);
   const [viewTccApp, setViewTccApp] = useState<TccViewApplication | null>(null);
@@ -552,6 +562,23 @@ export default function ClientDashboardDetails({
         else toast.error(res.error || 'Error');
       });
     }
+  };
+
+  const handleDeleteRcCertificate = () => {
+    if (!rcDeleteTarget) return;
+    startTransition(async () => {
+      const res =
+        rcDeleteTarget.kind === 'issued'
+          ? await deleteReachCertificateAction(rcDeleteTarget.id, client.id)
+          : await removeChemicalFromClientAction(client.id, rcDeleteTarget.chemicalId);
+      if (res.success) {
+        toast.success(res.message || 'Removed successfully.');
+        setRcDeleteTarget(null);
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to remove.');
+      }
+    });
   };
 
   const handleDeleteClient = () => {
@@ -956,9 +983,9 @@ export default function ClientDashboardDetails({
                             <div className="text-[10px] text-slate-500 font-medium" suppressHydrationWarning>
                               Until {reachCert?.expires_at ? new Date(reachCert.expires_at).toLocaleDateString('en-GB') : 'N/A'}
                             </div>
-                            {reachCert?.file_url && (
+                            {reachCert?.id && (
                               <a
-                                href={reachCert.file_url}
+                                href={buildReachCertificatePdfDownloadUrl(reachCert.id)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[10px] font-bold text-teal-700 hover:underline"
@@ -1104,12 +1131,15 @@ export default function ClientDashboardDetails({
                 <th className="px-6 py-4">Validated Date</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-center">Actions</th>
+                {currentUserRole !== 'CLIENT' && (
+                  <th className="px-6 py-4 text-center">Delete</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rcListRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={currentUserRole !== 'CLIENT' ? 9 : 8} className="px-6 py-12 text-center text-slate-400 font-medium">
                     No substances assigned yet. Assign a substance to issue an RC certificate.
                   </td>
                 </tr>
@@ -1141,6 +1171,25 @@ export default function ClientDashboardDetails({
                             </Link>
                           )}
                         </td>
+                        {currentUserRole !== 'CLIENT' && (
+                          <td className="px-6 py-4 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                              title="Remove assigned substance"
+                              onClick={() =>
+                                setRcDeleteTarget({
+                                  kind: 'pending',
+                                  chemicalId: row.chemicalId,
+                                  chemical_name: chemName,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        )}
                       </tr>
                     );
                   }
@@ -1171,8 +1220,13 @@ export default function ClientDashboardDetails({
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex justify-center gap-2">
-                          {cert.file_url && (
-                            <a href={cert.file_url} target="_blank" rel="noopener noreferrer" title="Download PDF">
+                          {cert.id && (
+                            <a
+                              href={buildReachCertificatePdfDownloadUrl(cert.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Download PDF"
+                            >
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
                                 <Download className="h-4 w-4" />
                               </Button>
@@ -1187,6 +1241,26 @@ export default function ClientDashboardDetails({
                           )}
                         </div>
                       </td>
+                      {currentUserRole !== 'CLIENT' && (
+                        <td className="px-6 py-4 text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                            title="Delete certificate"
+                            onClick={() =>
+                              setRcDeleteTarget({
+                                kind: 'issued',
+                                id: cert.id,
+                                certificate_number: cert.certificate_number,
+                                chemical_name: chemName,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -1196,6 +1270,42 @@ export default function ClientDashboardDetails({
         </div>
       </div>
       )}
+
+      <Dialog
+        isOpen={!!rcDeleteTarget}
+        onClose={() => setRcDeleteTarget(null)}
+        title={rcDeleteTarget?.kind === 'pending' ? 'Remove Assigned Substance' : 'Delete RC Certificate'}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            {rcDeleteTarget?.kind === 'pending' ? (
+              <>
+                Remove assigned substance <strong>{rcDeleteTarget.chemical_name}</strong> from this client?
+                The pending RC certificate row will be removed.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete RC Certificate{' '}
+                <strong className="font-mono text-slate-800">{rcDeleteTarget?.certificate_number}</strong>{' '}
+                for <strong>{rcDeleteTarget?.chemical_name}</strong>? This cannot be undone.
+              </>
+            )}
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setRcDeleteTarget(null)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteRcCertificate}
+              isLoading={isPending}
+              disabled={isPending}
+            >
+              {rcDeleteTarget?.kind === 'pending' ? 'Remove Substance' : 'Delete Certificate'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* 4. TCC Applications & Issued Certificates */}
       {showCertificatesSection && (
