@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth/session';
 import { buildReachCertificateStoredFile } from '@/lib/reach-pdf-data';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
-import { resolveReachCertificatePdfBuffer } from '@/lib/reach-certificate-pdf';
+import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
@@ -404,7 +404,7 @@ async function downloadReachCertificateAttachment(
     ? cert.expires_at.split('T')[0]
     : getLastDateOfYear();
 
-  const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
+  const certFile = await resolveReachCertificateDownloadFile(adminSupabase, {
     certificateNumber: cert.certificate_number,
     registrationNumber: cert.registration_number?.trim() || '—',
     issuedDate,
@@ -414,9 +414,9 @@ async function downloadReachCertificateAttachment(
   });
 
   return {
-    buffer: pdfBuffer,
-    fileName: `${cert.certificate_number}.pdf`,
-    contentType: 'application/pdf',
+    buffer: certFile.buffer,
+    fileName: certFile.fileName,
+    contentType: certFile.contentType,
   };
 }
 

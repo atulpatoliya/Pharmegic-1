@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { getLastDateOfYear, getTodayDateString, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
-import { resolveReachCertificatePdfBuffer } from '@/lib/reach-certificate-pdf';
-import { generateReachPdfForClientChemical } from '@/lib/reach-pdf-data';
+import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
 
-function pdfResponse(buffer: Buffer, fileName: string) {
+function fileResponse(buffer: Buffer, fileName: string, contentType: string, format: 'pdf' | 'docx') {
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${fileName}"`,
+      'Content-Type': contentType,
+      'Content-Disposition': `inline; filename="${fileName}"`,
       'Cache-Control': 'no-store',
+      'X-Certificate-Format': format,
     },
   });
 }
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       : getLastDateOfYear();
 
     try {
-      const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
+      const file = await resolveReachCertificateDownloadFile(adminSupabase, {
         certificateNumber: cert.certificate_number,
         registrationNumber: cert.registration_number?.trim() || '—',
         issuedDate,
@@ -93,9 +93,9 @@ export async function GET(request: NextRequest) {
         chemical: chemicalRecord,
       });
 
-      return pdfResponse(pdfBuffer, `${cert.certificate_number}.pdf`);
+      return fileResponse(file.buffer, file.fileName, file.contentType, file.format);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'PDF generation failed.';
+      const message = err instanceof Error ? err.message : 'Certificate download failed.';
       return NextResponse.json({ error: message }, { status: 500 });
     }
   }
@@ -166,24 +166,18 @@ export async function GET(request: NextRequest) {
   const certNumber = existingCert?.certificate_number || `RC-preview-${chemicalId.slice(0, 8)}`;
 
   try {
-    const pdfBuffer = existingCert
-      ? await resolveReachCertificatePdfBuffer(adminSupabase, {
-          certificateNumber: existingCert.certificate_number,
-          registrationNumber,
-          issuedDate,
-          validatedDate,
-          client,
-          chemical,
-        })
-      : await generateReachPdfForClientChemical(client, chemical, {
-          registrationNumber,
-          issuedDate,
-          validatedDate,
-        });
+    const file = await resolveReachCertificateDownloadFile(adminSupabase, {
+      certificateNumber: certNumber,
+      registrationNumber,
+      issuedDate,
+      validatedDate,
+      client,
+      chemical,
+    });
 
-    return pdfResponse(pdfBuffer, `${certNumber}.pdf`);
+    return fileResponse(file.buffer, file.fileName, file.contentType, file.format);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'PDF generation failed.';
+    const message = err instanceof Error ? err.message : 'Certificate download failed.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
