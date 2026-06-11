@@ -361,7 +361,7 @@ function getReachCertificateEmailHtml(
         <div class="detail-row"><span class="label">Chemical Substance</span><span class="value">${chemicalName}</span></div>
         <div class="detail-row"><span class="label">Status</span><span class="value" style="color:#16a34a;">✓ Active &amp; Valid</span></div>
       </div>
-      <p style="font-size:13px;color:#64748b;">The PDF certificate is attached. This RC certificate is required before applying for a Tonnage Compliance Certificate (TCC).</p>
+      <p style="font-size:13px;color:#64748b;">The PDF certificate is attached. This RC certificate is required before applying for a Tonnage Coverage Certificate (TCC).</p>
     </div>
     <div class="footer">
       Pharmegic Healthcare Compliance Division | This is an automated compliance notification.

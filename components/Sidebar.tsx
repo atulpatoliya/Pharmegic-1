@@ -33,16 +33,19 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     setSidebarOpen(false);
   }, [pathname, setSidebarOpen]);
 
+  const hideChemicalInventory = role === 'MASTER_ADMIN';
+
   const adminLinks = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/clients', label: 'Clients', icon: Users },
     { href: '/admin/chemicals', label: 'Chemical Inventory', icon: Database },
     { href: '/admin/approvals', label: 'TCC Approvals', icon: CheckSquare },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
-  ];
+  ].filter((link) => !(hideChemicalInventory && link.href === '/admin/chemicals'));
 
   if (role === 'SUPER_ADMIN') {
-    adminLinks.splice(4, 0, { href: '/admin/super', label: 'Super Admin', icon: Shield });
+    const settingsIndex = adminLinks.findIndex((link) => link.href === '/admin/settings');
+    adminLinks.splice(settingsIndex, 0, { href: '/admin/super', label: 'Super Admin', icon: Shield });
   }
 
   const clientProfileMatch = pathname.match(CLIENT_PROFILE_PATH);
@@ -97,7 +100,10 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
             icon: Award,
             isSub: true,
           },
-        ]
+        ].filter(
+          (link) =>
+            !(hideChemicalInventory && link.href === `/admin/clients/${clientProfileId}/chemicals`)
+        )
       : [];
 
   const navLinkClass = (active: boolean, isSub = false) =>
