@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { applyForTccAction, updateTccApplicationAction } from '@/actions/tcc';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
@@ -57,7 +57,6 @@ export interface TccApplicationEditData {
 
 interface TccApplicationFormProps {
   authorizedSubstances: Substance[];
-  clientCompanyName: string;
   editApplication?: TccApplicationEditData | null;
 }
 
@@ -68,7 +67,6 @@ function formatDateInput(value: string | null | undefined) {
 
 export default function TccApplicationForm({
   authorizedSubstances,
-  clientCompanyName,
   editApplication = null,
 }: TccApplicationFormProps) {
   const router = useRouter();
@@ -81,8 +79,8 @@ export default function TccApplicationForm({
     editApplication ? String(editApplication.quantity_mt) : ''
   );
   const [exportDate, setExportDate] = useState(formatDateInput(editApplication?.export_date));
-  const [euImporterCompanyName] = useState(
-    editApplication?.eu_importer_company_name?.trim() || clientCompanyName
+  const [euImporterCompanyName, setEuImporterCompanyName] = useState(
+    editApplication?.eu_importer_company_name?.trim() ?? ''
   );
   const [euImporterAddress, setEuImporterAddress] = useState(
     editApplication?.eu_importer_address ?? ''
@@ -92,6 +90,19 @@ export default function TccApplicationForm({
   );
   const [invoiceNumber, setInvoiceNumber] = useState(editApplication?.invoice_number ?? '');
   const [boFile, setBoFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (!editApplication) return;
+    setChemicalId(editApplication.chemical_id);
+    setQuantity(String(editApplication.quantity_mt));
+    setExportDate(formatDateInput(editApplication.export_date));
+    setEuImporterCompanyName(editApplication.eu_importer_company_name?.trim() ?? '');
+    setEuImporterAddress(editApplication.eu_importer_address ?? '');
+    setPurchaseOrderNumber(editApplication.purchase_order_number ?? '');
+    setInvoiceNumber(editApplication.invoice_number ?? '');
+    setBoFile(null);
+    setError(null);
+  }, [editApplication]);
 
   const selectedSubstance = authorizedSubstances.find((s) => s.id === chemicalId);
   const initialQuota = selectedSubstance ? Number(selectedSubstance.available_quantity) : 0;
@@ -157,6 +168,11 @@ export default function TccApplicationForm({
       return;
     }
 
+    if (!euImporterCompanyName.trim()) {
+      setError('EU importer company name is required.');
+      return;
+    }
+
     if (!euImporterAddress.trim()) {
       setError('EU importer address is required.');
       return;
@@ -200,7 +216,7 @@ export default function TccApplicationForm({
       payload.append('chemical_id', chemicalId);
       payload.append('quantity_mt', quantity);
       payload.append('export_date', exportDate);
-      payload.append('eu_importer_company_name', euImporterCompanyName);
+      payload.append('eu_importer_company_name', euImporterCompanyName.trim());
       payload.append('eu_importer_address', euImporterAddress.trim());
       payload.append('purchase_order_number', purchaseOrderNumber.trim());
       payload.append('invoice_number', invoiceNumber.trim());
@@ -266,9 +282,10 @@ export default function TccApplicationForm({
                     <FormLabel required>Company Name</FormLabel>
                     <Input
                       type="text"
+                      name="eu_importer_company_name"
                       value={euImporterCompanyName}
-                      readOnly
-                      className="bg-white text-slate-700"
+                      onChange={(e) => setEuImporterCompanyName(e.target.value)}
+                      required
                     />
                   </div>
 
@@ -276,7 +293,7 @@ export default function TccApplicationForm({
                     <FormLabel required>Address</FormLabel>
                     <Input
                       type="text"
-                      placeholder="Enter one-line EU importer address"
+                      name="eu_importer_address"
                       value={euImporterAddress}
                       onChange={(e) => setEuImporterAddress(e.target.value)}
                       required
@@ -287,7 +304,7 @@ export default function TccApplicationForm({
                     <FormLabel required>Purchase Order Number</FormLabel>
                     <Input
                       type="text"
-                      placeholder="Enter purchase order number"
+                      name="purchase_order_number"
                       value={purchaseOrderNumber}
                       onChange={(e) => setPurchaseOrderNumber(e.target.value)}
                       required
@@ -298,7 +315,7 @@ export default function TccApplicationForm({
                     <FormLabel>Invoice Number</FormLabel>
                     <Input
                       type="text"
-                      placeholder="Optional invoice number"
+                      name="invoice_number"
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value)}
                     />

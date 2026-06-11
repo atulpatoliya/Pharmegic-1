@@ -34,7 +34,7 @@ export default async function ApplyPage({
   const { edit: editId } = await searchParams;
   const adminSupabase = createAdminClient();
 
-  const [{ data: mappings }, { data: approvedTccs }, { data: reachCerts }, { data: client }] =
+  const [{ data: mappings }, { data: approvedTccs }, { data: reachCerts }] =
     await Promise.all([
       adminSupabase
         .from('client_chemicals')
@@ -52,7 +52,6 @@ export default async function ApplyPage({
         .eq('client_id', clientId)
         .eq('type', REACH_CERTIFICATE_TYPE)
         .order('issued_at', { ascending: false }),
-      adminSupabase.from('clients').select('company_name').eq('id', clientId).single(),
     ]);
 
   let editApplication = null;
@@ -104,7 +103,6 @@ export default async function ApplyPage({
   return (
     <TccApplicationForm
       authorizedSubstances={authorizedSubstances as any}
-      clientCompanyName={client?.company_name || ''}
       editApplication={editApplication}
     />
   );

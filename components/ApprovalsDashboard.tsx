@@ -59,6 +59,10 @@ interface Application {
   remarks?: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'changes_required' | 'modification_requested';
   rejection_reason: string | null;
+  eu_importer_company_name?: string | null;
+  eu_importer_address?: string | null;
+  purchase_order_number?: string | null;
+  invoice_number?: string | null;
   bo_attachment_url: string | null;
   bo_attachment_name: string | null;
   created_at: string;

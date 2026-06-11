@@ -912,11 +912,9 @@ export default function ClientDashboardDetails({
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-teal-900 tracking-tight">{pageTitle}</h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">
-            ID: {client.uuid_number ? client.uuid_number.split('-')[0].toUpperCase() : 'AP-882-2025'}
-          </p>
+          
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-centergap-3">
           {currentUserRole !== 'CLIENT' && (
             <Link href={`/admin/clients/${client.id}/edit`}>
               <Button variant="outline" size="sm" className="bg-white border-slate-200 shadow-xs">

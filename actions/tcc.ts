@@ -19,6 +19,32 @@ import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
 import { getRemainingQuota, getTonnageBandMaxQuota, sumApprovedExports } from '@/lib/quota';
 import { isActiveReachCertificate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 import { canClientEditTccApplication } from '@/lib/tcc-application';
+import { formatErrorMessage } from '@/lib/format-error';
+import type { z } from 'zod';
+
+type TccApplicationInput = z.infer<typeof tccApplicationSchema>;
+
+function resolveEuImporterFields(data: TccApplicationInput) {
+  return {
+    eu_importer_company_name: data.eu_importer_company_name.trim(),
+    eu_importer_address: data.eu_importer_address.trim(),
+    purchase_order_number: data.purchase_order_number.trim(),
+    invoice_number: data.invoice_number?.trim() || null,
+  };
+}
+
+function tccSaveErrorMessage(err: unknown): string {
+  const message = formatErrorMessage(err);
+  if (
+    message.includes('eu_importer') ||
+    message.includes('purchase_order_number') ||
+    message.includes('invoice_number') ||
+    message.includes('PGRST204')
+  ) {
+    return 'Database is missing EU Importer columns. Run the latest database.sql migration in Supabase, then try again.';
+  }
+  return message || 'Failed to save application.';
+}
 
 function parseTccApplicationFormData(formData: FormData) {
   return tccApplicationSchema.safeParse({
@@ -140,13 +166,13 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     }
     const authChem = validation.authChem;
 
-    const [{ data: chemical }, { data: client }] = await Promise.all([
+    const [{ data: chemical }, euImporter] = await Promise.all([
       adminSupabase
         .from('chemicals')
         .select('chemical_name')
         .eq('id', result.data.chemical_id)
         .single(),
-      adminSupabase.from('clients').select('company_name').eq('id', clientId).single(),
+      resolveEuImporterFields(result.data),
     ]);
 
     if (!chemical) return { success: false, error: 'Chemical not found.' };
@@ -172,10 +198,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
         registration_number: result.data.registration_number || null,
         export_date: result.data.export_date,
         remarks: result.data.remarks || null,
-        eu_importer_company_name: result.data.eu_importer_company_name,
-        eu_importer_address: result.data.eu_importer_address,
-        purchase_order_number: result.data.purchase_order_number,
-        invoice_number: result.data.invoice_number || null,
+        ...euImporter,
         status: 'pending',
       })
       .select()
@@ -199,7 +222,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     });
 
     // 5. Notify admins of new pending application
-    const companyLabel = client?.company_name || 'A client';
+    const companyLabel = euImporter.eu_importer_company_name || 'A client';
     await notifyAllAdmins(
       adminSupabase,
       'New TCC application',
@@ -207,11 +230,12 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     );
 
     revalidatePath('/client');
+    revalidatePath('/client/apply');
     revalidatePath('/admin', 'layout');
+    revalidatePath('/admin/approvals');
     return { success: true, message: 'TCC Application submitted. Status: Pending Review.' };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message || 'Failed to submit application.' };
+    return { success: false, error: tccSaveErrorMessage(err) };
   }
 }
 
@@ -281,6 +305,7 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
     }
 
     const resetStatus = ['changes_required', 'modification_requested', 'rejected'].includes(existing.status);
+    const euImporter = resolveEuImporterFields(result.data);
 
     const { error: updateError } = await adminSupabase
       .from('tcc_applications')
@@ -291,10 +316,7 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
         registration_number: result.data.registration_number || null,
         export_date: result.data.export_date,
         remarks: result.data.remarks || null,
-        eu_importer_company_name: result.data.eu_importer_company_name,
-        eu_importer_address: result.data.eu_importer_address,
-        purchase_order_number: result.data.purchase_order_number,
-        invoice_number: result.data.invoice_number || null,
+        ...euImporter,
         ...(resetStatus ? { status: 'pending', rejection_reason: null } : {}),
       })
       .eq('id', applicationId);
@@ -323,11 +345,12 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
     });
 
     revalidatePath('/client');
+    revalidatePath('/client/apply');
     revalidatePath('/admin', 'layout');
+    revalidatePath('/admin/approvals');
     return { success: true, message: 'TCC application updated successfully.' };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message || 'Failed to update application.' };
+    return { success: false, error: tccSaveErrorMessage(err) };
   }
 }
 

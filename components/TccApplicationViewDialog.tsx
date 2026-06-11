@@ -249,6 +249,19 @@ export function TccApplicationViewDialog({
           </span>
         </div>
 
+        <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+            <Building className="h-4 w-4 text-teal-700" />
+            EU Importer Information
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <DetailItem label="Company name">{app.eu_importer_company_name || '—'}</DetailItem>
+            <DetailItem label="Address">{app.eu_importer_address || '—'}</DetailItem>
+            <DetailItem label="Purchase order number">{app.purchase_order_number || '—'}</DetailItem>
+            <DetailItem label="Invoice number">{app.invoice_number || '—'}</DetailItem>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Client submission */}
           <div className="space-y-4">
@@ -285,18 +298,6 @@ export function TccApplicationViewDialog({
               </DetailItem>
               <DetailItem label="Expected export date">
                 {formatDisplayDate(app.export_date)}
-              </DetailItem>
-              <DetailItem label="EU importer company">
-                {app.eu_importer_company_name || app.clients.company_name}
-              </DetailItem>
-              <DetailItem label="EU importer address">
-                {app.eu_importer_address || '—'}
-              </DetailItem>
-              <DetailItem label="Purchase order number">
-                {app.purchase_order_number || '—'}
-              </DetailItem>
-              <DetailItem label="Invoice number">
-                {app.invoice_number || '—'}
               </DetailItem>
               {app.remarks && (
                 <div className="col-span-2">
