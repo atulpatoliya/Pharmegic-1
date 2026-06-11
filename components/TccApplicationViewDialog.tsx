@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { sendCertificateEmailAction, resendCertificateEmailAction } from '@/actions/tcc';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
+import {
+  appendMailSentHistory,
+  parseMailSentHistory,
+  resolveMailSentHistoryFallback,
+} from '@/lib/certificate-mail-history';
+import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
@@ -37,6 +43,7 @@ export interface TccViewCertificate {
   mail_sent_at?: string | null;
   mail_resend_count?: number;
   last_resend_at?: string | null;
+  mail_sent_history?: unknown;
 }
 
 export interface TccViewApplication {
@@ -66,8 +73,8 @@ export interface TccViewApplication {
 }
 
 export type TccEmailDefaults = {
-  adminCcEmails?: string | null;
-  adminBccEmails?: string | null;
+  defaultCcEmails?: string | null;
+  senderEmail?: string | null;
   contactEmails?: string[];
 };
 
@@ -134,17 +141,26 @@ export function TccApplicationViewDialog({
     mail_sent_at: null as string | null,
     mail_resend_count: 0,
     last_resend_at: null as string | null,
+    mail_sent_history: [] as string[],
   });
 
   const cert = app ? resolveCertificate(app) : null;
 
   useEffect(() => {
     if (!cert) return;
+    const history = parseMailSentHistory(cert.mail_sent_history);
     setMailState({
       mail_sent: cert.mail_sent ?? false,
       mail_sent_at: cert.mail_sent_at ?? null,
       mail_resend_count: cert.mail_resend_count ?? 0,
       last_resend_at: cert.last_resend_at ?? null,
+      mail_sent_history:
+        history.length > 0
+          ? history
+          : resolveMailSentHistoryFallback({
+              mail_sent_at: cert.mail_sent_at,
+              last_resend_at: cert.last_resend_at,
+            }),
     });
   }, [
     cert?.id,
@@ -152,6 +168,7 @@ export function TccApplicationViewDialog({
     cert?.mail_sent_at,
     cert?.mail_resend_count,
     cert?.last_resend_at,
+    cert?.mail_sent_history,
   ]);
 
   const mailRecipients = useMemo(() => {
@@ -159,8 +176,8 @@ export function TccApplicationViewDialog({
     return buildCertificateRecipients({
       primaryEmail: app.clients.email,
       contactEmails: emailDefaults?.contactEmails,
-      adminCcEmails: emailDefaults?.adminCcEmails,
-      adminBccEmails: emailDefaults?.adminBccEmails,
+      defaultCcEmails: emailDefaults?.defaultCcEmails,
+      senderEmail: emailDefaults?.senderEmail,
     });
   }, [app?.clients.email, emailDefaults]);
 
@@ -183,6 +200,7 @@ export function TccApplicationViewDialog({
           mail_sent_at: now,
           mail_resend_count: 0,
           last_resend_at: null,
+          mail_sent_history: [now],
         });
         toast.success(res.message || 'Certificate email sent successfully.');
         router.refresh();
@@ -202,6 +220,7 @@ export function TccApplicationViewDialog({
           ...prev,
           mail_resend_count: prev.mail_resend_count + 1,
           last_resend_at: now,
+          mail_sent_history: appendMailSentHistory(prev.mail_sent_history, now),
         }));
         toast.success(res.message || 'Certificate email resent.');
         router.refresh();
@@ -392,19 +411,7 @@ export function TccApplicationViewDialog({
                     <p>
                       <strong>CC:</strong> {formatEmailList(mailRecipients.cc)}
                     </p>
-                    <p>
-                      <strong>BCC:</strong> {formatEmailList(mailRecipients.bcc)}
-                    </p>
-                    {mailState.mail_sent_at && (
-                      <p className="pt-1 border-t border-blue-100 mt-2">
-                        <strong>First sent:</strong> {new Date(mailState.mail_sent_at).toLocaleString()}
-                      </p>
-                    )}
-                    {mailState.mail_resend_count > 0 && mailState.last_resend_at && (
-                      <p>
-                        <strong>Last resent:</strong> {new Date(mailState.last_resend_at).toLocaleString()}
-                      </p>
-                    )}
+                    <CertificateMailHistoryList timestamps={mailState.mail_sent_history} />
                   </div>
                 )}
 

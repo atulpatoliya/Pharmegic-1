@@ -29,6 +29,7 @@ import {
   buildReachCertificatePdfPreviewUrl,
 } from '@/lib/reach-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
+import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
 type ReachCertificatePreviewClientProps = {
   clientId: string;
   chemicalId: string;
@@ -64,8 +65,8 @@ type ReachCertificatePreviewClientProps = {
   mailRecipients: {
     to: string;
     cc: string[];
-    bcc: string[];
   } | null;
+  mailSentHistory: string[];
 };
 
 function formatEmailList(emails: string[]): string {
@@ -80,6 +81,7 @@ export default function ReachCertificatePreviewClient({
   cert,
   defaults,
   mailRecipients,
+  mailSentHistory,
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
   const [isIssuing, startIssueTransition] = useTransition();
@@ -249,19 +251,7 @@ export default function ReachCertificatePreviewClient({
           <p>
             <strong>CC:</strong> {formatEmailList(mailRecipients.cc)}
           </p>
-          <p>
-            <strong>BCC:</strong> {formatEmailList(mailRecipients.bcc)}
-          </p>
-          {cert.mail_sent_at && (
-            <p className="pt-1 border-t border-blue-100 mt-2">
-              <strong>First sent:</strong> {new Date(cert.mail_sent_at).toLocaleString()}
-            </p>
-          )}
-          {cert.mail_resend_count > 0 && cert.last_resend_at && (
-            <p>
-              <strong>Last resent:</strong> {new Date(cert.last_resend_at).toLocaleString()}
-            </p>
-          )}
+          <CertificateMailHistoryList timestamps={mailSentHistory} />
         </div>
       )}
 

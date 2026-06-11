@@ -51,7 +51,7 @@ export async function loadClientProfileData(clientId: string) {
       .select('*, users!internal_notes_author_id_fkey(email)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false }),
-    adminSupabase.from('admin_settings').select('cc_emails, bcc_emails').eq('id', 1).maybeSingle(),
+    adminSupabase.from('admin_settings').select('smtp_from, smtp_cc_default').eq('id', 1).maybeSingle(),
   ]);
 
   const tccHistory = (tccHistoryRaw || []).map((row: { chemicals?: unknown; certificates?: unknown; client_chemicals?: unknown }) => ({
@@ -93,8 +93,8 @@ export async function loadClientProfileData(clientId: string) {
     activityLogs: activityLogs || [],
     internalNotes,
     emailDefaults: {
-      adminCcEmails: adminSettings?.cc_emails ?? null,
-      adminBccEmails: adminSettings?.bcc_emails ?? null,
+      defaultCcEmails: adminSettings?.smtp_cc_default ?? null,
+      senderEmail: adminSettings?.smtp_from ?? null,
       contactEmails: (contacts || [])
         .map((c: { email?: string }) => c.email)
         .filter((email): email is string => Boolean(email)),

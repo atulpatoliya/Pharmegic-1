@@ -9,6 +9,7 @@ import {
 } from '@/lib/tcc-certificate-pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
+import { appendMailSentHistory } from '@/lib/certificate-mail-history';
 import { buildTccSmtpConfig } from '@/lib/certificate-smtp-settings';
 import { tccApplicationSchema } from '@/lib/validations';
 import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
@@ -486,9 +487,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
     // Get SMTP settings from admin_settings
     const { data: settings } = await adminSupabase
       .from('admin_settings')
-      .select(
-        'smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default, cc_emails, bcc_emails'
-      )
+      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default')
       .eq('id', 1)
       .single();
 
@@ -498,8 +497,8 @@ export async function sendCertificateEmailAction(certificateId: string) {
     const recipients = buildCertificateRecipients({
       primaryEmail: cert.clients.email,
       contactEmails,
-      adminCcEmails: settings?.cc_emails,
-      adminBccEmails: settings?.bcc_emails,
+      defaultCcEmails: settings?.smtp_cc_default,
+      senderEmail: settings?.smtp_from,
     });
 
     const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
@@ -509,7 +508,6 @@ export async function sendCertificateEmailAction(certificateId: string) {
     await sendCertEmail({
       to: recipients.to,
       cc: recipients.cc,
-      bcc: recipients.bcc,
       subject: `TCC Certificate Approved — ${cert.certificate_number}`,
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
@@ -528,6 +526,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
         mail_sent: true,
         mail_sent_at: now,
         mail_sent_by: session.userId,
+        mail_sent_history: [now],
       })
       .eq('id', certificateId);
 
@@ -586,9 +585,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
 
     const { data: settings } = await adminSupabase
       .from('admin_settings')
-      .select(
-        'smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default, cc_emails, bcc_emails'
-      )
+      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default')
       .eq('id', 1)
       .single();
 
@@ -598,8 +595,8 @@ export async function resendCertificateEmailAction(certificateId: string) {
     const recipients = buildCertificateRecipients({
       primaryEmail: cert.clients.email,
       contactEmails,
-      adminCcEmails: settings?.cc_emails,
-      adminBccEmails: settings?.bcc_emails,
+      defaultCcEmails: settings?.smtp_cc_default,
+      senderEmail: settings?.smtp_from,
     });
 
     const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
@@ -608,7 +605,6 @@ export async function resendCertificateEmailAction(certificateId: string) {
     await sendCertEmail({
       to: recipients.to,
       cc: recipients.cc,
-      bcc: recipients.bcc,
       subject: `TCC Certificate (Resent) — ${cert.certificate_number}`,
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
@@ -626,6 +622,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
         mail_resend_count: (cert.mail_resend_count || 0) + 1,
         last_resend_at: now,
         last_resend_by: session.userId,
+        mail_sent_history: appendMailSentHistory(cert.mail_sent_history, now),
       })
       .eq('id', certificateId);
 

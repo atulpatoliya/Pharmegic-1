@@ -21,6 +21,7 @@ import {
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
+import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
 
 interface CertificatePreviewClientProps {
   cert: {
@@ -60,9 +61,13 @@ interface CertificatePreviewClientProps {
       };
     } | null;
   };
+  mailSentHistory?: string[];
 }
 
-export default function CertificatePreviewClient({ cert }: CertificatePreviewClientProps) {
+export default function CertificatePreviewClient({
+  cert,
+  mailSentHistory = [],
+}: CertificatePreviewClientProps) {
   const router = useRouter();
   const [isSending, startSendTransition] = useTransition();
   const [isResending, startResendTransition] = useTransition();
@@ -171,18 +176,8 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
       {cert.mail_sent && !isReach && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
-          <div className="text-xs font-medium text-blue-700 space-y-0.5">
-            <p>
-              <strong>First Sent:</strong>{' '}
-              {cert.mail_sent_at ? new Date(cert.mail_sent_at).toLocaleString() : 'Unknown'}
-            </p>
-            {cert.mail_resend_count > 0 && cert.last_resend_at && (
-              <p>
-                <strong>Last Resent:</strong>{' '}
-                {new Date(cert.last_resend_at).toLocaleString()}{' '}
-                <span className="text-blue-500">({cert.mail_resend_count} resend{cert.mail_resend_count > 1 ? 's' : ''})</span>
-              </p>
-            )}
+          <div className="text-xs font-medium text-blue-700 space-y-0.5 w-full">
+            <CertificateMailHistoryList timestamps={mailSentHistory} />
           </div>
         </div>
       )}

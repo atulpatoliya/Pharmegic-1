@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { buildReachCertificateStoredFile } from '@/lib/reach-pdf-data';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
+import { appendMailSentHistory } from '@/lib/certificate-mail-history';
 import { buildRcSmtpConfig } from '@/lib/certificate-smtp-settings';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
@@ -348,7 +349,7 @@ async function fetchReachCertificateMailContext(certificateId: string) {
     adminSupabase
       .from('admin_settings')
       .select(
-        'rc_smtp_host, rc_smtp_port, rc_smtp_user, rc_smtp_pass, rc_smtp_from, rc_smtp_cc_default, cc_emails, bcc_emails'
+        'rc_smtp_host, rc_smtp_port, rc_smtp_user, rc_smtp_pass, rc_smtp_from, rc_smtp_cc_default'
       )
       .eq('id', 1)
       .single(),
@@ -363,8 +364,8 @@ async function fetchReachCertificateMailContext(certificateId: string) {
   const recipients = buildCertificateRecipients({
     primaryEmail: cert.clients.email,
     contactEmails,
-    adminCcEmails: settings?.cc_emails,
-    adminBccEmails: settings?.bcc_emails,
+    defaultCcEmails: settings?.rc_smtp_cc_default,
+    senderEmail: settings?.rc_smtp_from,
   });
 
   const attachment = await downloadReachCertificateAttachment(adminSupabase, cert);
@@ -436,7 +437,6 @@ export async function sendReachCertificateEmailAction(certificateId: string) {
     await sendCertEmail({
       to: recipients.to,
       cc: recipients.cc,
-      bcc: recipients.bcc,
       subject: `REACH Compliance Certificate Issued — ${cert.certificate_number}`,
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
@@ -455,6 +455,7 @@ export async function sendReachCertificateEmailAction(certificateId: string) {
         mail_sent: true,
         mail_sent_at: now,
         mail_sent_by: session.userId,
+        mail_sent_history: [now],
       })
       .eq('id', certificateId);
 
@@ -498,7 +499,6 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
     await sendCertEmail({
       to: recipients.to,
       cc: recipients.cc,
-      bcc: recipients.bcc,
       subject: `REACH Compliance Certificate (Resent) — ${cert.certificate_number}`,
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
@@ -517,6 +517,7 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
         mail_resend_count: (cert.mail_resend_count || 0) + 1,
         last_resend_at: now,
         last_resend_by: session.userId,
+        mail_sent_history: appendMailSentHistory(cert.mail_sent_history, now),
       })
       .eq('id', certificateId);
 

@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS public.certificates (
     mail_resend_count INTEGER NOT NULL DEFAULT 0,
     last_resend_at TIMESTAMP WITH TIME ZONE,
     last_resend_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    mail_sent_history JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -296,6 +297,7 @@ ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_cc_default TE
 
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS mail_sent_history JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Allow trashed status on client_chemicals (existing DBs may have old constraint)
 ALTER TABLE public.client_chemicals DROP CONSTRAINT IF EXISTS client_chemicals_status_check;

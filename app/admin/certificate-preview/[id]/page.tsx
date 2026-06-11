@@ -2,6 +2,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
 import CertificatePreviewClient from '@/components/CertificatePreview';
+import {
+  loadCertificateMailSentHistory,
+  TCC_MAIL_LOG_ACTIONS,
+} from '@/lib/certificate-mail-history';
 
 export const revalidate = 0;
 
@@ -31,6 +35,7 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
       mail_sent_at,
       mail_resend_count,
       last_resend_at,
+      mail_sent_history,
       clients (
         company_name,
         legal_name,
@@ -66,5 +71,9 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
     redirect(`/admin/clients/${cert.client_id}/rc-preview/${cert.chemical_id}`);
   }
 
-  return <CertificatePreviewClient cert={cert as any} />;
+  const mailSentHistory = cert.mail_sent
+    ? await loadCertificateMailSentHistory(adminSupabase, cert.id, cert, TCC_MAIL_LOG_ACTIONS)
+    : [];
+
+  return <CertificatePreviewClient cert={cert as any} mailSentHistory={mailSentHistory} />;
 }

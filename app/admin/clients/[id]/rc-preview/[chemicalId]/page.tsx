@@ -5,6 +5,10 @@ import ReachCertificatePreviewClient from '@/components/ReachCertificatePreviewC
 import { REACH_CERTIFICATE_TYPE, getLastDateOfYear, getTodayDateString } from '@/lib/reach-certificate';
 import { regenerateReachCertificateFile } from '@/actions/reach';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
+import {
+  loadCertificateMailSentHistory,
+  REACH_MAIL_LOG_ACTIONS,
+} from '@/lib/certificate-mail-history';
 
 export const revalidate = 0;
 
@@ -50,7 +54,7 @@ export default async function ReachCertificatePreviewPage({
       adminSupabase
         .from('certificates')
         .select(
-          'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, mail_sent, mail_sent_at, mail_resend_count, last_resend_at'
+          'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
         )
         .eq('client_id', clientId)
         .eq('chemical_id', chemicalId)
@@ -65,7 +69,7 @@ export default async function ReachCertificatePreviewPage({
         .order('created_at', { ascending: false }),
       adminSupabase
         .from('admin_settings')
-        .select('cc_emails, bcc_emails')
+        .select('rc_smtp_from, rc_smtp_cc_default')
         .eq('id', 1)
         .maybeSingle(),
     ]);
@@ -79,12 +83,15 @@ export default async function ReachCertificatePreviewPage({
   }
 
   const contactEmails = (contacts || []).map((c) => c.email).filter(Boolean);
+  const mailSentHistory = cert
+    ? await loadCertificateMailSentHistory(adminSupabase, cert.id, cert, REACH_MAIL_LOG_ACTIONS)
+    : [];
   const mailRecipients = client.email
     ? buildCertificateRecipients({
         primaryEmail: client.email,
         contactEmails,
-        adminCcEmails: adminSettings?.cc_emails,
-        adminBccEmails: adminSettings?.bcc_emails,
+        defaultCcEmails: adminSettings?.rc_smtp_cc_default,
+        senderEmail: adminSettings?.rc_smtp_from,
       })
     : null;
 
@@ -117,6 +124,7 @@ export default async function ReachCertificatePreviewPage({
       cert={cert ?? null}
       defaults={defaults}
       mailRecipients={mailRecipients}
+      mailSentHistory={mailSentHistory}
     />
   );
 }

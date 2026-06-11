@@ -9,15 +9,15 @@ export default async function ApprovalsPage() {
 
   const [applications, { data: adminSettings }] = await Promise.all([
     getTccApplications(supabase, 'all'),
-    supabase.from('admin_settings').select('cc_emails, bcc_emails').eq('id', 1).maybeSingle(),
+    supabase.from('admin_settings').select('smtp_from, smtp_cc_default').eq('id', 1).maybeSingle(),
   ]);
 
   return (
     <ApprovalsDashboard
       initialApplications={applications as any}
       emailDefaults={{
-        adminCcEmails: adminSettings?.cc_emails ?? null,
-        adminBccEmails: adminSettings?.bcc_emails ?? null,
+        defaultCcEmails: adminSettings?.smtp_cc_default ?? null,
+        senderEmail: adminSettings?.smtp_from ?? null,
       }}
     />
   );

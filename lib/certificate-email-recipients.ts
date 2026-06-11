@@ -16,21 +16,28 @@ export function uniqueEmails(emails: string[]): string[] {
   });
 }
 
+export type CertificateMailRecipients = {
+  to: string;
+  cc: string[];
+};
+
+/** Build TO/CC for certificate emails — no BCC. */
 export function buildCertificateRecipients(params: {
   primaryEmail: string;
   contactEmails?: string[];
-  adminCcEmails?: string | null;
-  adminBccEmails?: string | null;
-}) {
+  /** Default CC from TCC/RC SMTP settings tab */
+  defaultCcEmails?: string | null;
+  /** From address on the SMTP account (also CC'd on the email) */
+  senderEmail?: string | null;
+}): CertificateMailRecipients {
+  const to = params.primaryEmail.trim();
+  const toKey = to.toLowerCase();
+
   const cc = uniqueEmails([
     ...(params.contactEmails || []).filter(Boolean),
-    ...parseEmailList(params.adminCcEmails),
-  ]);
-  const bcc = uniqueEmails(parseEmailList(params.adminBccEmails));
+    ...parseEmailList(params.defaultCcEmails),
+    ...(params.senderEmail?.trim() ? [params.senderEmail.trim()] : []),
+  ]).filter((email) => email.toLowerCase() !== toKey);
 
-  return {
-    to: params.primaryEmail,
-    cc,
-    bcc,
-  };
+  return { to, cc };
 }
