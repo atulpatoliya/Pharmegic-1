@@ -1,12 +1,11 @@
 'use client';
 
 import { Button } from './ui/Button';
-import { toast } from '@/store/toast';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import { FormLabel } from './ui/FormLabel';
 import { useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
@@ -17,63 +16,15 @@ export default function LoginForm() {
       ? 'Your session expired. Please sign in again.'
       : errorParam === 'Unauthorized'
         ? 'You are not authorized to access that area.'
-        : '';
+        : errorParam === 'InvalidCredentials'
+          ? 'Invalid email or password.'
+          : '';
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(initialError);
-  const [isPending, startTransition] = useTransition();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    if (!email || !password) {
-      setErrorMsg('Please enter both email and password.');
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            email,
-            password,
-            redirectTo: redirectTo || undefined,
-          }),
-        });
-
-        const data = (await response.json()) as {
-          success?: boolean;
-          error?: string;
-          redirectTo?: string;
-        };
-
-        if (!response.ok || !data.success) {
-          const message = data.error || 'Invalid credentials.';
-          setErrorMsg(message);
-          toast.error(message);
-          return;
-        }
-
-        toast.success('Successfully logged in!');
-        window.location.assign(data.redirectTo || '/login');
-      } catch {
-        const message = 'Unable to sign in right now. Please try again.';
-        setErrorMsg(message);
-        toast.error(message);
-      }
-    });
-  };
+  const [errorMsg] = useState(initialError);
 
   return (
     <div className="w-full max-w-[500px] bg-white rounded-2xl shadow-xl border border-slate-100 p-8 shadow-emerald-900/50" suppressHydrationWarning>
-
-      {/* Brand Header */}
       <div className="flex flex-col items-center mb-8">
         <BrandLogo variant="full" href="/" className="mb-10" />
         <h1 className="text-3xl font-bold text-center mb-2">Welcome to Pharmegic</h1>
@@ -89,7 +40,9 @@ export default function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form action="/api/auth/login" method="POST" className="space-y-5">
+        {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
+
         <div className="w-full flex flex-col gap-1.5">
           <FormLabel required className="flex items-center gap-1.5 normal-case">
             <Mail className="h-3.5 w-3.5 text-slate-400" /> Corporate Email
@@ -97,12 +50,11 @@ export default function LoginForm() {
           <input
             type="email"
             id="login-email"
+            name="email"
             placeholder="officer@company.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={isPending}
+            autoComplete="email"
             required
-            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary transition-colors"
           />
         </div>
 
@@ -114,26 +66,24 @@ export default function LoginForm() {
             <input
               type={showPassword ? 'text' : 'password'}
               id="login-password"
+              name="password"
               placeholder="••••••••"
-              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isPending}
+              autoComplete="current-password"
               required
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary transition-colors"
             />
             <button
               type="button"
               onClick={() => setShowPassword((value) => !value)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              disabled={isPending}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
         </div>
 
-        <Button type="submit" id="login-submit" className="w-full h-11 text-sm font-bold" isLoading={isPending}>
+        <Button type="submit" id="login-submit" className="w-full h-11 text-sm font-bold">
           Authenticate Session
         </Button>
       </form>

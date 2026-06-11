@@ -8,7 +8,7 @@ export default async function ClientLayout({ children }: { children: React.React
   const session = await getSession();
 
   if (!session) {
-    redirectToLoginPage('SessionExpired', '/client');
+    redirectToLoginPage(undefined, '/client');
   }
   if (session.role !== 'CLIENT') {
     redirectToRoleHome(session.role);

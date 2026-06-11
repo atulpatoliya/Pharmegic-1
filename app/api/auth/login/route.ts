@@ -5,27 +5,58 @@ import { SESSION_COOKIE_OPTIONS } from '@/lib/auth/cookie-options';
 import { resolveLoginRedirect } from '@/lib/auth/resolve-login-redirect';
 import { signSessionToken } from '@/lib/auth/sign-session';
 
-export async function POST(request: NextRequest) {
-  let body: { email?: string; password?: string; redirectTo?: string };
+async function readLoginBody(request: NextRequest) {
+  const contentType = request.headers.get('content-type') || '';
 
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ success: false, error: 'Invalid request body.' }, { status: 400 });
+  if (contentType.includes('application/json')) {
+    const body = await request.json();
+    return {
+      email: String(body.email ?? ''),
+      password: String(body.password ?? ''),
+      redirectTo: String(body.redirectTo ?? ''),
+    };
   }
 
-  const email = String(body.email ?? '');
-  const password = String(body.password ?? '');
+  const formData = await request.formData();
+  return {
+    email: String(formData.get('email') ?? ''),
+    password: String(formData.get('password') ?? ''),
+    redirectTo: String(formData.get('redirectTo') ?? ''),
+  };
+}
+
+function loginFailureRedirect(request: NextRequest, redirectTo: string, message: string) {
+  const loginUrl = new URL('/login', request.url);
+  loginUrl.searchParams.set('error', message);
+  if (redirectTo) {
+    loginUrl.searchParams.set('redirectTo', redirectTo);
+  }
+  return NextResponse.redirect(loginUrl);
+}
+
+export async function POST(request: NextRequest) {
+  let email = '';
+  let password = '';
+  let redirectTo = '';
+
+  try {
+    const body = await readLoginBody(request);
+    email = body.email;
+    password = body.password;
+    redirectTo = body.redirectTo;
+  } catch {
+    return loginFailureRedirect(request, '', 'InvalidCredentials');
+  }
 
   const auth = await authenticateUser(email, password);
   if (!auth.ok) {
-    return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
+    return loginFailureRedirect(request, redirectTo, 'InvalidCredentials');
   }
 
-  const redirectTo = resolveLoginRedirect(auth.session.role, body.redirectTo);
+  const target = resolveLoginRedirect(auth.session.role, redirectTo);
   const token = await signSessionToken(auth.session);
 
-  const response = NextResponse.json({ success: true, redirectTo });
+  const response = NextResponse.redirect(new URL(target, request.url));
   response.cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
   return response;
 }

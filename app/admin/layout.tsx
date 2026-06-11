@@ -8,7 +8,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await getSession();
 
   if (!session) {
-    redirectToLoginPage('SessionExpired', '/admin');
+    redirectToLoginPage(undefined, '/admin');
   }
 
   if (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN') {
