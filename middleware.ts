@@ -24,16 +24,33 @@ function redirectToRoleHome(request: NextRequest, role: string) {
   return redirectToLogin(request, 'error=Unauthorized', true);
 }
 
-async function readSessionFromRequest(request: NextRequest) {
+type SessionReadResult =
+  | { status: 'ok'; session: { role?: string; userId?: string; email?: string } }
+  | { status: 'missing' }
+  | { status: 'invalid' };
+
+async function readSessionFromRequest(request: NextRequest): Promise<SessionReadResult> {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+  if (!token) return { status: 'missing' };
 
   try {
     const { payload } = await jwtVerify(token, getAuthSecret());
-    return payload as { role?: string; userId?: string; email?: string };
+    return {
+      status: 'ok',
+      session: payload as { role?: string; userId?: string; email?: string },
+    };
   } catch {
-    return null;
+    return { status: 'invalid' };
   }
+}
+
+function requireSession(
+  request: NextRequest,
+  result: SessionReadResult
+): NextResponse | null {
+  if (result.status === 'ok') return null;
+  const clearCookie = result.status === 'invalid';
+  return redirectToLogin(request, 'error=SessionExpired', clearCookie);
 }
 
 export async function middleware(request: NextRequest) {
@@ -52,11 +69,10 @@ export async function middleware(request: NextRequest) {
 
   // Protected admin routes
   if (pathname.startsWith('/admin')) {
-    const session = await readSessionFromRequest(request);
-    if (!session) {
-      return redirectToLogin(request, 'error=SessionExpired', true);
-    }
-    const role = session.role as string;
+    const result = await readSessionFromRequest(request);
+    const denied = requireSession(request, result);
+    if (denied || result.status !== 'ok') return denied!;
+    const role = result.session.role as string;
     if (!ADMIN_ROLES.includes(role)) {
       return redirectToRoleHome(request, role);
     }
@@ -65,11 +81,10 @@ export async function middleware(request: NextRequest) {
 
   // Protected client routes
   if (pathname.startsWith('/client')) {
-    const session = await readSessionFromRequest(request);
-    if (!session) {
-      return redirectToLogin(request, 'error=SessionExpired', true);
-    }
-    const role = session.role as string;
+    const result = await readSessionFromRequest(request);
+    const denied = requireSession(request, result);
+    if (denied || result.status !== 'ok') return denied!;
+    const role = result.session.role as string;
     if (role !== CLIENT_ROLE) {
       return redirectToRoleHome(request, role);
     }
@@ -78,9 +93,9 @@ export async function middleware(request: NextRequest) {
 
   // Root — redirect based on session
   if (pathname === '/') {
-    const session = await readSessionFromRequest(request);
-    if (session) {
-      const role = session.role as string;
+    const result = await readSessionFromRequest(request);
+    if (result.status === 'ok') {
+      const role = result.session.role as string;
       if (ADMIN_ROLES.includes(role)) {
         return NextResponse.redirect(new URL('/admin', request.url));
       }
@@ -88,7 +103,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/client', request.url));
       }
     }
-    return redirectToLogin(request, undefined, true);
+    return redirectToLogin(request, undefined, result.status === 'invalid');
   }
 
   return NextResponse.next();

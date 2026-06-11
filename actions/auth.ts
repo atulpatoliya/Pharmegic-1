@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession, destroySession } from '@/lib/auth/session';
 import { loginSchema } from '@/lib/validations';
+import { redirect } from 'next/navigation';
 
 // ============================================================================
 // LOGIN
@@ -41,7 +42,7 @@ export async function login(prevState: unknown, formData: FormData) {
     return { success: false, error: 'Invalid email or password.' };
   }
 
-  // 4. Create session cookie
+  // 4. Create session cookie, then server redirect so the browser receives Set-Cookie before navigation
   await createSession({
     userId: user.id,
     email: user.email,
@@ -49,7 +50,15 @@ export async function login(prevState: unknown, formData: FormData) {
     clientId: user.client_id ?? null,
   });
 
-  return { success: true, role: user.role };
+  const redirectTo = String(formData.get('redirectTo') ?? '').trim();
+  if (redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
+    redirect(redirectTo);
+  }
+
+  if (user.role === 'CLIENT') {
+    redirect('/client');
+  }
+  redirect('/admin');
 }
 
 // ============================================================================

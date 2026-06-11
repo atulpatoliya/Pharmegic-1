@@ -7,11 +7,10 @@ import { toast } from '@/store/toast';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import { FormLabel } from './ui/FormLabel';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
 export default function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '';
   const errorParam = searchParams.get('error');
@@ -40,23 +39,19 @@ export default function LoginForm() {
     const formData = new FormData();
     formData.append('email', email);
     formData.append('password', password);
+    if (redirectTo) {
+      formData.append('redirectTo', redirectTo);
+    }
 
     startTransition(async () => {
-      const res = await login(null, formData);
-      if (!res.success) {
-        setErrorMsg(res.error || 'Invalid credentials.');
-        toast.error(res.error || 'Login failed.');
-      } else {
-        toast.success('Successfully logged in!');
-        router.refresh();
-
-        if (redirectTo) {
-          router.push(redirectTo);
-        } else if (res.role === 'MASTER_ADMIN' || res.role === 'SUPER_ADMIN') {
-          router.push('/admin');
-        } else {
-          router.push('/client');
+      try {
+        const res = await login(null, formData);
+        if (!res?.success) {
+          setErrorMsg(res?.error || 'Invalid credentials.');
+          toast.error(res?.error || 'Login failed.');
         }
+      } catch {
+        // Successful login — server action redirect handles navigation
       }
     });
   };
