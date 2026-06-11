@@ -2,6 +2,7 @@
 
 import { createClientAction } from '@/actions/clients';
 import { formatErrorMessage } from '@/lib/format-error';
+import { formatMobileNumberInput, getMobileNumberError } from '@/lib/mobile-number';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { ModalErrorBox } from './ui/ModalErrorBox';
@@ -59,14 +60,14 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
   };
 
   const handlePhoneChange = (value: string) => {
-    setProfile((p) => ({ ...p, phone: value }));
-    if (!value) {
-      setFieldErrors((e) => ({ ...e, phone: 'Mobile number is required' }));
-    } else if (!/^[+\d][\d\s\-().]{6,19}$/.test(value)) {
-      setFieldErrors((e) => ({ ...e, phone: 'Enter a valid mobile number (digits only)' }));
-    } else {
-      setFieldErrors((e) => ({ ...e, phone: undefined }));
-    }
+    const formatted = formatMobileNumberInput(value);
+    setProfile((p) => ({ ...p, phone: formatted }));
+    setFieldErrors((e) => ({ ...e, phone: getMobileNumberError(formatted, true) }));
+  };
+
+  const handleContactPhoneChange = (value: string) => {
+    const formatted = formatMobileNumberInput(value);
+    setTempContact((contact) => ({ ...contact, phone: formatted }));
   };
 
   const [tempContact, setTempContact] = useState({
@@ -85,7 +86,7 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
     if (!profile.email) return 'Primary contact email is required';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) return 'Invalid email format';
     if (!profile.password || profile.password.length < 6) return 'Password must be at least 6 characters';
-    if (!profile.phone) return 'Primary contact mobile number is required';
+    if (getMobileNumberError(profile.phone, true)) return 'Enter a valid primary contact mobile number';
     if (!profile.address.trim()) return 'Address is required';
     if (!profile.city.trim()) return 'City is required';
     if (!profile.state.trim()) return 'State is required';
@@ -102,6 +103,11 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tempContact.email)) {
       setContactError('Invalid contact email format.');
+      return;
+    }
+
+    if (tempContact.phone && getMobileNumberError(tempContact.phone)) {
+      setContactError('Enter a valid mobile number (e.g. +91 123 456 7890).');
       return;
     }
 
@@ -213,6 +219,7 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
               placeholder="jane@company.com"
               value={profile.email}
               onChange={(e) => handleEmailChange(e.target.value)}
+              autoComplete="off"
               required
             />
             {fieldErrors.email && (
@@ -224,9 +231,11 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
           <div className="w-full flex flex-col gap-1">
             <Input
               label="Mobile Number"
-              placeholder="+90 532 123 4567"
+              placeholder="+91 123 456 7890"
               value={profile.phone}
               onChange={(e) => handlePhoneChange(e.target.value)}
+              inputMode="tel"
+              autoComplete="tel"
               required
             />
             {fieldErrors.phone && (
@@ -240,6 +249,15 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                id="client-initial-password"
+                name="client-initial-password"
+                autoComplete="new-password"
+                data-1p-ignore
+                data-lpignore="true"
+                readOnly
+                onFocus={(e) => {
+                  e.currentTarget.readOnly = false;
+                }}
                 placeholder="Create a temporary password"
                 value={profile.password}
                 onChange={(e) => setProfile({ ...profile, password: e.target.value })}
@@ -294,9 +312,11 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
           />
           <Input
             label="Mobile Number"
-            placeholder="+90 532 123 4567"
+            placeholder="+91 123 456 7890"
             value={tempContact.phone}
-            onChange={(e) => setTempContact({ ...tempContact, phone: e.target.value })}
+            onChange={(e) => handleContactPhoneChange(e.target.value)}
+            inputMode="tel"
+            autoComplete="tel"
           />
           <Input
             label="Position / Role"

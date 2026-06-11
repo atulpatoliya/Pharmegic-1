@@ -6,6 +6,7 @@ import { updateClientAction } from '@/actions/clients';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { toast } from '@/store/toast';
+import { formatMobileNumberInput, getMobileNumberError } from '@/lib/mobile-number';
 import { useLayoutStore } from '@/store/layout';
 import { Briefcase, AlertCircle } from 'lucide-react';
 
@@ -58,7 +59,7 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
     primary_contact_last_name: client.primary_contact_last_name || '',
     email: client.email || '',
     owner_name: client.owner_name || '',
-    phone: client.phone || '',
+    phone: client.phone ? formatMobileNumberInput(client.phone) : '',
     cc_emails: client.cc_emails || '',
     cc_phones: client.cc_phones || '',
     address: client.address || '',
@@ -103,6 +104,10 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
     }
     if (!editProfile.country.trim()) {
       setEditError('Country is required.');
+      return;
+    }
+    if (editProfile.phone && getMobileNumberError(editProfile.phone)) {
+      setEditError('Enter a valid primary contact mobile number (e.g. +91 123 456 7890).');
       return;
     }
 
@@ -164,8 +169,13 @@ export default function EditClientClient({ client, chemicals, initialChemicalIds
           />
           <Input
             label="Primary Contact Mobile Number"
+            placeholder="+91 123 456 7890"
             value={editProfile.phone}
-            onChange={(e) => setEditProfile({ ...editProfile, phone: e.target.value })}
+            onChange={(e) =>
+              setEditProfile({ ...editProfile, phone: formatMobileNumberInput(e.target.value) })
+            }
+            inputMode="tel"
+            autoComplete="tel"
           />
           <Input
             label="CC Email (comma-separated)"
