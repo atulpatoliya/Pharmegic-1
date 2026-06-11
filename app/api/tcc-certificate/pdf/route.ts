@@ -3,16 +3,15 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import {
   buildTccCertificatePdfInputFromCert,
-  resolveTccCertificateDownloadFile,
+  resolveTccCertificatePdfBuffer,
 } from '@/lib/tcc-certificate-pdf';
 
-function fileResponse(buffer: Buffer, fileName: string, contentType: string, format: 'pdf' | 'docx') {
+function pdfResponse(buffer: Buffer, fileName: string) {
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
-      'Content-Type': contentType,
+      'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${fileName}"`,
       'Cache-Control': 'no-store',
-      'X-Certificate-Format': format,
     },
   });
 }
@@ -83,8 +82,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const input = buildTccCertificatePdfInputFromCert(cert as never);
-    const file = await resolveTccCertificateDownloadFile(adminSupabase, input);
-    return fileResponse(file.buffer, file.fileName, file.contentType, file.format);
+    const pdfBuffer = await resolveTccCertificatePdfBuffer(adminSupabase, input);
+    return pdfResponse(pdfBuffer, `${cert.certificate_number}.pdf`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Certificate download failed.';
     return NextResponse.json({ error: message }, { status: 500 });

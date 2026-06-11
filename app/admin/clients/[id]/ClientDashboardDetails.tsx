@@ -38,10 +38,14 @@ import {
 } from '@/lib/reach-certificate';
 import { deleteReachCertificateAction } from '@/actions/reach';
 import {
+  buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
-  buildReachCertificatePdfPreviewUrl,
 } from '@/lib/reach-certificate-download';
-import { buildTccCertificatePdfDownloadUrl } from '@/lib/tcc-certificate-download';
+import {
+  buildTccCertificateDocxPreviewUrl,
+  buildTccCertificatePdfDownloadUrl,
+} from '@/lib/tcc-certificate-download';
+import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { processTccAction } from '@/actions/tcc';
 import { TccApplicationViewDialog, type TccEmailDefaults, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
@@ -950,7 +954,7 @@ export default function ClientDashboardDetails({
                         {cc.chemicals?.ec_number || 'N/A'}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-[11px] font-bold">
+                        <span className="px-2.5 py-1 text-slate-600 rounded-full text-[11px] font-bold">
                           {cc.chemicals?.tonnage_band || '-'}
                         </span>
                       </td>
@@ -974,22 +978,19 @@ export default function ClientDashboardDetails({
                       </td>
                       <td className="px-6 py-4">
                         {reachValid ? (
-                          <div className="space-y-1">
+                          <div className="flex items-center gap-2">
                             <Badge variant="success" className="text-[10px] uppercase font-bold flex items-center gap-1 w-fit">
                               <ShieldCheck className="h-3 w-3" /> Valid
                             </Badge>
-                            <div className="text-[10px] text-slate-500 font-medium" suppressHydrationWarning>
-                              Until {reachCert?.expires_at ? new Date(reachCert.expires_at).toLocaleDateString('en-GB') : 'N/A'}
-                            </div>
-                            {reachCert?.id && (
-                              <a
-                                href={buildReachCertificatePdfDownloadUrl(reachCert.id)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] font-bold text-teal-700 hover:underline"
+                            {reachCert?.id && cc.chemical_id && (
+                              <Link
+                                href={`/admin/clients/${client.id}/rc-preview/${cc.chemical_id}`}
+                                title="View certificate"
                               >
-                                View PDF
-                              </a>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-teal-700 hover:bg-teal-50">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </Link>
                             )}
                           </div>
                         ) : (
@@ -1219,16 +1220,15 @@ export default function ClientDashboardDetails({
                       <td className="px-6 py-4 text-center">
                         <div className="flex justify-center gap-2">
                           {cert.id && (
-                            <a
-                              href={buildReachCertificatePdfDownloadUrl(cert.id)}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <CertificatePdfDownloadLink
+                              pdfUrl={buildReachCertificatePdfDownloadUrl(cert.id)}
+                              docxUrl={buildReachCertificateDocxPreviewUrl(cert.id)}
+                              fileName={`${cert.certificate_number || 'reach-certificate'}.pdf`}
                               title="Download PDF"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                             >
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </a>
+                              <Download className="h-4 w-4" />
+                            </CertificatePdfDownloadLink>
                           )}
                           {currentUserRole !== 'CLIENT' && cert.chemical_id && (
                             <Link href={`/admin/clients/${client.id}/rc-preview/${cert.chemical_id}`} title="Preview certificate">
@@ -1393,16 +1393,15 @@ export default function ClientDashboardDetails({
                             <Eye className="h-4 w-4" />
                           </Button>
                           {cert?.id && app.status === 'approved' && (
-                            <a
-                              href={buildTccCertificatePdfDownloadUrl(cert.id)}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <CertificatePdfDownloadLink
+                              pdfUrl={buildTccCertificatePdfDownloadUrl(cert.id)}
+                              docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)}
+                              fileName={`${cert.certificate_number || 'tcc-certificate'}.pdf`}
                               title="Download certificate PDF"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                             >
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </a>
+                              <Download className="h-4 w-4" />
+                            </CertificatePdfDownloadLink>
                           )}
                         </div>
                       </td>

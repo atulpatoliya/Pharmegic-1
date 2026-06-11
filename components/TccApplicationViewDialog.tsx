@@ -25,6 +25,7 @@ import {
   buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
+import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { toast } from '@/store/toast';
 
 export interface TccViewCertificate {
@@ -341,15 +342,15 @@ export function TccApplicationViewDialog({
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <a
-                      href={buildTccCertificatePdfDownloadUrl(cert.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                    <CertificatePdfDownloadLink
+                      pdfUrl={buildTccCertificatePdfDownloadUrl(cert.id)}
+                      docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)}
+                      fileName={`${cert.certificate_number}.pdf`}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline disabled:opacity-60"
                     >
                       <Download className="h-3.5 w-3.5" />
                       Download PDF
-                    </a>
+                    </CertificatePdfDownloadLink>
                     {!mailState.mail_sent ? (
                       <Button
                         onClick={handleSendMail}

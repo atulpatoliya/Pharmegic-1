@@ -13,9 +13,14 @@ import {
 import Link from 'next/link';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import {
+  buildReachCertificateDocxPreviewUrl,
+  buildReachCertificatePdfDownloadUrl,
+} from '@/lib/reach-certificate-download';
+import {
   buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
+import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 
 interface CertificatePreviewClientProps {
   cert: {
@@ -122,14 +127,22 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Download */}
-          <a
-            href={buildTccCertificatePdfDownloadUrl(cert.id)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+          <CertificatePdfDownloadLink
+            pdfUrl={
+              isReach
+                ? buildReachCertificatePdfDownloadUrl(cert.id)
+                : buildTccCertificatePdfDownloadUrl(cert.id)
+            }
+            docxUrl={
+              isReach
+                ? buildReachCertificateDocxPreviewUrl(cert.id)
+                : buildTccCertificateDocxPreviewUrl(cert.id)
+            }
+            fileName={`${cert.certificate_number}.pdf`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-60"
           >
             <Download className="h-4 w-4" /> Download PDF
-          </a>
+          </CertificatePdfDownloadLink>
 
           {/* Send / Resend — TCC only */}
           {!isReach && (

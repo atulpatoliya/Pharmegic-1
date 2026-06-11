@@ -15,7 +15,15 @@ import {
   ExternalLink,
   FlaskConical
 } from 'lucide-react';
-import { resolveReachCertificateDownloadUrl } from '@/lib/reach-certificate-download';
+import {
+  buildReachCertificateDocxPreviewUrl,
+  buildReachCertificatePdfDownloadUrl,
+} from '@/lib/reach-certificate-download';
+import {
+  buildTccCertificateDocxPreviewUrl,
+  buildTccCertificatePdfDownloadUrl,
+} from '@/lib/tcc-certificate-download';
+import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 
 interface Certificate {
   id: string;
@@ -205,14 +213,22 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
                     <td className="p-4">{getStatusBadge(cert.status)}</td>
                     <td className="p-4 text-right">
                       <div className="inline-flex items-center gap-2">
-                        <a
-                          href={resolveReachCertificateDownloadUrl(cert)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-lg transition-colors border border-emerald-100"
+                        <CertificatePdfDownloadLink
+                          pdfUrl={
+                            cert.type === 'TCC'
+                              ? buildTccCertificatePdfDownloadUrl(cert.id)
+                              : buildReachCertificatePdfDownloadUrl(cert.id)
+                          }
+                          docxUrl={
+                            cert.type === 'TCC'
+                              ? buildTccCertificateDocxPreviewUrl(cert.id)
+                              : buildReachCertificateDocxPreviewUrl(cert.id)
+                          }
+                          fileName={`${cert.certificate_number}.pdf`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-lg transition-colors border border-emerald-100 disabled:opacity-60"
                         >
                           <Download className="h-3.5 w-3.5" /> PDF
-                        </a>
+                        </CertificatePdfDownloadLink>
                         <a
                           href={`/verify/${cert.certificate_number}`}
                           target="_blank"

@@ -23,7 +23,12 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
-import { buildReachCertificatePdfDownloadUrl, buildReachCertificatePdfPreviewUrl } from '@/lib/reach-certificate-download';
+import {
+  buildReachCertificateDocxPreviewUrl,
+  buildReachCertificatePdfDownloadUrl,
+  buildReachCertificatePdfPreviewUrl,
+} from '@/lib/reach-certificate-download';
+import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 type ReachCertificatePreviewClientProps = {
   clientId: string;
   chemicalId: string;
@@ -98,7 +103,7 @@ export default function ReachCertificatePreviewClient({
     return `/api/reach-certificate/docx?${params.toString()}`;
   }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate]);
 
-  const downloadHref = cert
+  const downloadPdfUrl = cert
     ? buildReachCertificatePdfDownloadUrl(cert.id)
     : buildReachCertificatePdfPreviewUrl({
         clientId,
@@ -107,6 +112,12 @@ export default function ReachCertificatePreviewClient({
         issuedDate,
         validatedDate,
       });
+  const downloadDocxUrl = cert
+    ? buildReachCertificateDocxPreviewUrl(cert.id)
+    : docxPreviewUrl;
+  const downloadFileName = cert
+    ? `${cert.certificate_number}.pdf`
+    : `RC-preview-${chemicalId.slice(0, 8)}.pdf`;
   const downloadLabel = 'Download PDF';
 
   const backHref = `/admin/clients/${clientId}/rc-certificates`;
@@ -190,15 +201,14 @@ export default function ReachCertificatePreviewClient({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <a
-            href={downloadHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            download
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+          <CertificatePdfDownloadLink
+            pdfUrl={downloadPdfUrl}
+            docxUrl={downloadDocxUrl}
+            fileName={downloadFileName}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-60"
           >
             <Download className="h-4 w-4" /> {downloadLabel}
-          </a>
+          </CertificatePdfDownloadLink>
 
           {!isPending && cert && (
             <>

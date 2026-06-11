@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { getLastDateOfYear, getTodayDateString, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
-import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
+import { resolveReachCertificatePdfBuffer } from '@/lib/reach-certificate-pdf';
 
-function fileResponse(buffer: Buffer, fileName: string, contentType: string, format: 'pdf' | 'docx') {
+function pdfResponse(buffer: Buffer, fileName: string) {
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
-      'Content-Type': contentType,
+      'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="${fileName}"`,
       'Cache-Control': 'no-store',
-      'X-Certificate-Format': format,
     },
   });
 }
@@ -84,7 +83,7 @@ export async function GET(request: NextRequest) {
       : getLastDateOfYear();
 
     try {
-      const file = await resolveReachCertificateDownloadFile(adminSupabase, {
+      const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
         certificateNumber: cert.certificate_number,
         registrationNumber: cert.registration_number?.trim() || '—',
         issuedDate,
@@ -93,7 +92,7 @@ export async function GET(request: NextRequest) {
         chemical: chemicalRecord,
       });
 
-      return fileResponse(file.buffer, file.fileName, file.contentType, file.format);
+      return pdfResponse(pdfBuffer, `${cert.certificate_number}.pdf`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Certificate download failed.';
       return NextResponse.json({ error: message }, { status: 500 });
@@ -166,7 +165,7 @@ export async function GET(request: NextRequest) {
   const certNumber = existingCert?.certificate_number || `RC-preview-${chemicalId.slice(0, 8)}`;
 
   try {
-    const file = await resolveReachCertificateDownloadFile(adminSupabase, {
+    const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
       certificateNumber: certNumber,
       registrationNumber,
       issuedDate,
@@ -175,7 +174,7 @@ export async function GET(request: NextRequest) {
       chemical,
     });
 
-    return fileResponse(file.buffer, file.fileName, file.contentType, file.format);
+    return pdfResponse(pdfBuffer, `${certNumber}.pdf`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Certificate download failed.';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -13,7 +13,11 @@ import { TableDateRangeFilter, type DateRangeValue } from './ui/TableDateRangeFi
 import { TableNumberRangeFilter, type NumberRangeValue } from './ui/TableNumberRangeFilter';
 import { matchesDateRange, formatDisplayDate } from '@/lib/date-filter';
 import { matchesNumberRange } from '@/lib/number-filter';
-import { buildTccCertificatePdfDownloadUrl } from '@/lib/tcc-certificate-download';
+import {
+  buildTccCertificateDocxPreviewUrl,
+  buildTccCertificatePdfDownloadUrl,
+} from '@/lib/tcc-certificate-download';
+import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import type { TccEmailDefaults } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
 import {
@@ -503,15 +507,15 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                             View
                           </Button>
                           {app.status === 'approved' && cert?.id && (
-                            <a
-                              href={buildTccCertificatePdfDownloadUrl(cert.id)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 h-8 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-md transition-colors border border-emerald-100"
+                            <CertificatePdfDownloadLink
+                              pdfUrl={buildTccCertificatePdfDownloadUrl(cert.id)}
+                              docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)}
+                              fileName={`${cert.certificate_number}.pdf`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 h-8 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-md transition-colors border border-emerald-100 disabled:opacity-60"
                             >
                               <Download className="h-3.5 w-3.5" />
                               PDF
-                            </a>
+                            </CertificatePdfDownloadLink>
                           )}
                           {isAwaitingReview(app.status) && (
                             <Badge variant="warning" className="text-[10px] py-0.5">

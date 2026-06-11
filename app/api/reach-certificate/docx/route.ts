@@ -8,21 +8,118 @@ import {
 } from '@/services/reach-certificate-docx';
 import { getLastDateOfYear, getTodayDateString, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 
+function docxResponse(buffer: Buffer, fileName: string) {
+  return new NextResponse(new Uint8Array(buffer), {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `inline; filename="${fileName}"`,
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
-  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
+  const certificateId = searchParams.get('certificateId');
+  const adminSupabase = createAdminClient();
+
+  if (certificateId) {
+    const { data: cert, error } = await adminSupabase
+      .from('certificates')
+      .select(
+        `
+        id,
+        certificate_number,
+        registration_number,
+        issued_at,
+        expires_at,
+        client_id,
+        type,
+        clients (
+          company_name,
+          uuid_number,
+          address,
+          city,
+          state,
+          postal_code,
+          country
+        ),
+        chemicals (
+          chemical_name,
+          cas_number,
+          ec_number,
+          tonnage_band
+        )
+      `
+      )
+      .eq('id', certificateId)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .single();
+
+    if (error || !cert) {
+      return NextResponse.json({ error: 'RC certificate not found.' }, { status: 404 });
+    }
+
+    const clientRecord = Array.isArray(cert.clients) ? cert.clients[0] : cert.clients;
+    const chemicalRecord = Array.isArray(cert.chemicals) ? cert.chemicals[0] : cert.chemicals;
+
+    if (!clientRecord || !chemicalRecord) {
+      return NextResponse.json({ error: 'RC certificate not found.' }, { status: 404 });
+    }
+
+    const isAdmin = session.role === 'MASTER_ADMIN' || session.role === 'SUPER_ADMIN';
+    const isOwner = session.role === 'CLIENT' && session.clientId === cert.client_id;
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const issuedDate = cert.issued_at ? cert.issued_at.split('T')[0] : getTodayDateString();
+    const validatedDate = cert.expires_at
+      ? cert.expires_at.split('T')[0]
+      : getLastDateOfYear();
+
+    try {
+      const address = buildReachAddressLines(clientRecord);
+      const docxBuffer = generateReachCertificateDocx({
+        companyName: clientRecord.company_name,
+        addressLine1: address.line1,
+        addressLine2: address.line2,
+        addressLine3: address.line3,
+        chemicalName: chemicalRecord.chemical_name,
+        ecNumber: chemicalRecord.ec_number || '—',
+        casNumber: chemicalRecord.cas_number,
+        registrationNumber: cert.registration_number?.trim() || '—',
+        tonnageBand: chemicalRecord.tonnage_band || '—',
+        uuidNumber: clientRecord.uuid_number || '—',
+        issuedDate: formatReachCertDate(issuedDate),
+        validatedDate: formatReachCertDate(validatedDate),
+      });
+
+      return docxResponse(docxBuffer, `${cert.certificate_number}.docx`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'DOCX generation failed.';
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  if (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const clientId = searchParams.get('clientId');
   const chemicalId = searchParams.get('chemicalId');
 
   if (!clientId || !chemicalId) {
-    return NextResponse.json({ error: 'clientId and chemicalId are required.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'certificateId or clientId and chemicalId are required.' },
+      { status: 400 }
+    );
   }
-
-  const adminSupabase = createAdminClient();
 
   const [{ data: client }, { data: chemical }, { data: clientChem }, { data: existingCert }] =
     await Promise.all([
@@ -90,14 +187,7 @@ export async function GET(request: NextRequest) {
       validatedDate: formatReachCertDate(validatedDate),
     });
 
-    return new NextResponse(new Uint8Array(docxBuffer), {
-      headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': 'inline; filename="reach-certificate-preview.docx"',
-        'Cache-Control': 'no-store',
-      },
-    });
+    return docxResponse(docxBuffer, 'reach-certificate-preview.docx');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'DOCX generation failed.';
     return NextResponse.json({ error: message }, { status: 500 });
