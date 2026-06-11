@@ -5,11 +5,23 @@ import { SESSION_COOKIE, getAuthSecret } from '@/lib/auth/constants';
 const ADMIN_ROLES = ['SUPER_ADMIN', 'MASTER_ADMIN'];
 const CLIENT_ROLE = 'CLIENT';
 
-function redirectToLogin(request: NextRequest, query?: string) {
+function redirectToLogin(request: NextRequest, query?: string, clearCookie = false) {
   const path = query ? `/login?${query}` : '/login';
   const response = NextResponse.redirect(new URL(path, request.url));
-  response.cookies.delete(SESSION_COOKIE);
+  if (clearCookie) {
+    response.cookies.delete(SESSION_COOKIE);
+  }
   return response;
+}
+
+function redirectToRoleHome(request: NextRequest, role: string) {
+  if (ADMIN_ROLES.includes(role)) {
+    return NextResponse.redirect(new URL('/admin', request.url));
+  }
+  if (role === CLIENT_ROLE) {
+    return NextResponse.redirect(new URL('/client', request.url));
+  }
+  return redirectToLogin(request, 'error=Unauthorized', true);
 }
 
 async function readSessionFromRequest(request: NextRequest) {
@@ -24,7 +36,7 @@ async function readSessionFromRequest(request: NextRequest) {
   }
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes — always accessible (do not auto-bounce /login → /admin; layout validates DB user)
@@ -42,11 +54,11 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith('/admin')) {
     const session = await readSessionFromRequest(request);
     if (!session) {
-      return redirectToLogin(request);
+      return redirectToLogin(request, 'error=SessionExpired', true);
     }
     const role = session.role as string;
     if (!ADMIN_ROLES.includes(role)) {
-      return redirectToLogin(request, 'error=Unauthorized');
+      return redirectToRoleHome(request, role);
     }
     return NextResponse.next();
   }
@@ -55,11 +67,11 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith('/client')) {
     const session = await readSessionFromRequest(request);
     if (!session) {
-      return redirectToLogin(request);
+      return redirectToLogin(request, 'error=SessionExpired', true);
     }
     const role = session.role as string;
     if (role !== CLIENT_ROLE) {
-      return redirectToLogin(request, 'error=Unauthorized');
+      return redirectToRoleHome(request, role);
     }
     return NextResponse.next();
   }
@@ -76,7 +88,7 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL('/client', request.url));
       }
     }
-    return redirectToLogin(request);
+    return redirectToLogin(request, undefined, true);
   }
 
   return NextResponse.next();

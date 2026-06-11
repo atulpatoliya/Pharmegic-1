@@ -26,9 +26,12 @@ export default function TopNavbar({
   const router = useRouter();
 
   const handleLogout = async () => {
-    await logout();
-    router.push('/login');
-    router.refresh();
+    try {
+      await logout();
+    } finally {
+      router.replace('/login');
+      router.refresh();
+    }
   };
 
   const getRoleLabel = (r: string) => {

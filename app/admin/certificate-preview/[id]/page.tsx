@@ -50,7 +50,7 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
       ),
       tcc_applications (
         quantity_mt,
-        kkdik_reg_no,
+        registration_number,
         export_date,
         chemicals (
           chemical_name,

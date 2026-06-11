@@ -1,17 +1,17 @@
 import Sidebar from '@/components/Sidebar';
 import TopNavbar from '@/components/TopNavbar';
 import { getSession } from '@/lib/auth/session';
+import { redirectToLoginPage, redirectToRoleHome } from '@/lib/auth/redirects';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { redirect } from 'next/navigation';
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
 
   if (!session) {
-    redirect('/api/auth/clear?error=SessionExpired');
+    redirectToLoginPage('SessionExpired');
   }
   if (session.role !== 'CLIENT') {
-    redirect('/api/auth/clear?error=Unauthorized');
+    redirectToRoleHome(session.role);
   }
 
   const adminSupabase = createAdminClient();

@@ -51,7 +51,7 @@ interface CertificatePreviewClientProps {
     } | null;
     tcc_applications?: {
       quantity_mt: number;
-      kkdik_reg_no: string | null;
+      registration_number: string | null;
       export_date: string | null;
       chemicals: {
         chemical_name: string;
@@ -235,10 +235,10 @@ export default function CertificatePreviewClient({
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Quantity</p>
                       <p className="text-lg font-black text-slate-800">{cert.tcc_applications.quantity_mt} MT</p>
                     </div>
-                    {cert.tcc_applications.kkdik_reg_no && (
+                    {cert.tcc_applications.registration_number && (
                       <div>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">KKDIK Reg. No</p>
-                        <p className="font-mono font-semibold text-slate-700">{cert.tcc_applications.kkdik_reg_no}</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Registration Number</p>
+                        <p className="font-mono font-semibold text-slate-700">{cert.tcc_applications.registration_number}</p>
                       </div>
                     )}
                   </>

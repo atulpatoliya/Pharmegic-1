@@ -46,6 +46,9 @@ import {
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
+import { TableDataExport } from '@/components/TableDataExport';
+import { formatDisplayDate } from '@/lib/date-filter';
+import type { CsvColumn } from '@/lib/export-csv';
 import { processTccAction } from '@/actions/tcc';
 import { TccApplicationViewDialog, type TccEmailDefaults, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
@@ -207,6 +210,7 @@ export default function ClientDashboardDetails({
     | null
   >(null);
   const [selectedRcCertIds, setSelectedRcCertIds] = useState<string[]>([]);
+  const [selectedTccAppIds, setSelectedTccAppIds] = useState<string[]>([]);
 
   const issuedRcCertIds = useMemo(
     () =>
@@ -230,6 +234,68 @@ export default function ClientDashboardDetails({
   const toggleAllIssuedRcSelection = () => {
     setSelectedRcCertIds(allIssuedRcSelected ? [] : [...issuedRcCertIds]);
   };
+
+  const rcExportRows = useMemo(
+    () => rcListRows.filter((row) => row.kind === 'issued').map((row) => row.cert),
+    [rcListRows]
+  );
+
+  const RC_CLIENT_EXPORT_COLUMNS: CsvColumn<(typeof rcExportRows)[number]>[] = [
+    { header: 'Company', value: () => client.company_name },
+    { header: 'Certificate No.', value: (cert) => cert.certificate_number },
+    { header: 'Registration No.', value: (cert) => cert.registration_number },
+    {
+      header: 'Chemical',
+      value: (cert) => cert.chemicals?.chemical_name || cert.chemical?.chemical_name,
+    },
+    {
+      header: 'CAS Number',
+      value: (cert) => cert.chemicals?.cas_number || cert.chemical?.cas_number,
+    },
+    { header: 'Issued Date', value: (cert) => formatDisplayDate(cert.issued_at) },
+    { header: 'Validated Date', value: (cert) => formatDisplayDate(cert.expires_at) },
+    {
+      header: 'Status',
+      value: (cert) => (isActiveReachCertificate(cert) ? 'Valid' : getReachCertificateStatus(cert)),
+    },
+    { header: 'Mail Sent', value: (cert) => (cert.mail_sent ? 'Yes' : 'No') },
+  ];
+
+  const allTccSelected =
+    tccHistory.length > 0 && tccHistory.every((app) => selectedTccAppIds.includes(app.id));
+
+  const toggleTccSelection = (id: string) => {
+    setSelectedTccAppIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const toggleAllTccSelection = () => {
+    setSelectedTccAppIds(allTccSelected ? [] : tccHistory.map((app) => app.id));
+  };
+
+  const TCC_CLIENT_EXPORT_COLUMNS: CsvColumn<(typeof tccHistory)[number]>[] = [
+    { header: 'Company', value: () => client.company_name },
+    { header: 'Reference', value: (app) => app.tracking_id || app.id },
+    {
+      header: 'Chemical',
+      value: (app) => app.chemicals?.chemical_name || 'N/A',
+    },
+    { header: 'Quantity (MT)', value: (app) => app.quantity_mt },
+    { header: 'Registration Number', value: (app) => app.registration_number },
+    { header: 'Submitted', value: (app) => formatDisplayDate(app.created_at) },
+    { header: 'Export Date', value: (app) => formatDisplayDate(app.export_date) },
+    { header: 'Status', value: (app) => app.status },
+    {
+      header: 'Certificate No.',
+      value: (app) => {
+        const cert = app.certificates;
+        if (!cert) return '';
+        if (Array.isArray(cert)) return cert[0]?.certificate_number || '';
+        return cert.certificate_number || '';
+      },
+    },
+  ];
 
   const [isTccViewOpen, setIsTccViewOpen] = useState(false);
   const [viewTccApp, setViewTccApp] = useState<TccViewApplication | null>(null);
@@ -677,7 +743,7 @@ export default function ClientDashboardDetails({
       id: app.id as string,
       tracking_id: app.tracking_id as string | undefined,
       quantity_mt: Number(app.quantity_mt ?? 0),
-      kkdik_reg_no: (app.kkdik_reg_no as string) || '',
+      registration_number: (app.registration_number as string) || '',
       export_date: (app.export_date as string | null | undefined) ?? null,
       remarks: app.remarks as string | null | undefined,
       status: app.status as string,
@@ -1147,7 +1213,7 @@ export default function ClientDashboardDetails({
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-3">
           <h2 className="font-bold text-slate-700 text-sm">RC Compliance Certificates</h2>
           {currentUserRole !== 'CLIENT' && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {selectedRcCertIds.length > 0 && (
                 <Button
                   size="sm"
@@ -1161,6 +1227,13 @@ export default function ClientDashboardDetails({
                   Send Mail ({selectedRcCertIds.length})
                 </Button>
               )}
+              <TableDataExport
+                filename={`${client.company_name}-rc-certificates`}
+                columns={RC_CLIENT_EXPORT_COLUMNS}
+                filteredRows={rcExportRows}
+                selectedIds={selectedRcCertIds}
+                getRowId={(cert) => cert.id}
+              />
               <Button
                 size="sm"
                 className="h-8 bg-teal-700 hover:bg-teal-800"
@@ -1394,28 +1467,50 @@ export default function ClientDashboardDetails({
       {/* 4. TCC Applications & Issued Certificates */}
       {showCertificatesSection && (
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-8">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white">
+        <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
           <h2 className="font-bold text-slate-700 text-sm">
             {currentUserRole === 'CLIENT' ? 'My TCC Applications & Certificates' : 'Issued Export Certificates'}
           </h2>
-          {currentUserRole === 'CLIENT' ? (
-            <Link href="/client/apply">
-              <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800">
+          <div className="flex flex-wrap items-center gap-2">
+            <TableDataExport
+              filename={`${client.company_name}-tcc-applications`}
+              columns={TCC_CLIENT_EXPORT_COLUMNS}
+              filteredRows={tccHistory}
+              selectedIds={selectedTccAppIds}
+              getRowId={(app) => app.id}
+            />
+            {currentUserRole === 'CLIENT' ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 bg-teal-700 hover:bg-teal-800"
+                onClick={() => router.push('/client/apply')}
+              >
                 + Apply for TCC
               </Button>
-            </Link>
-          ) : (
-            <Link href="/admin/approvals">
-              <Button size="sm" variant="outline" className="h-8 border-slate-300">
-                Review Applications
-              </Button>
-            </Link>
-          )}
+            ) : (
+              <Link href="/admin/approvals">
+                <Button size="sm" variant="outline" className="h-8 border-slate-300">
+                  Review Applications
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
               <tr>
+                <th className="px-4 py-4 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allTccSelected}
+                    onChange={toggleAllTccSelection}
+                    disabled={tccHistory.length === 0}
+                    aria-label="Select all TCC applications"
+                    className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                  />
+                </th>
                 <th className="px-6 py-4">Reference</th>
                 <th className="px-6 py-4">Chemical Item</th>
                 <th className="px-6 py-4 text-right">Quantity (MT)</th>
@@ -1427,7 +1522,7 @@ export default function ClientDashboardDetails({
             <tbody className="divide-y divide-slate-100">
               {tccHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium">
                     {currentUserRole === 'CLIENT'
                       ? 'No TCC applications yet. Click "Apply for TCC" to submit your first request.'
                       : 'No TCC applications for this client.'}
@@ -1439,8 +1534,22 @@ export default function ClientDashboardDetails({
                   const statusInfo = tccStatusDisplay(app.status);
                   const StatusIcon = statusInfo.icon;
 
+                  const isTccSelected = selectedTccAppIds.includes(app.id);
+
                   return (
-                    <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr
+                      key={app.id}
+                      className={`hover:bg-slate-50/50 transition-colors ${isTccSelected ? 'bg-teal-50/40' : ''}`}
+                    >
+                      <td className="px-4 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isTccSelected}
+                          onChange={() => toggleTccSelection(app.id)}
+                          aria-label={`Select ${app.tracking_id || app.id}`}
+                          className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                        />
+                      </td>
                       <td className="px-6 py-4 font-bold text-slate-800 tracking-wide text-xs">
                         {app.tracking_id || app.id.slice(0, 8).toUpperCase()}
                       </td>

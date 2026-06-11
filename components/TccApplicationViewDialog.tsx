@@ -50,7 +50,7 @@ export interface TccViewApplication {
   id: string;
   tracking_id?: string | null;
   quantity_mt: number;
-  kkdik_reg_no: string;
+  registration_number: string;
   export_date: string | null;
   remarks?: string | null;
   status: string;
@@ -276,8 +276,8 @@ export function TccApplicationViewDialog({
               <DetailItem label="Available quota (client)">
                 {availableQuota} MT
               </DetailItem>
-              <DetailItem label="KKDIK registration no">
-                <span className="font-mono text-xs">{app.kkdik_reg_no}</span>
+              <DetailItem label="Registration Number">
+                <span className="font-mono text-xs">{app.registration_number}</span>
               </DetailItem>
               <DetailItem label="Expected export date">
                 {formatDisplayDate(app.export_date)}

@@ -38,6 +38,7 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
   const adminLinks = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/clients', label: 'Clients', icon: Users },
+    { href: '/admin/rc-certificates', label: 'RC Certificate', icon: FileText },
     { href: '/admin/chemicals', label: 'Chemical Inventory', icon: Database },
     { href: '/admin/approvals', label: 'TCC Approvals', icon: CheckSquare },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
@@ -54,6 +55,7 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
 
   const clientProfileHiddenHrefs = new Set([
     '/admin',
+    '/admin/rc-certificates',
     '/admin/chemicals',
     '/admin/approvals',
     '/admin/settings',

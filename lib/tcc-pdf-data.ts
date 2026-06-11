@@ -40,7 +40,7 @@ export type TccPdfApplication = {
   quantity_mt: number;
   export_date?: string | null;
   tracking_id?: string | null;
-  kkdik_reg_no?: string | null;
+  registration_number?: string | null;
   remarks?: string | null;
 };
 
@@ -53,7 +53,7 @@ export function buildTccDocxData(input: {
   deliveryChallanNo?: string | null;
 }): TccCertificateDocxData {
   const address = buildReachAddressLines(input.client);
-  const euImporter = parseEuImporterFields(input.application.remarks, input.application.kkdik_reg_no);
+  const euImporter = parseEuImporterFields(input.application.remarks, input.application.registration_number);
   const exportDateRaw = input.application.export_date || getTodayDateString();
 
   return {

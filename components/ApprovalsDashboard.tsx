@@ -18,7 +18,9 @@ import {
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
+import { TableDataExport } from '@/components/TableDataExport';
 import type { TccEmailDefaults } from '@/components/TccApplicationViewDialog';
+import type { CsvColumn } from '@/lib/export-csv';
 import { toast } from '@/store/toast';
 import {
   Clock,
@@ -52,7 +54,7 @@ interface Application {
   client_id: string;
   chemical_id: string;
   quantity_mt: number;
-  kkdik_reg_no: string;
+  registration_number: string;
   export_date: string | null;
   remarks?: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'changes_required' | 'modification_requested';
@@ -93,7 +95,7 @@ const INITIAL_COLUMN_FILTERS = {
   company: '',
   substance: '',
   quantity: { ...EMPTY_NUMBER_RANGE },
-  kkdik: '',
+  registrationNumber: '',
   exportDate: { ...EMPTY_DATE_RANGE },
   issueDate: { ...EMPTY_DATE_RANGE },
   approveDate: { ...EMPTY_DATE_RANGE },
@@ -120,6 +122,23 @@ function getIssueDate(app: Application): string | null {
   return resolveCertificate(app)?.issued_at ?? null;
 }
 
+const TCC_EXPORT_COLUMNS: CsvColumn<Application>[] = [
+  { header: 'Company', value: (app) => app.clients.company_name },
+  { header: 'Client Email', value: (app) => app.clients.email },
+  { header: 'Tracking ID', value: (app) => app.tracking_id },
+  { header: 'Substance', value: (app) => app.chemicals.chemical_name },
+  { header: 'CAS Number', value: (app) => app.chemicals.cas_number },
+  { header: 'EC Number', value: (app) => app.chemicals.ec_number },
+  { header: 'Quantity (MT)', value: (app) => app.quantity_mt },
+  { header: 'Registration Number', value: (app) => app.registration_number },
+  { header: 'Export Date', value: (app) => formatDisplayDate(app.export_date) },
+  { header: 'Submitted', value: (app) => formatDisplayDate(app.created_at) },
+  { header: 'Issue Date', value: (app) => formatDisplayDate(getIssueDate(app)) },
+  { header: 'Approve Date', value: (app) => formatDisplayDate(getApproveDate(app)) },
+  { header: 'Status', value: (app) => app.status },
+  { header: 'Certificate No.', value: (app) => resolveCertificate(app)?.certificate_number },
+];
+
 export default function ApprovalsDashboard({ initialApplications, emailDefaults }: ApprovalsDashboardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -135,6 +154,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
   const [actionType, setActionType] = useState<'approved' | 'rejected' | 'changes_required'>('approved');
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     setApplications(initialApplications);
@@ -145,7 +165,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
     if (columnFilters.company.trim()) n++;
     if (columnFilters.substance.trim()) n++;
     if (columnFilters.quantity.min || columnFilters.quantity.max) n++;
-    if (columnFilters.kkdik.trim()) n++;
+    if (columnFilters.registrationNumber.trim()) n++;
     if (columnFilters.exportDate.from || columnFilters.exportDate.to) n++;
     if (columnFilters.issueDate.from || columnFilters.issueDate.to) n++;
     if (columnFilters.approveDate.from || columnFilters.approveDate.to) n++;
@@ -180,7 +200,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
       ) {
         return false;
       }
-      if (!matchesText(app.kkdik_reg_no || '', columnFilters.kkdik)) return false;
+      if (!matchesText(app.registration_number || '', columnFilters.registrationNumber)) return false;
 
       if (
         !matchesDateRange(
@@ -224,6 +244,24 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
   };
 
   const clearAllFilters = () => setColumnFilters(INITIAL_COLUMN_FILTERS);
+
+  const filteredIds = useMemo(
+    () => filteredApplications.map((app) => app.id),
+    [filteredApplications]
+  );
+
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds(allFilteredSelected ? [] : [...filteredIds]);
+  };
 
   const handleOpenView = (app: Application) => {
     setViewApp(app);
@@ -306,16 +344,25 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
 
   return (
     <div className="space-y-8 animate-slide-in">
-      <div>
-        <h1 className="text-2xl font-black text-slate-800 tracking-tight">TCC Application Worklist</h1>
-        <p className="text-sm text-slate-500 font-medium">
-          Review company tonnage compliance certificate applications, allocate chemicals quota, and issue signed PDF permits.
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">TCC Application Worklist</h1>
+          <p className="text-sm text-slate-500 font-medium">
+            Review company tonnage compliance certificate applications, allocate chemicals quota, and issue signed PDF permits.
+          </p>
+        </div>
+        <TableDataExport
+          filename="tcc-applications"
+          columns={TCC_EXPORT_COLUMNS}
+          filteredRows={filteredApplications}
+          selectedIds={selectedIds}
+          getRowId={(app) => app.id}
+        />
       </div>
 
       {/* Status tabs */}
       <Card className="border-slate-100 shadow-xs">
-        <CardContent className="p-4">
+        <CardContent className="p-2">
           <div className="flex flex-wrap gap-2">
             {[
               { id: 'all', label: 'All Permits' },
@@ -342,13 +389,18 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
 
       {/* Main Table */}
       <Card className="border-slate-100 overflow-hidden">
-        {activeFilterCount > 0 && (
+        {(activeFilterCount > 0 || selectedIds.length > 0) && (
           <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
             <p className="text-xs font-semibold text-slate-600">
               Showing {filteredApplications.length} of {applications.length} applications
-              <span className="text-primary ml-1">
-                ({activeFilterCount} column filter{activeFilterCount !== 1 ? 's' : ''} active)
-              </span>
+              {activeFilterCount > 0 && (
+                <span className="text-primary ml-1">
+                  ({activeFilterCount} column filter{activeFilterCount !== 1 ? 's' : ''} active)
+                </span>
+              )}
+              {selectedIds.length > 0 && (
+                <span className="text-teal-700 ml-2">· {selectedIds.length} selected</span>
+              )}
             </p>
             <Button type="button" variant="outline" size="sm" onClick={clearAllFilters} className="h-8 text-xs">
               <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
@@ -360,6 +412,16 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
           <table className="w-full text-left border-collapse min-w-[1280px]">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100 align-top">
+                <th className="p-3 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFiltered}
+                    disabled={filteredIds.length === 0}
+                    aria-label="Select all filtered TCC applications"
+                    className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                  />
+                </th>
                 <th className="p-3 min-w-[150px]">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Company</span>
                   <TableColumnFilter
@@ -385,11 +447,11 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                   />
                 </th>
                 <th className="p-3 min-w-[120px]">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">KKDIK No</span>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Number</span>
                   <TableColumnFilter
-                    value={columnFilters.kkdik}
-                    onChange={(v) => updateColumnFilter('kkdik', v)}
-                    placeholder="Reg no…"
+                    value={columnFilters.registrationNumber}
+                    onChange={(v) => updateColumnFilter('registrationNumber', v)}
+                    placeholder="Registration no…"
                   />
                 </th>
                 <th className="p-3 min-w-[130px]">
@@ -424,7 +486,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredApplications.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
                     No applications match the selected status and column filters.
                   </td>
                 </tr>
@@ -434,8 +496,22 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                   const issueDate = getIssueDate(app);
                   const approveDate = getApproveDate(app);
 
+                  const isSelected = selectedIds.includes(app.id);
+
                   return (
-                    <tr key={app.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr
+                      key={app.id}
+                      className={`hover:bg-slate-50/50 transition-colors group ${isSelected ? 'bg-teal-50/40' : ''}`}
+                    >
+                      <td className="p-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelection(app.id)}
+                          aria-label={`Select ${app.clients.company_name}`}
+                          className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                        />
+                      </td>
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-full bg-emerald-50 text-primary flex items-center justify-center font-bold shrink-0">
@@ -462,7 +538,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                         </div>
                       </td>
                       <td className="p-4 font-extrabold text-slate-800">{app.quantity_mt} MT</td>
-                      <td className="p-4 font-mono text-xs text-slate-600">{app.kkdik_reg_no}</td>
+                      <td className="p-4 font-mono text-xs text-slate-600">{app.registration_number}</td>
                       <td className="p-4 text-slate-600 font-medium text-xs">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />

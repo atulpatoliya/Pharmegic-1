@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -13,6 +13,9 @@ import { Badge } from './ui/Badge';
 import { Dialog } from './ui/Dialog';
 import { toast } from '@/store/toast';
 import ClientWizard from './ClientWizard';
+import { TableDataExport } from '@/components/TableDataExport';
+import { formatDisplayDate } from '@/lib/date-filter';
+import type { CsvColumn } from '@/lib/export-csv';
 
 import {
   Search,
@@ -63,6 +66,20 @@ interface ClientsDashboardProps {
   adminRole: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT' | null;
 }
 
+const CLIENT_EXPORT_COLUMNS: CsvColumn<Client>[] = [
+  { header: 'Company', value: (client) => client.company_name },
+  { header: 'UUID', value: (client) => client.uuid_number },
+  { header: 'Email', value: (client) => client.email },
+  { header: 'Owner', value: (client) => client.owner_name },
+  { header: 'Phone', value: (client) => client.phone },
+  { header: 'City', value: (client) => client.city },
+  { header: 'State', value: (client) => client.state },
+  { header: 'Country', value: (client) => client.country },
+  { header: 'Postal Code', value: (client) => client.postal_code },
+  { header: 'Status', value: (client) => client.status },
+  { header: 'Registered', value: (client) => formatDisplayDate(client.created_at) },
+];
+
 export default function ClientsDashboard({ initialClients, chemicals, adminRole }: ClientsDashboardProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -99,6 +116,7 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
   const [editChemicalIds, setEditChemicalIds] = useState<string[]>([]);
   const [loadingEditData, setLoadingEditData] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
 
 
   // Update local clients when initialClients change
@@ -136,6 +154,24 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
 
     return matchesSearch && matchesStatus;
   });
+
+  const filteredClientIds = useMemo(
+    () => filteredClients.map((client) => client.id),
+    [filteredClients]
+  );
+
+  const allFilteredSelected =
+    filteredClientIds.length > 0 && filteredClientIds.every((id) => selectedClientIds.includes(id));
+
+  const toggleClientSelection = (id: string) => {
+    setSelectedClientIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectAllFilteredClients = () => {
+    setSelectedClientIds(allFilteredSelected ? [] : [...filteredClientIds]);
+  };
 
   // Open Edit Modal & load active data
   const handleOpenEdit = async (client: Client) => {
@@ -246,10 +282,19 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
             Manage company compliance profiles, secondary contact officers, and substance authorization bands.
           </p>
         </div>
-        <Button onClick={() => router.push('/admin/clients/new')} className="sm:self-start">
-          <UserPlus className="h-4 w-4 mr-2" />
-          Onboard New Client
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 sm:self-start">
+          <TableDataExport
+            filename="clients"
+            columns={CLIENT_EXPORT_COLUMNS}
+            filteredRows={filteredClients}
+            selectedIds={selectedClientIds}
+            getRowId={(client) => client.id}
+          />
+          <Button onClick={() => router.push('/admin/clients/new')}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Onboard New Client
+          </Button>
+        </div>
       </div>
 
       {/* Filters card */}
@@ -287,6 +332,16 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100">
+                <th className="p-4 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFilteredClients}
+                    disabled={filteredClientIds.length === 0}
+                    aria-label="Select all filtered clients"
+                    className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                  />
+                </th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Company Profile</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Primary Representative</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Location</th>
@@ -298,13 +353,27 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredClients.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
                     No clients found matching the selected search criteria.
                   </td>
                 </tr>
               ) : (
-                filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-slate-50/50 transition-colors group">
+                filteredClients.map((client) => {
+                  const isSelected = selectedClientIds.includes(client.id);
+                  return (
+                  <tr
+                    key={client.id}
+                    className={`hover:bg-slate-50/50 transition-colors group ${isSelected ? 'bg-teal-50/40' : ''}`}
+                  >
+                    <td className="p-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleClientSelection(client.id)}
+                        aria-label={`Select ${client.company_name}`}
+                        className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                      />
+                    </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-emerald-50 text-primary flex items-center justify-center font-bold">
@@ -381,7 +450,8 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

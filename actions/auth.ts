@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession, destroySession } from '@/lib/auth/session';
 import { loginSchema } from '@/lib/validations';
-import { redirect } from 'next/navigation';
 
 // ============================================================================
 // LOGIN
@@ -58,5 +57,5 @@ export async function login(prevState: unknown, formData: FormData) {
 // ============================================================================
 export async function logout() {
   await destroySession();
-  redirect('/login');
+  return { success: true as const };
 }

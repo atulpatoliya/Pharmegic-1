@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS public.tcc_applications (
     client_chemical_id UUID REFERENCES public.client_chemicals(id) ON DELETE SET NULL,
     quantity_mt NUMERIC(12, 2) NOT NULL CHECK (quantity_mt > 0),
     export_date DATE,
-    kkdik_reg_no TEXT,
+    registration_number TEXT,
     remarks TEXT,
     bo_attachment_url TEXT,
     bo_attachment_name TEXT,
@@ -298,6 +298,18 @@ ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_cc_default TE
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS mail_sent_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'tcc_applications'
+      AND column_name = 'kkdik_reg_no'
+  ) THEN
+    ALTER TABLE public.tcc_applications RENAME COLUMN kkdik_reg_no TO registration_number;
+  END IF;
+END $$;
 
 -- Allow trashed status on client_chemicals (existing DBs may have old constraint)
 ALTER TABLE public.client_chemicals DROP CONSTRAINT IF EXISTS client_chemicals_status_check;

@@ -79,7 +79,7 @@ export const internalNoteSchema = z.object({
 export const tccApplicationSchema = z.object({
   chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
   quantity_mt: z.coerce.number().positive({ message: 'Quantity must be greater than 0' }),
-  kkdik_reg_no: z
+  registration_number: z
     .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
   export_date: z.string().min(1, { message: 'Expected export date is required' }),
   remarks: z

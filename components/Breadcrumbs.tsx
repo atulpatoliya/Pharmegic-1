@@ -15,7 +15,7 @@ const routeMaps: Record<string, string> = {
   client: 'Client Portal',
   apply: 'Apply for TCC',
   certificates: 'My Certificates',
-  'rc-certificates': 'RC Certificate',
+  'rc-certificates': 'RC Certificates',
 };
 
 export default function Breadcrumbs() {

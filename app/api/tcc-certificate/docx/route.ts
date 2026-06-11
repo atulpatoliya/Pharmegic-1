@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         quantity_mt,
         export_date,
         tracking_id,
-        kkdik_reg_no,
+        registration_number,
         remarks,
         chemicals (
           chemical_name,

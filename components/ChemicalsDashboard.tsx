@@ -16,6 +16,9 @@ import { Select } from './ui/Select';
 import { Badge } from './ui/Badge';
 import { Dialog } from './ui/Dialog';
 import { TableColumnFilter } from './ui/TableColumnFilter';
+import { TableDataExport } from '@/components/TableDataExport';
+import { formatDisplayDate } from '@/lib/date-filter';
+import type { CsvColumn } from '@/lib/export-csv';
 import { toast } from '@/store/toast';
 import {
   Plus,
@@ -81,6 +84,19 @@ interface ChemicalsDashboardProps {
   initialTrashedChemicals?: TrashedChemical[];
 }
 
+const CHEMICAL_EXPORT_COLUMNS: CsvColumn<Chemical>[] = [
+  { header: 'Companies', value: (chem) => (chem.company_names || []).join('; ') },
+  { header: 'Substance', value: (chem) => chem.chemical_name },
+  { header: 'CAS Number', value: (chem) => chem.cas_number },
+  { header: 'EC Number', value: (chem) => chem.ec_number },
+  { header: 'Tonnage Band', value: (chem) => chem.tonnage_band },
+  { header: 'Remaining Quota (MT)', value: (chem) => formatMt(chem.remaining_quota) },
+  { header: 'Exported (MT)', value: (chem) => formatMt(chem.exported_mt) },
+  { header: 'Total Quota (MT)', value: (chem) => formatMt(chem.total_quota) },
+  { header: 'Validity Date', value: (chem) => formatDisplayDate(chem.validity_date) },
+  { header: 'Status', value: (chem) => chem.status },
+];
+
 export default function ChemicalsDashboard({
   initialChemicals,
   initialTrashedChemicals = [],
@@ -91,6 +107,7 @@ export default function ChemicalsDashboard({
   const [columnFilters, setColumnFilters] = useState(INITIAL_COLUMN_FILTERS);
   const [chemicals, setChemicals] = useState<Chemical[]>(initialChemicals);
   const [trashedChemicals, setTrashedChemicals] = useState<TrashedChemical[]>(initialTrashedChemicals);
+  const [selectedChemicalIds, setSelectedChemicalIds] = useState<string[]>([]);
 
   // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -176,6 +193,24 @@ export default function ChemicalsDashboard({
   };
 
   const clearAllFilters = () => setColumnFilters(INITIAL_COLUMN_FILTERS);
+
+  const filteredChemicalIds = useMemo(
+    () => filteredChemicals.map((chem) => chem.id),
+    [filteredChemicals]
+  );
+
+  const allFilteredSelected =
+    filteredChemicalIds.length > 0 && filteredChemicalIds.every((id) => selectedChemicalIds.includes(id));
+
+  const toggleChemicalSelection = (id: string) => {
+    setSelectedChemicalIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectAllFilteredChemicals = () => {
+    setSelectedChemicalIds(allFilteredSelected ? [] : [...filteredChemicalIds]);
+  };
 
   const handleOpenCreate = () => {
     setFormError(null);
@@ -348,19 +383,33 @@ export default function ChemicalsDashboard({
             Manage tonnage limits, substance identification numbers, and export metrics of the compliance registry.
           </p>
         </div>
-        <Button onClick={handleOpenCreate} className="sm:self-start">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Substance
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 sm:self-start">
+          <TableDataExport
+            filename="chemical-inventory"
+            columns={CHEMICAL_EXPORT_COLUMNS}
+            filteredRows={filteredChemicals}
+            selectedIds={selectedChemicalIds}
+            getRowId={(chem) => chem.id}
+          />
+          <Button onClick={handleOpenCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Substance
+          </Button>
+        </div>
       </div>
 
       {/* Chemicals inventory table */}
       <Card className="border-slate-100 overflow-hidden">
-        {activeFilterCount > 0 && (
+        {(activeFilterCount > 0 || selectedChemicalIds.length > 0) && (
           <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
             <p className="text-xs font-semibold text-slate-600">
               Showing {filteredChemicals.length} of {chemicals.length} substances
-              <span className="text-primary ml-1">({activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active)</span>
+              {activeFilterCount > 0 && (
+                <span className="text-primary ml-1">({activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active)</span>
+              )}
+              {selectedChemicalIds.length > 0 && (
+                <span className="text-teal-700 ml-2">· {selectedChemicalIds.length} selected</span>
+              )}
             </p>
             <Button type="button" variant="outline" size="sm" onClick={clearAllFilters} className="h-8 text-xs">
               <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
@@ -372,6 +421,16 @@ export default function ChemicalsDashboard({
           <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100 align-top">
+                <th className="p-3 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFilteredChemicals}
+                    disabled={filteredChemicalIds.length === 0}
+                    aria-label="Select all filtered substances"
+                    className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                  />
+                </th>
                 <th className="p-3 min-w-[160px]">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Company Name</span>
                   <TableColumnFilter
@@ -442,13 +501,27 @@ export default function ChemicalsDashboard({
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredChemicals.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
                     No substances found matching your column filters.
                   </td>
                 </tr>
               ) : (
-                filteredChemicals.map((chem) => (
-                  <tr key={chem.id} className="hover:bg-slate-50/50 transition-colors group">
+                filteredChemicals.map((chem) => {
+                  const isSelected = selectedChemicalIds.includes(chem.id);
+                  return (
+                  <tr
+                    key={chem.id}
+                    className={`hover:bg-slate-50/50 transition-colors group ${isSelected ? 'bg-teal-50/40' : ''}`}
+                  >
+                    <td className="p-4 text-center align-top">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleChemicalSelection(chem.id)}
+                        aria-label={`Select ${chem.chemical_name}`}
+                        className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                      />
+                    </td>
                     <td className="p-4 align-top">
                       {chem.company_names && chem.company_names.length > 0 ? (
                         <div className="space-y-1">
@@ -560,7 +633,8 @@ export default function ChemicalsDashboard({
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

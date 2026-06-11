@@ -93,7 +93,7 @@ export function buildTccExporterFullAddress(client: {
   return [address.line1, address.line2, `Dist. ${address.line3}`].filter(Boolean).join(' ');
 }
 
-export function parseEuImporterFields(remarks?: string | null, kkdikRegNo?: string | null): {
+export function parseEuImporterFields(remarks?: string | null, registrationNumber?: string | null): {
   name: string;
   addr1: string;
   addr2: string;
@@ -113,9 +113,9 @@ export function parseEuImporterFields(remarks?: string | null, kkdikRegNo?: stri
     };
   }
 
-  if (kkdikRegNo?.trim()) {
+  if (registrationNumber?.trim()) {
     return {
-      name: kkdikRegNo.trim(),
+      name: registrationNumber.trim(),
       addr1: '—',
       addr2: '—',
       addr3: '—',

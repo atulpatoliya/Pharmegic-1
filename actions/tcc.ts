@@ -36,7 +36,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
   const result = tccApplicationSchema.safeParse({
     chemical_id: formData.get('chemical_id'),
     quantity_mt: formData.get('quantity_mt'),
-    kkdik_reg_no: formData.get('kkdik_reg_no') ?? '',
+    registration_number: formData.get('registration_number') ?? '',
     export_date: formData.get('export_date'),
     remarks: formData.get('remarks') ?? '',
   });
@@ -142,7 +142,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
         chemical_id: result.data.chemical_id,
         client_chemical_id: authChem.id,
         quantity_mt: result.data.quantity_mt,
-        kkdik_reg_no: result.data.kkdik_reg_no || null,
+        registration_number: result.data.registration_number || null,
         export_date: result.data.export_date,
         remarks: result.data.remarks || null,
         status: 'pending',
@@ -470,7 +470,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
         *,
         chemicals (chemical_name, cas_number, ec_number, tonnage_band),
         tcc_applications (
-          id, quantity_mt, kkdik_reg_no, export_date, tracking_id, remarks,
+          id, quantity_mt, registration_number, export_date, tracking_id, remarks,
           chemicals (chemical_name, cas_number, ec_number, tonnage_band)
         ),
         clients (
@@ -568,7 +568,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
         *,
         chemicals (chemical_name, cas_number, ec_number, tonnage_band),
         tcc_applications (
-          quantity_mt, kkdik_reg_no, export_date, tracking_id, remarks,
+          quantity_mt, registration_number, export_date, tracking_id, remarks,
           chemicals (chemical_name, cas_number, ec_number, tonnage_band)
         ),
         clients (
