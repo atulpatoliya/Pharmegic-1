@@ -44,15 +44,16 @@ export default function LoginForm() {
     }
 
     startTransition(async () => {
-      try {
-        const res = await login(null, formData);
-        if (!res?.success) {
-          setErrorMsg(res?.error || 'Invalid credentials.');
-          toast.error(res?.error || 'Login failed.');
-        }
-      } catch {
-        // Successful login — server action redirect handles navigation
+      const res = await login(null, formData);
+      if (!res.success) {
+        setErrorMsg(res.error || 'Invalid credentials.');
+        toast.error(res.error || 'Login failed.');
+        return;
       }
+
+      toast.success('Successfully logged in!');
+      // Full page navigation ensures the session cookie is sent on the next request
+      window.location.assign(res.redirectTo || '/login');
     });
   };
 

@@ -5,10 +5,22 @@ import { SESSION_COOKIE, getAuthSecret } from '@/lib/auth/constants';
 const ADMIN_ROLES = ['SUPER_ADMIN', 'MASTER_ADMIN'];
 const CLIENT_ROLE = 'CLIENT';
 
-function redirectToLogin(request: NextRequest, query?: string, clearCookie = false) {
-  const path = query ? `/login?${query}` : '/login';
-  const response = NextResponse.redirect(new URL(path, request.url));
-  if (clearCookie) {
+function redirectToLogin(
+  request: NextRequest,
+  options?: { error?: string; clearCookie?: boolean; rememberPath?: boolean }
+) {
+  const loginUrl = new URL('/login', request.url);
+  if (options?.error) {
+    loginUrl.searchParams.set('error', options.error);
+  }
+  if (options?.rememberPath) {
+    const { pathname, search } = request.nextUrl;
+    if (pathname.startsWith('/admin') || pathname.startsWith('/client')) {
+      loginUrl.searchParams.set('redirectTo', `${pathname}${search}`);
+    }
+  }
+  const response = NextResponse.redirect(loginUrl);
+  if (options?.clearCookie) {
     response.cookies.delete(SESSION_COOKIE);
   }
   return response;
@@ -21,7 +33,7 @@ function redirectToRoleHome(request: NextRequest, role: string) {
   if (role === CLIENT_ROLE) {
     return NextResponse.redirect(new URL('/client', request.url));
   }
-  return redirectToLogin(request, 'error=Unauthorized', true);
+  return redirectToLogin(request, { error: 'Unauthorized', clearCookie: true });
 }
 
 type SessionReadResult =
@@ -49,21 +61,32 @@ function requireSession(
   result: SessionReadResult
 ): NextResponse | null {
   if (result.status === 'ok') return null;
-  const clearCookie = result.status === 'invalid';
-  return redirectToLogin(request, 'error=SessionExpired', clearCookie);
+  return redirectToLogin(request, {
+    error: 'SessionExpired',
+    clearCookie: result.status === 'invalid',
+    rememberPath: true,
+  });
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Public routes — always accessible (do not auto-bounce /login → /admin; layout validates DB user)
+  // Public routes
   if (
     pathname.startsWith('/verify') ||
-    pathname === '/login' ||
     pathname.startsWith('/api/auth/clear') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
   ) {
+    return NextResponse.next();
+  }
+
+  // Single login URL — signed-in users skip the login page
+  if (pathname === '/login') {
+    const result = await readSessionFromRequest(request);
+    if (result.status === 'ok') {
+      return redirectToRoleHome(request, result.session.role as string);
+    }
     return NextResponse.next();
   }
 
@@ -103,7 +126,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/client', request.url));
       }
     }
-    return redirectToLogin(request, undefined, result.status === 'invalid');
+    return redirectToLogin(request, { clearCookie: result.status === 'invalid' });
   }
 
   return NextResponse.next();

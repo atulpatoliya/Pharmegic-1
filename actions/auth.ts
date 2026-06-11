@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession, destroySession } from '@/lib/auth/session';
 import { loginSchema } from '@/lib/validations';
-import { redirect } from 'next/navigation';
 
 // ============================================================================
 // LOGIN
@@ -42,7 +41,6 @@ export async function login(prevState: unknown, formData: FormData) {
     return { success: false, error: 'Invalid email or password.' };
   }
 
-  // 4. Create session cookie, then server redirect so the browser receives Set-Cookie before navigation
   await createSession({
     userId: user.id,
     email: user.email,
@@ -50,15 +48,21 @@ export async function login(prevState: unknown, formData: FormData) {
     clientId: user.client_id ?? null,
   });
 
-  const redirectTo = String(formData.get('redirectTo') ?? '').trim();
-  if (redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
-    redirect(redirectTo);
+  const requestedRedirect = String(formData.get('redirectTo') ?? '').trim();
+  const roleHome = user.role === 'CLIENT' ? '/client' : '/admin';
+  let redirectTo = roleHome;
+
+  if (requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')) {
+    const isClientPath = requestedRedirect.startsWith('/client');
+    const isAdminPath = requestedRedirect.startsWith('/admin');
+    if (user.role === 'CLIENT' && isClientPath) {
+      redirectTo = requestedRedirect;
+    } else if (user.role !== 'CLIENT' && isAdminPath) {
+      redirectTo = requestedRedirect;
+    }
   }
 
-  if (user.role === 'CLIENT') {
-    redirect('/client');
-  }
-  redirect('/admin');
+  return { success: true as const, redirectTo };
 }
 
 // ============================================================================
