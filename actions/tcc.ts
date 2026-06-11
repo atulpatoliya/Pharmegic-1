@@ -2,7 +2,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
-import { generateCertificatePdf } from '@/services/pdf';
+import { buildTccCertificateStoredFile } from '@/lib/tcc-pdf-data';
+import { resolveTccCertificatePdfBuffer, buildTccCertificatePdfInputFromCert } from '@/lib/tcc-certificate-pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { tccApplicationSchema } from '@/lib/validations';
@@ -199,7 +200,7 @@ export async function processTccAction(
       .from('tcc_applications')
       .select(`
         *,
-        clients (id, company_name, legal_name, email, phone, primary_contact_first_name, primary_contact_last_name),
+        clients (id, company_name, legal_name, email, phone, primary_contact_first_name, primary_contact_last_name, uuid_number, address, city, state, postal_code, country),
         chemicals (id, chemical_name, cas_number, ec_number, tonnage_band, available_quantity, exported_quantity)
       `)
       .eq('id', applicationId)
@@ -313,53 +314,57 @@ export async function processTccAction(
       const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
       const certNumber = `TCC-${new Date().getFullYear()}-${randStr}`;
 
-      // 6. Get branding template
-      const { data: branding } = await adminSupabase
-        .from('templates')
-        .select('*')
+      // 6. Fetch REACH registration number for this substance
+      const { data: reachCert } = await adminSupabase
+        .from('certificates')
+        .select('registration_number')
+        .eq('client_id', app.client_id)
+        .eq('chemical_id', app.chemical_id)
+        .eq('type', REACH_CERTIFICATE_TYPE)
+        .eq('status', 'active')
+        .order('issued_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      // 7. Generate PDF
+      // 7. Generate certificate file from TCC Word template
       const issueDate = new Date();
       const expiryDate = new Date();
       expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
-      const pdfBuffer = await generateCertificatePdf({
-        certificateNumber: certNumber,
-        companyName: app.clients.company_name,
-        legalName: app.clients.company_name,
-        chemicalName: app.chemicals.chemical_name,
-        casNumber: app.chemicals.cas_number,
-        ecNumber: app.chemicals.ec_number || '',
-        tonnageBand: app.chemicals.tonnage_band || 'N/A',
-        quantityMt: Number(app.quantity_mt),
-        issueDate: issueDate.toISOString().split('T')[0],
-        expiryDate: expiryDate.toISOString().split('T')[0],
-        logoUrl: branding?.logo || null,
-        signatureUrl: branding?.signature_image || null,
-        footerText: branding?.footer_text || null,
-        accentColor: branding?.accent_color || '#064e3b',
+      const certFile = await buildTccCertificateStoredFile({
+        certNumber,
+        client: app.clients,
+        chemical: app.chemicals,
+        application: app,
+        registrationNumber: reachCert?.registration_number,
+        validUntilDate: expiryDate.toISOString().split('T')[0],
+        deliveryChallanNo: app.tracking_id,
       });
 
-      // 8. Upload PDF to Supabase Storage
+      // 8. Upload to Supabase Storage
       await ensureCertificatesBucket(adminSupabase);
-      const fileName = `${certNumber}.pdf`;
       const { error: uploadError } = await adminSupabase.storage
         .from(CERTIFICATES_BUCKET)
-        .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true });
+        .upload(certFile.fileName, certFile.buffer, {
+          contentType: certFile.contentType,
+          upsert: true,
+        });
 
-      if (uploadError) throw new Error(`PDF upload failed: ${uploadError.message}`);
+      if (uploadError) throw new Error(`Certificate upload failed: ${uploadError.message}`);
 
-      const { data: { publicUrl } } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
 
       // 9. Register certificate in DB (NO email sent here)
       const { data: cert, error: certError } = await adminSupabase
         .from('certificates')
         .insert({
           client_id: app.client_id,
+          chemical_id: app.chemical_id,
           tcc_application_id: applicationId,
           certificate_number: certNumber,
+          registration_number: reachCert?.registration_number || null,
           type: 'TCC',
           file_url: publicUrl,
           issued_at: issueDate.toISOString(),
@@ -458,16 +463,18 @@ export async function sendCertificateEmailAction(certificateId: string) {
       .from('certificates')
       .select(`
         *,
+        chemicals (chemical_name, cas_number, ec_number, tonnage_band),
         tcc_applications (
-          id, quantity_mt, kkdik_reg_no,
-          chemicals (chemical_name, cas_number, ec_number)
+          id, quantity_mt, kkdik_reg_no, export_date, tracking_id, remarks,
+          chemicals (chemical_name, cas_number, ec_number, tonnage_band)
         ),
         clients (
-          id, company_name, email, cc_emails,
+          id, company_name, email, cc_emails, uuid_number, address, city, state, postal_code, country,
           client_contacts (email)
         )
       `)
       .eq('id', certificateId)
+      .eq('type', 'TCC')
       .single();
 
     if (error || !cert) throw new Error('Certificate not found');
@@ -489,13 +496,8 @@ export async function sendCertificateEmailAction(certificateId: string) {
       adminBccEmails: settings?.bcc_emails,
     });
 
-    // Download PDF from storage for attachment
-    const { data: pdfData, error: pdfError } = await adminSupabase.storage
-      .from('certificates')
-      .download(`${cert.certificate_number}.pdf`);
-
-    if (pdfError || !pdfData) throw new Error('Could not retrieve certificate PDF from storage');
-    const pdfBuffer = Buffer.from(await pdfData.arrayBuffer());
+    const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
+    const pdfBuffer = await resolveTccCertificatePdfBuffer(adminSupabase, pdfInput);
 
     // Send email
     await sendCertEmail({
@@ -532,6 +534,8 @@ export async function sendCertificateEmailAction(certificateId: string) {
     });
 
     revalidatePath(`/admin/certificate-preview/${certificateId}`);
+    revalidatePath('/admin/approvals');
+    revalidatePath(`/admin/clients/${cert.client_id}`);
     return { success: true, message: `Certificate email sent to ${cert.clients.email}` };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -556,10 +560,18 @@ export async function resendCertificateEmailAction(certificateId: string) {
       .from('certificates')
       .select(`
         *,
-        tcc_applications (chemicals (chemical_name)),
-        clients (id, company_name, email, client_contacts (email))
+        chemicals (chemical_name, cas_number, ec_number, tonnage_band),
+        tcc_applications (
+          quantity_mt, kkdik_reg_no, export_date, tracking_id, remarks,
+          chemicals (chemical_name, cas_number, ec_number, tonnage_band)
+        ),
+        clients (
+          id, company_name, email, uuid_number, address, city, state, postal_code, country,
+          client_contacts (email)
+        )
       `)
       .eq('id', certificateId)
+      .eq('type', 'TCC')
       .single();
 
     if (error || !cert) throw new Error('Certificate not found');
@@ -581,12 +593,8 @@ export async function resendCertificateEmailAction(certificateId: string) {
       adminBccEmails: settings?.bcc_emails,
     });
 
-    const { data: pdfData, error: pdfError } = await adminSupabase.storage
-      .from('certificates')
-      .download(`${cert.certificate_number}.pdf`);
-
-    if (pdfError || !pdfData) throw new Error('Could not retrieve certificate PDF');
-    const pdfBuffer = Buffer.from(await pdfData.arrayBuffer());
+    const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
+    const pdfBuffer = await resolveTccCertificatePdfBuffer(adminSupabase, pdfInput);
 
     await sendCertEmail({
       to: recipients.to,
@@ -621,6 +629,8 @@ export async function resendCertificateEmailAction(certificateId: string) {
     });
 
     revalidatePath(`/admin/certificate-preview/${certificateId}`);
+    revalidatePath('/admin/approvals');
+    revalidatePath(`/admin/clients/${cert.client_id}`);
     return { success: true, message: 'Certificate email resent successfully.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

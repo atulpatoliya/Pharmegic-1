@@ -1,5 +1,9 @@
 'use client';
 
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { sendCertificateEmailAction, resendCertificateEmailAction } from '@/actions/tcc';
+import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
@@ -12,7 +16,27 @@ import {
   Shield,
   Download,
   ExternalLink,
+  Mail,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react';
+import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import {
+  buildTccCertificateDocxPreviewUrl,
+  buildTccCertificatePdfDownloadUrl,
+} from '@/lib/tcc-certificate-download';
+import { toast } from '@/store/toast';
+
+export interface TccViewCertificate {
+  id: string;
+  certificate_number: string;
+  file_url: string | null;
+  issued_at: string;
+  mail_sent?: boolean;
+  mail_sent_at?: string | null;
+  mail_resend_count?: number;
+  last_resend_at?: string | null;
+}
 
 export interface TccViewApplication {
   id: string;
@@ -37,24 +61,24 @@ export interface TccViewApplication {
     validity_date: string | null;
     available_quantity: number;
   };
-  certificates?: {
-    id: string;
-    certificate_number: string;
-    file_url: string | null;
-    issued_at: string;
-  } | {
-    id: string;
-    certificate_number: string;
-    file_url: string | null;
-    issued_at: string;
-  }[] | null;
+  certificates?: TccViewCertificate | TccViewCertificate[] | null;
 }
 
-function resolveCertificate(app: TccViewApplication) {
+export type TccEmailDefaults = {
+  adminCcEmails?: string | null;
+  adminBccEmails?: string | null;
+  contactEmails?: string[];
+};
+
+function resolveCertificate(app: TccViewApplication): TccViewCertificate | null {
   const c = app.certificates;
   if (!c) return null;
   if (Array.isArray(c)) return c[0] ?? null;
   return c;
+}
+
+function formatEmailList(emails: string[]): string {
+  return emails.length > 0 ? emails.join(', ') : '—';
 }
 
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
@@ -87,6 +111,7 @@ interface TccApplicationViewDialogProps {
   onRequestChanges: () => void;
   getStatusBadge: (status: string) => React.ReactNode;
   allowReview?: boolean;
+  emailDefaults?: TccEmailDefaults;
 }
 
 export function TccApplicationViewDialog({
@@ -98,14 +123,92 @@ export function TccApplicationViewDialog({
   onRequestChanges,
   getStatusBadge,
   allowReview = true,
+  emailDefaults,
 }: TccApplicationViewDialogProps) {
+  const router = useRouter();
+  const [isSending, startSendTransition] = useTransition();
+  const [isResending, startResendTransition] = useTransition();
+  const [mailState, setMailState] = useState({
+    mail_sent: false,
+    mail_sent_at: null as string | null,
+    mail_resend_count: 0,
+    last_resend_at: null as string | null,
+  });
+
+  const cert = app ? resolveCertificate(app) : null;
+
+  useEffect(() => {
+    if (!cert) return;
+    setMailState({
+      mail_sent: cert.mail_sent ?? false,
+      mail_sent_at: cert.mail_sent_at ?? null,
+      mail_resend_count: cert.mail_resend_count ?? 0,
+      last_resend_at: cert.last_resend_at ?? null,
+    });
+  }, [
+    cert?.id,
+    cert?.mail_sent,
+    cert?.mail_sent_at,
+    cert?.mail_resend_count,
+    cert?.last_resend_at,
+  ]);
+
+  const mailRecipients = useMemo(() => {
+    if (!app?.clients.email) return null;
+    return buildCertificateRecipients({
+      primaryEmail: app.clients.email,
+      contactEmails: emailDefaults?.contactEmails,
+      adminCcEmails: emailDefaults?.adminCcEmails,
+      adminBccEmails: emailDefaults?.adminBccEmails,
+    });
+  }, [app?.clients.email, emailDefaults]);
+
   if (!app) return null;
 
-  const cert = resolveCertificate(app);
   const availableQuota =
     app.client_chemicals?.available_quantity ?? app.chemicals.available_quantity;
   const showActions = allowReview && canReviewActions(app.status);
   const boUrl = app.bo_attachment_url;
+  const totalSent = mailState.mail_resend_count + (mailState.mail_sent ? 1 : 0);
+
+  const handleSendMail = () => {
+    if (!cert?.id) return;
+    startSendTransition(async () => {
+      const res = await sendCertificateEmailAction(cert.id);
+      if (res.success) {
+        const now = new Date().toISOString();
+        setMailState({
+          mail_sent: true,
+          mail_sent_at: now,
+          mail_resend_count: 0,
+          last_resend_at: null,
+        });
+        toast.success(res.message || 'Certificate email sent successfully.');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to send email.');
+      }
+    });
+  };
+
+  const handleResendMail = () => {
+    if (!cert?.id) return;
+    startResendTransition(async () => {
+      const res = await resendCertificateEmailAction(cert.id);
+      if (res.success) {
+        const now = new Date().toISOString();
+        setMailState((prev) => ({
+          ...prev,
+          mail_resend_count: prev.mail_resend_count + 1,
+          last_resend_at: now,
+        }));
+        toast.success(res.message || 'Certificate email resent.');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to resend email.');
+      }
+    });
+  };
 
   return (
     <Dialog
@@ -226,7 +329,7 @@ export function TccApplicationViewDialog({
               <Shield className="h-4 w-4 text-primary" />
               Certificate preview
             </h3>
-            {cert?.file_url ? (
+            {cert?.id ? (
               <div className="rounded-xl border border-emerald-100 overflow-hidden bg-emerald-50/30">
                 <div className="px-4 py-2.5 border-b border-emerald-100 flex items-center justify-between flex-wrap gap-2">
                   <div>
@@ -237,21 +340,74 @@ export function TccApplicationViewDialog({
                       Issued {formatDisplayDate(cert.issued_at)}
                     </p>
                   </div>
-                  <a
-                    href={cert.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Download PDF
-                  </a>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href={buildTccCertificatePdfDownloadUrl(cert.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download PDF
+                    </a>
+                    {!mailState.mail_sent ? (
+                      <Button
+                        onClick={handleSendMail}
+                        isLoading={isSending}
+                        disabled={isSending}
+                        size="sm"
+                        className="gap-1.5 h-8"
+                      >
+                        <Mail className="h-3.5 w-3.5" /> Send Mail To Client
+                      </Button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-[10px] font-bold text-emerald-700">
+                            Sent {totalSent > 1 ? `(${totalSent}x)` : ''}
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={handleResendMail}
+                          isLoading={isResending}
+                          disabled={isResending}
+                          size="sm"
+                          className="gap-1.5 h-8"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" /> Resend Mail
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <iframe
-                  src={cert.file_url}
-                  title={`Certificate ${cert.certificate_number}`}
-                  className="w-full h-[420px] bg-white"
-                />
+
+                {mailState.mail_sent && mailRecipients && (
+                  <div className="px-4 py-3 bg-blue-50 border-b border-blue-100 text-xs font-medium text-blue-700 space-y-1">
+                    <p>
+                      <strong>TO:</strong> {mailRecipients.to}
+                    </p>
+                    <p>
+                      <strong>CC:</strong> {formatEmailList(mailRecipients.cc)}
+                    </p>
+                    <p>
+                      <strong>BCC:</strong> {formatEmailList(mailRecipients.bcc)}
+                    </p>
+                    {mailState.mail_sent_at && (
+                      <p className="pt-1 border-t border-blue-100 mt-2">
+                        <strong>First sent:</strong> {new Date(mailState.mail_sent_at).toLocaleString()}
+                      </p>
+                    )}
+                    {mailState.mail_resend_count > 0 && mailState.last_resend_at && (
+                      <p>
+                        <strong>Last resent:</strong> {new Date(mailState.last_resend_at).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <ReachCertificateDocxViewer docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)} />
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">

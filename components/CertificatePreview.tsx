@@ -11,6 +11,11 @@ import {
   Building, FlaskConical, Calendar, FileText, Shield, AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
+import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import {
+  buildTccCertificateDocxPreviewUrl,
+  buildTccCertificatePdfDownloadUrl,
+} from '@/lib/tcc-certificate-download';
 
 interface CertificatePreviewClientProps {
   cert: {
@@ -110,7 +115,7 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
             <p className="text-sm text-slate-500 font-medium">
               {isReach
                 ? 'REACH Compliance Certificate — valid for 1 year. Required before TCC application.'
-                : 'Review and send the certificate to the client'}
+                : 'TCC Import Certificate — review and send to the client'}
             </p>
           </div>
         </div>
@@ -118,7 +123,7 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
         <div className="flex items-center gap-2 flex-wrap">
           {/* Download */}
           <a
-            href={cert.file_url}
+            href={buildTccCertificatePdfDownloadUrl(cert.id)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
@@ -273,17 +278,12 @@ export default function CertificatePreviewClient({ cert }: CertificatePreviewCli
               <FileText className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-bold text-slate-800">Certificate Document Preview</h3>
             </div>
-            {cert.file_url ? (
-              <iframe
-                src={cert.file_url}
-                className="w-full"
-                style={{ height: '700px', border: 'none' }}
-                title="Certificate PDF"
-              />
+            {cert.id ? (
+              <ReachCertificateDocxViewer docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)} />
             ) : (
               <div className="flex flex-col items-center justify-center h-96 text-slate-400">
                 <Shield className="h-12 w-12 mb-3 opacity-30" />
-                <p className="font-medium">PDF not available</p>
+                <p className="font-medium">Certificate preview not available</p>
               </div>
             )}
           </div>

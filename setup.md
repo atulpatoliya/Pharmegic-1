@@ -127,6 +127,18 @@ Microsoft Word or LibreOffice on the machine is used automatically for PDF gener
 
 > Place `CT_Draftr.docx` in the project root and run `node scripts/prepare-reach-template.mjs` to refresh `templates/CT_2026.docx`.
 
+### TCC Certificate template
+
+TCC certificates use `templates/TCC-Demo.docx` as the source design. Prepare the merge template with:
+
+```bash
+node scripts/prepare-tcc-template.mjs
+```
+
+This writes `templates/TCC_2026.docx`. Only client, chemical, and application fields are filled at issue time; the Word layout stays fixed.
+
+Dynamic fields include: company name/address, chemical name, CAS/EC numbers, REACH registration number, tonnage band, UUID, export volume (MT), delivery challan, export date, and valid-until date.
+
 ---
 
 ## 5. Running the Application locally

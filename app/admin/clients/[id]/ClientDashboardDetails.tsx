@@ -41,15 +41,16 @@ import {
   buildReachCertificatePdfDownloadUrl,
   buildReachCertificatePdfPreviewUrl,
 } from '@/lib/reach-certificate-download';
+import { buildTccCertificatePdfDownloadUrl } from '@/lib/tcc-certificate-download';
 import { processTccAction } from '@/actions/tcc';
-import { TccApplicationViewDialog, type TccViewApplication } from '@/components/TccApplicationViewDialog';
+import { TccApplicationViewDialog, type TccEmailDefaults, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
 import Link from 'next/link';
 import { 
   Building, Mail, Phone, MapPin, Calendar, CheckCircle, 
   AlertCircle, FileText, User, ShieldAlert, Key, Plus, Trash2,
   FileSignature, Award, Clipboard, StickyNote, History, Lock, Unlock,
-  Download, Filter, Eye, EyeOff, PenLine, RotateCcw, Clock, XCircle, ShieldCheck
+  Download, Eye, EyeOff, PenLine, RotateCcw, Clock, XCircle, ShieldCheck
 } from 'lucide-react';
 import { useLayoutStore } from '@/store/layout';
 import dynamic from 'next/dynamic';
@@ -68,6 +69,7 @@ interface ClientDashboardDetailsProps {
   internalNotes: any[];
   currentUserId: string;
   currentUserRole: string;
+  emailDefaults?: TccEmailDefaults;
   viewMode?: 'overview' | 'chemicals' | 'certificates' | 'rc-certificates';
 }
 
@@ -83,6 +85,7 @@ export default function ClientDashboardDetails({
   internalNotes,
   currentUserId,
   currentUserRole,
+  emailDefaults,
   viewMode = 'overview',
 }: ClientDashboardDetailsProps) {
   const router = useRouter();
@@ -804,10 +807,6 @@ export default function ClientDashboardDetails({
               </Button>
             </Link>
           )}
-          <Button variant="outline" size="sm" className="bg-white border-slate-200 shadow-xs text-slate-700">
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
         </div>
       </div>
 
@@ -890,7 +889,6 @@ export default function ClientDashboardDetails({
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <h2 className="font-bold text-slate-700 text-sm">Substance Details</h2>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500"><Filter className="h-4 w-4" /></Button>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500" onClick={handleExportCSV} title="Export CSV">
               <Download className="h-4 w-4" />
             </Button>
@@ -1394,8 +1392,13 @@ export default function ClientDashboardDetails({
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {cert?.file_url && app.status === 'approved' && (
-                            <a href={cert.file_url} target="_blank" rel="noopener noreferrer" title="Download certificate PDF">
+                          {cert?.id && app.status === 'approved' && (
+                            <a
+                              href={buildTccCertificatePdfDownloadUrl(cert.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Download certificate PDF"
+                            >
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
                                 <Download className="h-4 w-4" />
                               </Button>
@@ -1764,6 +1767,7 @@ export default function ClientDashboardDetails({
         onApprove={() => handleTccViewThenAction('approved')}
         onReject={() => handleTccViewThenAction('rejected')}
         onRequestChanges={() => handleTccViewThenAction('changes_required')}
+        emailDefaults={emailDefaults}
       />
 
       <Dialog

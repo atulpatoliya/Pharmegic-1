@@ -13,6 +13,8 @@ import { TableDateRangeFilter, type DateRangeValue } from './ui/TableDateRangeFi
 import { TableNumberRangeFilter, type NumberRangeValue } from './ui/TableNumberRangeFilter';
 import { matchesDateRange, formatDisplayDate } from '@/lib/date-filter';
 import { matchesNumberRange } from '@/lib/number-filter';
+import { buildTccCertificatePdfDownloadUrl } from '@/lib/tcc-certificate-download';
+import type { TccEmailDefaults } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
 import {
   Clock,
@@ -34,6 +36,10 @@ interface CertificateRow {
   certificate_number: string;
   file_url: string | null;
   issued_at: string;
+  mail_sent?: boolean;
+  mail_sent_at?: string | null;
+  mail_resend_count?: number;
+  last_resend_at?: string | null;
 }
 
 interface Application {
@@ -73,6 +79,7 @@ function isAwaitingReview(status: string) {
 
 interface ApprovalsDashboardProps {
   initialApplications: Application[];
+  emailDefaults?: TccEmailDefaults;
 }
 
 const EMPTY_DATE_RANGE: DateRangeValue = { from: '', to: '' };
@@ -109,7 +116,7 @@ function getIssueDate(app: Application): string | null {
   return resolveCertificate(app)?.issued_at ?? null;
 }
 
-export default function ApprovalsDashboard({ initialApplications }: ApprovalsDashboardProps) {
+export default function ApprovalsDashboard({ initialApplications, emailDefaults }: ApprovalsDashboardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -495,9 +502,9 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
                             <Eye className="h-3.5 w-3.5 mr-1.5" />
                             View
                           </Button>
-                          {app.status === 'approved' && cert?.file_url && (
+                          {app.status === 'approved' && cert?.id && (
                             <a
-                              href={cert.file_url}
+                              href={buildTccCertificatePdfDownloadUrl(cert.id)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 h-8 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-md transition-colors border border-emerald-100"
@@ -530,6 +537,7 @@ export default function ApprovalsDashboard({ initialApplications }: ApprovalsDas
         onApprove={() => handleViewThenAction('approved')}
         onReject={() => handleViewThenAction('rejected')}
         onRequestChanges={() => handleViewThenAction('changes_required')}
+        emailDefaults={emailDefaults}
       />
 
       <Dialog

@@ -26,7 +26,7 @@ export type ReachCertificateDocxData = {
   validatedDate: string;
 };
 
-function escapeXml(text: string): string {
+export function escapeReachXml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -73,29 +73,29 @@ function resolveTemplatePath(): string {
 
 function applyPlaceholders(xml: string, data: ReachCertificateDocxData): string {
   const map: Record<string, string> = {
-    '{{COMPANY_NAME}}': escapeXml(data.companyName),
-    '{{ADDR_LINE1}}': escapeXml(data.addressLine1),
-    '{{ADDR_LINE2}}': escapeXml(data.addressLine2),
-    '{{ADDR_LINE3}}': escapeXml(data.addressLine3),
-    '{{CHEMICAL_NAME}}': escapeXml(data.chemicalName),
-    '{{EC_NUMBER}}': escapeXml(data.ecNumber),
-    '{{CAS_NUMBER}}': escapeXml(data.casNumber),
-    '{{REGISTRATION_NUMBER}}': escapeXml(data.registrationNumber),
-    '{{TONNAGE_BAND}}': escapeXml(data.tonnageBand),
-    '{{UUID_NUMBER}}': escapeXml(data.uuidNumber),
-    '{{ISSUED_DATE}}': escapeXml(data.issuedDate),
-    '{{VALIDATED_DATE}}': escapeXml(data.validatedDate),
+    '{{COMPANY_NAME}}': escapeReachXml(data.companyName),
+    '{{ADDR_LINE1}}': escapeReachXml(data.addressLine1),
+    '{{ADDR_LINE2}}': escapeReachXml(data.addressLine2),
+    '{{ADDR_LINE3}}': escapeReachXml(data.addressLine3),
+    '{{CHEMICAL_NAME}}': escapeReachXml(data.chemicalName),
+    '{{EC_NUMBER}}': escapeReachXml(data.ecNumber),
+    '{{CAS_NUMBER}}': escapeReachXml(data.casNumber),
+    '{{REGISTRATION_NUMBER}}': escapeReachXml(data.registrationNumber),
+    '{{TONNAGE_BAND}}': escapeReachXml(data.tonnageBand),
+    '{{UUID_NUMBER}}': escapeReachXml(data.uuidNumber),
+    '{{ISSUED_DATE}}': escapeReachXml(data.issuedDate),
+    '{{VALIDATED_DATE}}': escapeReachXml(data.validatedDate),
     // Fallback replacements when template was not prepared (raw CT_Draftr.docx)
-    'Fairchem Organics Limited': escapeXml(data.companyName),
-    '253/P and 312, Village Chekhala,': escapeXml(data.addressLine1),
-    'Sanand – Kadi Highway, Taluka SANAND,': escapeXml(data.addressLine2),
-    'Dist. AHMEDABAD\u00a0\u2013 382 115, INDIA': `Dist. ${escapeXml(data.addressLine3)}`,
-    'Fatty acids, C18-unsatd, dimers': escapeXml(data.chemicalName),
-    '500-148-0': escapeXml(data.ecNumber),
-    '61788-89-4': escapeXml(data.casNumber),
-    '01-2119493908-18-0028': escapeXml(data.registrationNumber),
-    '10-100 tpa': escapeXml(data.tonnageBand),
-    'ECHA-334d8d7b-4b93-40d9-b1f3-25494dc492d6': escapeXml(data.uuidNumber),
+    'Fairchem Organics Limited': escapeReachXml(data.companyName),
+    '253/P and 312, Village Chekhala,': escapeReachXml(data.addressLine1),
+    'Sanand – Kadi Highway, Taluka SANAND,': escapeReachXml(data.addressLine2),
+    'Dist. AHMEDABAD\u00a0\u2013 382 115, INDIA': `Dist. ${escapeReachXml(data.addressLine3)}`,
+    'Fatty acids, C18-unsatd, dimers': escapeReachXml(data.chemicalName),
+    '500-148-0': escapeReachXml(data.ecNumber),
+    '61788-89-4': escapeReachXml(data.casNumber),
+    '01-2119493908-18-0028': escapeReachXml(data.registrationNumber),
+    '10-100 tpa': escapeReachXml(data.tonnageBand),
+    'ECHA-334d8d7b-4b93-40d9-b1f3-25494dc492d6': escapeReachXml(data.uuidNumber),
   };
 
   let result = xml;
@@ -109,7 +109,7 @@ function applyPlaceholders(xml: string, data: ReachCertificateDocxData): string 
   if (issuedSample.test(result)) {
     result = result.replace(
       issuedSample,
-      `<w:r w:rsidR="007957B7"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(data.issuedDate)}</w:t></w:r>`
+      `<w:r w:rsidR="007957B7"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeReachXml(data.issuedDate)}</w:t></w:r>`
     );
   }
 
@@ -118,7 +118,7 @@ function applyPlaceholders(xml: string, data: ReachCertificateDocxData): string 
   if (validatedSample.test(result)) {
     result = result.replace(
       validatedSample,
-      `<w:r w:rsidR="0014606D"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(data.validatedDate)}</w:t></w:r>`
+      `<w:r w:rsidR="0014606D"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeReachXml(data.validatedDate)}</w:t></w:r>`
     );
   }
 

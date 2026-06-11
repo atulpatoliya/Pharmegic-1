@@ -4,7 +4,7 @@ import { login } from '@/actions/auth';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { toast } from '@/store/toast';
-import { Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import { FormLabel } from './ui/FormLabel';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -24,6 +24,7 @@ export default function LoginForm() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState(initialError);
   const [isPending, startTransition] = useTransition();
 
@@ -100,16 +101,27 @@ export default function LoginForm() {
           <FormLabel required className="flex items-center gap-1.5 normal-case">
             <Lock className="h-3.5 w-3.5 text-slate-400" /> Password
           </FormLabel>
-          <input
-            type="password"
-            id="login-password"
-            placeholder="••••••••"
-            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isPending}
-            required
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              id="login-password"
+              placeholder="••••••••"
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isPending}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              disabled={isPending}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <Button type="submit" id="login-submit" className="w-full h-11 text-sm font-bold" isLoading={isPending}>

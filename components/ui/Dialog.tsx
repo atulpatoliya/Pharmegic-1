@@ -17,7 +17,7 @@ interface DialogProps {
 
 const sizeClasses = {
   default: 'max-w-[800px]',
-  wide: 'max-w-6xl',
+  wide: 'max-w-8xl',
 };
 
 export function Dialog({

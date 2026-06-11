@@ -1,4 +1,5 @@
 import { REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
+import { buildTccCertificatePdfDownloadUrl } from '@/lib/tcc-certificate-download';
 
 export function buildReachCertificatePdfDownloadUrl(certificateId: string): string {
   return `/api/reach-certificate/pdf?certificateId=${encodeURIComponent(certificateId)}`;
@@ -28,6 +29,9 @@ export function resolveReachCertificateDownloadUrl(cert: {
 }): string {
   if (cert.type === REACH_CERTIFICATE_TYPE || cert.type === 'REACH') {
     return buildReachCertificatePdfDownloadUrl(cert.id);
+  }
+  if (cert.type === 'TCC') {
+    return buildTccCertificatePdfDownloadUrl(cert.id);
   }
   return cert.file_url || '#';
 }
