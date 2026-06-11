@@ -18,6 +18,94 @@ import { revalidatePath } from 'next/cache';
 import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
 import { getRemainingQuota, getTonnageBandMaxQuota, sumApprovedExports } from '@/lib/quota';
 import { isActiveReachCertificate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
+import { canClientEditTccApplication } from '@/lib/tcc-application';
+
+function parseTccApplicationFormData(formData: FormData) {
+  return tccApplicationSchema.safeParse({
+    chemical_id: formData.get('chemical_id'),
+    quantity_mt: formData.get('quantity_mt'),
+    registration_number: formData.get('registration_number') ?? '',
+    export_date: formData.get('export_date'),
+    remarks: formData.get('remarks') ?? '',
+    eu_importer_company_name: formData.get('eu_importer_company_name') ?? '',
+    eu_importer_address: formData.get('eu_importer_address') ?? '',
+    purchase_order_number: formData.get('purchase_order_number') ?? '',
+    invoice_number: formData.get('invoice_number') ?? '',
+  });
+}
+
+async function validateClientTccSubmission(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  data: {
+    chemical_id: string;
+    quantity_mt: number;
+    export_date: string;
+  }
+) {
+  const { data: authChem } = await adminSupabase
+    .from('client_chemicals')
+    .select('id, available_quantity, status, chemicals(tonnage_band)')
+    .eq('client_id', clientId)
+    .eq('chemical_id', data.chemical_id)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!authChem) {
+    return { ok: false as const, error: 'This chemical is not authorized for your company. Contact your administrator.' };
+  }
+
+  const { data: reachCert } = await adminSupabase
+    .from('certificates')
+    .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
+    .eq('client_id', clientId)
+    .eq('chemical_id', data.chemical_id)
+    .eq('type', REACH_CERTIFICATE_TYPE)
+    .eq('status', 'active')
+    .order('issued_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!isActiveReachCertificate(reachCert)) {
+    return {
+      ok: false as const,
+      error:
+        'A valid REACH Compliance Certificate is required before applying for TCC. Contact your administrator to issue one for this substance.',
+    };
+  }
+
+  if (data.export_date && reachCert?.expires_at) {
+    const exportD = new Date(data.export_date);
+    const reachExpiry = new Date(reachCert.expires_at);
+    if (exportD > reachExpiry) {
+      return {
+        ok: false as const,
+        error: `Expected export date exceeds REACH Compliance Certificate validity (${reachExpiry.toLocaleDateString()}).`,
+      };
+    }
+  }
+
+  const { data: approvedForChem } = await adminSupabase
+    .from('tcc_applications')
+    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+    .eq('client_id', clientId)
+    .eq('chemical_id', data.chemical_id)
+    .eq('status', 'approved');
+
+  const exportedMt = sumApprovedExports(approvedForChem || [], data.chemical_id);
+  const chem = Array.isArray(authChem.chemicals) ? authChem.chemicals[0] : authChem.chemicals;
+  const tonnageBand = (chem as { tonnage_band?: string | null } | null)?.tonnage_band ?? null;
+  const clientQuota = getRemainingQuota(Number(authChem.available_quantity ?? 0), exportedMt, tonnageBand);
+
+  if (clientQuota < data.quantity_mt) {
+    return {
+      ok: false as const,
+      error: `Insufficient quota. Requested: ${data.quantity_mt} MT, Available: ${clientQuota} MT.`,
+    };
+  }
+
+  return { ok: true as const, authChem };
+}
 
 // ============================================================================
 // APPLY FOR TCC (Client Action)
@@ -33,13 +121,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     return { success: false, error: 'User is not linked to a valid client organization.' };
   }
 
-  const result = tccApplicationSchema.safeParse({
-    chemical_id: formData.get('chemical_id'),
-    quantity_mt: formData.get('quantity_mt'),
-    registration_number: formData.get('registration_number') ?? '',
-    export_date: formData.get('export_date'),
-    remarks: formData.get('remarks') ?? '',
-  });
+  const result = parseTccApplicationFormData(formData);
 
   if (!result.success) {
     const issue = result.error.issues[0];
@@ -52,66 +134,11 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
   const adminSupabase = createAdminClient();
 
   try {
-    // 1. Verify chemical is authorized for this client
-    const { data: authChem } = await adminSupabase
-      .from('client_chemicals')
-      .select('id, available_quantity, status, chemicals(tonnage_band)')
-      .eq('client_id', clientId)
-      .eq('chemical_id', result.data.chemical_id)
-      .eq('status', 'active')
-      .maybeSingle();
-
-    if (!authChem) {
-      return { success: false, error: 'This chemical is not authorized for your company. Contact your administrator.' };
+    const validation = await validateClientTccSubmission(adminSupabase, clientId, result.data);
+    if (!validation.ok) {
+      return { success: false, error: validation.error };
     }
-
-    const { data: reachCert } = await adminSupabase
-      .from('certificates')
-      .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
-      .eq('client_id', clientId)
-      .eq('chemical_id', result.data.chemical_id)
-      .eq('type', REACH_CERTIFICATE_TYPE)
-      .eq('status', 'active')
-      .order('issued_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!isActiveReachCertificate(reachCert)) {
-      return {
-        success: false,
-        error:
-          'A valid REACH Compliance Certificate is required before applying for TCC. Contact your administrator to issue one for this substance.',
-      };
-    }
-
-    if (result.data.export_date && reachCert?.expires_at) {
-      const exportD = new Date(result.data.export_date);
-      const reachExpiry = new Date(reachCert.expires_at);
-      if (exportD > reachExpiry) {
-        return {
-          success: false,
-          error: `Expected export date exceeds REACH Compliance Certificate validity (${reachExpiry.toLocaleDateString()}).`,
-        };
-      }
-    }
-
-    const { data: approvedForChem } = await adminSupabase
-      .from('tcc_applications')
-      .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
-      .eq('client_id', clientId)
-      .eq('chemical_id', result.data.chemical_id)
-      .eq('status', 'approved');
-
-    const exportedMt = sumApprovedExports(approvedForChem || [], result.data.chemical_id);
-    const chem = Array.isArray(authChem.chemicals) ? authChem.chemicals[0] : authChem.chemicals;
-    const tonnageBand = (chem as { tonnage_band?: string | null } | null)?.tonnage_band ?? null;
-    const clientQuota = getRemainingQuota(Number(authChem.available_quantity ?? 0), exportedMt, tonnageBand);
-    if (clientQuota < result.data.quantity_mt) {
-      return {
-        success: false,
-        error: `Insufficient quota. Requested: ${result.data.quantity_mt} MT, Available: ${clientQuota} MT.`,
-      };
-    }
+    const authChem = validation.authChem;
 
     const [{ data: chemical }, { data: client }] = await Promise.all([
       adminSupabase
@@ -126,7 +153,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
 
     const boFile = formData.get('bo_attachment');
     if (!(boFile instanceof File) || boFile.size === 0) {
-      return { success: false, error: 'BO attachment is required.' };
+      return { success: false, error: 'PO attachment is required.' };
     }
 
     const boValidation = validateBoAttachment(boFile);
@@ -145,6 +172,10 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
         registration_number: result.data.registration_number || null,
         export_date: result.data.export_date,
         remarks: result.data.remarks || null,
+        eu_importer_company_name: result.data.eu_importer_company_name,
+        eu_importer_address: result.data.eu_importer_address,
+        purchase_order_number: result.data.purchase_order_number,
+        invoice_number: result.data.invoice_number || null,
         status: 'pending',
       })
       .select()
@@ -181,6 +212,122 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message || 'Failed to submit application.' };
+  }
+}
+
+// ============================================================================
+// UPDATE TCC APPLICATION (Client — until admin approves)
+// ============================================================================
+export async function updateTccApplicationAction(prevState: unknown, formData: FormData) {
+  const session = await getSession();
+  if (!session || session.role !== 'CLIENT') {
+    return { success: false, error: 'Unauthorized. Clients only.' };
+  }
+
+  const clientId = session.clientId;
+  if (!clientId) {
+    return { success: false, error: 'User is not linked to a valid client organization.' };
+  }
+
+  const applicationId = String(formData.get('application_id') ?? '').trim();
+  if (!applicationId) {
+    return { success: false, error: 'Application ID is required.' };
+  }
+
+  const result = parseTccApplicationFormData(formData);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    return {
+      success: false,
+      error: issue.message || `Invalid ${issue.path.join('.') || 'input'}.`,
+    };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  try {
+    const { data: existing, error: loadError } = await adminSupabase
+      .from('tcc_applications')
+      .select('id, client_id, status, bo_attachment_url, bo_attachment_name')
+      .eq('id', applicationId)
+      .eq('client_id', clientId)
+      .maybeSingle();
+
+    if (loadError) throw loadError;
+    if (!existing) {
+      return { success: false, error: 'Application not found.' };
+    }
+    if (!canClientEditTccApplication(existing.status)) {
+      return { success: false, error: 'Approved applications cannot be edited.' };
+    }
+
+    const validation = await validateClientTccSubmission(adminSupabase, clientId, result.data);
+    if (!validation.ok) {
+      return { success: false, error: validation.error };
+    }
+    const authChem = validation.authChem;
+
+    const boFile = formData.get('bo_attachment');
+    const hasNewBo = boFile instanceof File && boFile.size > 0;
+    if (!hasNewBo && !existing.bo_attachment_url) {
+      return { success: false, error: 'PO attachment is required.' };
+    }
+
+    if (hasNewBo) {
+      const boValidation = validateBoAttachment(boFile);
+      if (!boValidation.ok) {
+        return { success: false, error: boValidation.error };
+      }
+    }
+
+    const resetStatus = ['changes_required', 'modification_requested', 'rejected'].includes(existing.status);
+
+    const { error: updateError } = await adminSupabase
+      .from('tcc_applications')
+      .update({
+        chemical_id: result.data.chemical_id,
+        client_chemical_id: authChem.id,
+        quantity_mt: result.data.quantity_mt,
+        registration_number: result.data.registration_number || null,
+        export_date: result.data.export_date,
+        remarks: result.data.remarks || null,
+        eu_importer_company_name: result.data.eu_importer_company_name,
+        eu_importer_address: result.data.eu_importer_address,
+        purchase_order_number: result.data.purchase_order_number,
+        invoice_number: result.data.invoice_number || null,
+        ...(resetStatus ? { status: 'pending', rejection_reason: null } : {}),
+      })
+      .eq('id', applicationId);
+
+    if (updateError) throw updateError;
+
+    if (hasNewBo) {
+      const { url: boUrl, name: boName } = await uploadBoAttachment(
+        adminSupabase,
+        boFile,
+        clientId,
+        applicationId
+      );
+      await adminSupabase
+        .from('tcc_applications')
+        .update({ bo_attachment_url: boUrl, bo_attachment_name: boName })
+        .eq('id', applicationId);
+    }
+
+    await adminSupabase.from('audit_logs').insert({
+      user_id: session.userId,
+      action: 'UPDATE_TCC_APPLICATION',
+      entity_type: 'tcc_applications',
+      entity_id: applicationId,
+      metadata: { quantity: result.data.quantity_mt },
+    });
+
+    revalidatePath('/client');
+    revalidatePath('/admin', 'layout');
+    return { success: true, message: 'TCC application updated successfully.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message || 'Failed to update application.' };
   }
 }
 

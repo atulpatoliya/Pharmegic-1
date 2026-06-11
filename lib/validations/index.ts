@@ -84,6 +84,11 @@ export const tccApplicationSchema = z.object({
   export_date: z.string().min(1, { message: 'Expected export date is required' }),
   remarks: z
     .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
+  eu_importer_company_name: z.string().min(1, { message: 'EU importer company name is required' }),
+  eu_importer_address: z.string().min(1, { message: 'EU importer address is required' }),
+  purchase_order_number: z.string().min(1, { message: 'Purchase order number is required' }),
+  invoice_number: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
 });
 
 // ============================================================================

@@ -665,7 +665,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
                   >
                     <Download className="h-3.5 w-3.5" />
-                    View BO: {selectedApp.bo_attachment_name || 'Attachment'}
+                    View PO: {selectedApp.bo_attachment_name || 'Attachment'}
                   </a>
                 )}
               </div>

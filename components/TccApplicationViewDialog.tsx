@@ -55,6 +55,10 @@ export interface TccViewApplication {
   remarks?: string | null;
   status: string;
   rejection_reason?: string | null;
+  eu_importer_company_name?: string | null;
+  eu_importer_address?: string | null;
+  purchase_order_number?: string | null;
+  invoice_number?: string | null;
   bo_attachment_url?: string | null;
   bo_attachment_name?: string | null;
   created_at: string;
@@ -282,6 +286,18 @@ export function TccApplicationViewDialog({
               <DetailItem label="Expected export date">
                 {formatDisplayDate(app.export_date)}
               </DetailItem>
+              <DetailItem label="EU importer company">
+                {app.eu_importer_company_name || app.clients.company_name}
+              </DetailItem>
+              <DetailItem label="EU importer address">
+                {app.eu_importer_address || '—'}
+              </DetailItem>
+              <DetailItem label="Purchase order number">
+                {app.purchase_order_number || '—'}
+              </DetailItem>
+              <DetailItem label="Invoice number">
+                {app.invoice_number || '—'}
+              </DetailItem>
               {app.remarks && (
                 <div className="col-span-2">
                   <DetailItem label="Remarks / notes">{app.remarks}</DetailItem>
@@ -289,12 +305,12 @@ export function TccApplicationViewDialog({
               )}
             </div>
 
-            {/* BO attachment */}
+            {/* PO attachment */}
             <div className="rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
-                  BO attachment (client upload)
+                  PO attachment (client upload)
                 </span>
                 {boUrl && (
                   <a
@@ -313,13 +329,13 @@ export function TccApplicationViewDialog({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={boUrl}
-                      alt={app.bo_attachment_name || 'BO attachment'}
+                      alt={app.bo_attachment_name || 'PO attachment'}
                       className="max-h-[280px] w-full object-contain rounded"
                     />
                   ) : isPdfUrl(boUrl) ? (
                     <iframe
                       src={boUrl}
-                      title="BO attachment preview"
+                      title="PO attachment preview"
                       className="w-full h-[280px] rounded border border-slate-100"
                     />
                   ) : (
@@ -338,7 +354,7 @@ export function TccApplicationViewDialog({
                   )}
                 </div>
               ) : (
-                <p className="p-6 text-sm text-slate-400 text-center font-medium">No BO attachment uploaded</p>
+                <p className="p-6 text-sm text-slate-400 text-center font-medium">No PO attachment uploaded</p>
               )}
             </div>
           </div>
@@ -422,7 +438,7 @@ export function TccApplicationViewDialog({
                 <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
                 <p className="text-sm font-semibold text-slate-600">Certificate not issued yet</p>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                  Review the client submission and BO attachment above. After you approve, the PDF certificate will
+                  Review the client submission and PO attachment above. After you approve, the PDF certificate will
                   appear here.
                 </p>
               </div>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { applyForTccAction } from '@/actions/tcc';
+import { applyForTccAction, updateTccApplicationAction } from '@/actions/tcc';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Info,
   Paperclip,
+  Building2,
 } from 'lucide-react';
 import { ModalErrorBox } from './ui/ModalErrorBox';
 import { FormLabel } from './ui/FormLabel';
@@ -41,23 +42,58 @@ interface Substance {
   reach_certificate?: ReachCertificateInfo | null;
 }
 
-interface TccApplicationFormProps {
-  authorizedSubstances: Substance[];
+export interface TccApplicationEditData {
+  id: string;
+  chemical_id: string;
+  quantity_mt: number;
+  export_date: string | null;
+  eu_importer_company_name: string | null;
+  eu_importer_address: string | null;
+  purchase_order_number: string | null;
+  invoice_number: string | null;
+  bo_attachment_url?: string | null;
+  bo_attachment_name?: string | null;
 }
 
-export default function TccApplicationForm({ authorizedSubstances }: TccApplicationFormProps) {
+interface TccApplicationFormProps {
+  authorizedSubstances: Substance[];
+  clientCompanyName: string;
+  editApplication?: TccApplicationEditData | null;
+}
+
+function formatDateInput(value: string | null | undefined) {
+  if (!value) return '';
+  return value.slice(0, 10);
+}
+
+export default function TccApplicationForm({
+  authorizedSubstances,
+  clientCompanyName,
+  editApplication = null,
+}: TccApplicationFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const isEditing = Boolean(editApplication?.id);
 
-  const [chemicalId, setChemicalId] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [exportDate, setExportDate] = useState('');
+  const [chemicalId, setChemicalId] = useState(editApplication?.chemical_id ?? '');
+  const [quantity, setQuantity] = useState(
+    editApplication ? String(editApplication.quantity_mt) : ''
+  );
+  const [exportDate, setExportDate] = useState(formatDateInput(editApplication?.export_date));
+  const [euImporterCompanyName] = useState(
+    editApplication?.eu_importer_company_name?.trim() || clientCompanyName
+  );
+  const [euImporterAddress, setEuImporterAddress] = useState(
+    editApplication?.eu_importer_address ?? ''
+  );
+  const [purchaseOrderNumber, setPurchaseOrderNumber] = useState(
+    editApplication?.purchase_order_number ?? ''
+  );
+  const [invoiceNumber, setInvoiceNumber] = useState(editApplication?.invoice_number ?? '');
   const [boFile, setBoFile] = useState<File | null>(null);
 
-  // Selected chemical info for preview
   const selectedSubstance = authorizedSubstances.find((s) => s.id === chemicalId);
-
   const initialQuota = selectedSubstance ? Number(selectedSubstance.available_quantity) : 0;
   const requestedAmt = Number(quantity) || 0;
   const finalQuota = initialQuota - requestedAmt;
@@ -67,6 +103,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
   const eligibleSubstances = authorizedSubstances.filter(
     (s) => s.has_valid_reach && Number(s.available_quantity) > 0
   );
+  const hasExistingBo = Boolean(editApplication?.bo_attachment_url);
 
   const handleChemicalChange = (value: string) => {
     setChemicalId(value);
@@ -84,7 +121,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
     }
   };
 
-  const handleApply = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -120,12 +157,21 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       return;
     }
 
-    if (!boFile) {
-      setError('BO attachment is required.');
+    if (!euImporterAddress.trim()) {
+      setError('EU importer address is required.');
       return;
     }
 
-    // Verify expiry date of chemical substance
+    if (!purchaseOrderNumber.trim()) {
+      setError('Purchase order number is required.');
+      return;
+    }
+
+    if (!boFile && !hasExistingBo) {
+      setError('PO attachment is required.');
+      return;
+    }
+
     if (selectedSubstance?.validity_date) {
       const expiry = new Date(selectedSubstance.validity_date);
       const shipment = new Date(exportDate);
@@ -148,34 +194,45 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
 
     startTransition(async () => {
       const payload = new FormData();
+      if (isEditing && editApplication) {
+        payload.append('application_id', editApplication.id);
+      }
       payload.append('chemical_id', chemicalId);
       payload.append('quantity_mt', quantity);
       payload.append('export_date', exportDate);
-      payload.append('bo_attachment', boFile);
+      payload.append('eu_importer_company_name', euImporterCompanyName);
+      payload.append('eu_importer_address', euImporterAddress.trim());
+      payload.append('purchase_order_number', purchaseOrderNumber.trim());
+      payload.append('invoice_number', invoiceNumber.trim());
+      if (boFile) {
+        payload.append('bo_attachment', boFile);
+      }
 
-      const res = await applyForTccAction(null, payload);
+      const res = isEditing
+        ? await updateTccApplicationAction(null, payload)
+        : await applyForTccAction(null, payload);
+
       if (res.success) {
-        toast.success(res.message || 'TCC compliance application submitted.');
+        toast.success(res.message || (isEditing ? 'Application updated.' : 'TCC application submitted.'));
         router.push('/client');
       } else {
-        setError(typeof res.error === 'string' ? res.error : 'Failed to submit application.');
+        setError(typeof res.error === 'string' ? res.error : 'Failed to save application.');
       }
     });
   };
 
-  // Calculate dynamic quota preview (finalQuota computed above)
-
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-slide-in">
-      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Tonnage Compliance Declaration</h1>
         <p className="text-sm text-slate-500 font-medium">
-          Apply for an official TCC permit. A valid REACH Compliance Certificate (1-year validity) is required per substance before TCC application.
+          {isEditing
+            ? 'Update your TCC application. Changes are allowed until the administrator approves it.'
+            : 'Apply for an official TCC permit. A valid REACH Compliance Certificate (1-year validity) is required per substance before TCC application.'}
         </p>
       </div>
 
-      {eligibleSubstances.length === 0 && (
+      {eligibleSubstances.length === 0 && !isEditing && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900 font-medium flex gap-3 items-start">
           <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
@@ -188,7 +245,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
       )}
 
       <div className="grid gap-8 grid-cols-1 md:grid-cols-5">
-        {/* Form panel */}
         <div className="md:col-span-3">
           <Card className="border-slate-100 shadow-xs">
             <CardHeader>
@@ -199,8 +255,56 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
               <CardDescription>Enter correct regulatory and chemical data.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleApply} className="space-y-4">
-                {/* Substance Selection */}
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-teal-700" />
+                    EU Importer Information
+                  </h3>
+
+                  <div className="space-y-2">
+                    <FormLabel required>Company Name</FormLabel>
+                    <Input
+                      type="text"
+                      value={euImporterCompanyName}
+                      readOnly
+                      className="bg-white text-slate-700"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <FormLabel required>Address</FormLabel>
+                    <Input
+                      type="text"
+                      placeholder="Enter one-line EU importer address"
+                      value={euImporterAddress}
+                      onChange={(e) => setEuImporterAddress(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <FormLabel required>Purchase Order Number</FormLabel>
+                    <Input
+                      type="text"
+                      placeholder="Enter purchase order number"
+                      value={purchaseOrderNumber}
+                      onChange={(e) => setPurchaseOrderNumber(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <FormLabel>Invoice Number</FormLabel>
+                    <Input
+                      type="text"
+                      placeholder="Optional invoice number"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <FormLabel required>Chemical Substance</FormLabel>
                   <Select
@@ -214,7 +318,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                         let label = `${s.chemical_name} (CAS: ${s.cas_number})`;
                         if (!reachOk) {
                           label += ' — REACH certificate required';
-                        } else if (remaining <= 0) {
+                        } else if (remaining <= 0 && !isEditing) {
                           label += ' — No quota left';
                         } else {
                           label += ` — ${remaining} MT available`;
@@ -222,7 +326,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                         return {
                           value: s.id,
                           label,
-                          disabled: !reachOk || remaining <= 0,
+                          disabled: !reachOk || (remaining <= 0 && !isEditing),
                         };
                       }),
                     ]}
@@ -230,7 +334,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   />
                 </div>
 
-                {/* Tonnage Quantity */}
                 <div className="space-y-2">
                   <FormLabel required>Export Tonnage (Metric Tons - MT)</FormLabel>
                   <Input
@@ -245,7 +348,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                     }
                     value={quantity}
                     onChange={(e) => handleQuantityChange(e.target.value)}
-                    disabled={noQuotaLeft}
+                    disabled={noQuotaLeft && !isEditing}
                     required
                   />
                   {selectedSubstance && (
@@ -261,7 +364,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   )}
                 </div>
 
-                {/* Export date */}
                 <div className="space-y-2">
                   <FormLabel required>Expected Export Shipment Date</FormLabel>
                   <Input
@@ -273,7 +375,22 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                 </div>
 
                 <div className="space-y-2">
-                  <FormLabel required>BO Attachment</FormLabel>
+                  <FormLabel required={!hasExistingBo}>
+                    PO Attachment{hasExistingBo ? ' (replace optional)' : ''}
+                  </FormLabel>
+                  {hasExistingBo && (
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Current file:{' '}
+                      <a
+                        href={editApplication?.bo_attachment_url ?? '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-700 hover:underline"
+                      >
+                        {editApplication?.bo_attachment_name || 'View attachment'}
+                      </a>
+                    </p>
+                  )}
                   <div className="flex flex-col gap-2">
                     <label className="flex items-center gap-2 h-10 px-3 border border-slate-200 rounded-md bg-white cursor-pointer hover:bg-slate-50 text-sm text-slate-600">
                       <Paperclip className="h-4 w-4 text-slate-400 shrink-0" />
@@ -305,9 +422,17 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                   <Button
                     type="submit"
                     isLoading={isPending}
-                    disabled={isPending || quotaExceeded || noQuotaLeft || noValidReach || !quantity || Number(quantity) <= 0}
+                    disabled={
+                      isPending ||
+                      quotaExceeded ||
+                      (noQuotaLeft && !isEditing) ||
+                      noValidReach ||
+                      !quantity ||
+                      Number(quantity) <= 0
+                    }
                   >
-                    Submit Application <ArrowRight className="h-4 w-4 ml-1.5" />
+                    {isEditing ? 'Save Changes' : 'Submit Application'}{' '}
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
                   </Button>
                 </div>
               </form>
@@ -315,7 +440,6 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
           </Card>
         </div>
 
-        {/* Dynamic preview sidebar */}
         <div className="md:col-span-2 space-y-6">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
             <Info className="h-4 w-4 text-slate-400" /> Tonnage Quota Calculator
@@ -392,7 +516,7 @@ export default function TccApplicationForm({ authorizedSubstances }: TccApplicat
                         </p>
                       </div>
                     </div>
-                  ) : noQuotaLeft ? (
+                  ) : noQuotaLeft && !isEditing ? (
                     <div className="p-3 bg-amber-50 text-amber-800 border border-amber-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
                       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                       <div>

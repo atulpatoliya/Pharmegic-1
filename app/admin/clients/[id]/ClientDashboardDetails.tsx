@@ -50,6 +50,7 @@ import { TableDataExport } from '@/components/TableDataExport';
 import { formatDisplayDate } from '@/lib/date-filter';
 import type { CsvColumn } from '@/lib/export-csv';
 import { processTccAction } from '@/actions/tcc';
+import { canClientEditTccApplication } from '@/lib/tcc-application';
 import { TccApplicationViewDialog, type TccEmailDefaults, type TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
 import Link from 'next/link';
@@ -748,6 +749,10 @@ export default function ClientDashboardDetails({
       remarks: app.remarks as string | null | undefined,
       status: app.status as string,
       rejection_reason: app.rejection_reason as string | null | undefined,
+      eu_importer_company_name: app.eu_importer_company_name as string | null | undefined,
+      eu_importer_address: app.eu_importer_address as string | null | undefined,
+      purchase_order_number: app.purchase_order_number as string | null | undefined,
+      invoice_number: app.invoice_number as string | null | undefined,
       bo_attachment_url: app.bo_attachment_url as string | null | undefined,
       bo_attachment_name: app.bo_attachment_name as string | null | undefined,
       created_at: app.created_at as string,
@@ -1572,11 +1577,22 @@ export default function ClientDashboardDetails({
                       <td className="px-6 py-4 text-center">
                         <div className="flex justify-center gap-2 items-center">
                           {app.bo_attachment_url && (
-                            <a href={app.bo_attachment_url} target="_blank" rel="noopener noreferrer" title="View BO attachment">
+                            <a href={app.bo_attachment_url} target="_blank" rel="noopener noreferrer" title="View PO attachment">
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-600">
                                 <FileText className="h-4 w-4" />
                               </Button>
                             </a>
+                          )}
+                          {currentUserRole === 'CLIENT' && canClientEditTccApplication(app.status) && (
+                            <Link href={`/client/apply?edit=${app.id}`} title="Edit application">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-amber-700 hover:bg-amber-50"
+                              >
+                                <PenLine className="h-4 w-4" />
+                              </Button>
+                            </Link>
                           )}
                           <Button
                             variant="ghost"
@@ -2009,7 +2025,7 @@ export default function ClientDashboardDetails({
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
                   >
                     <Download className="h-3.5 w-3.5" />
-                    View BO: {selectedTccApp.bo_attachment_name || 'Attachment'}
+                    View PO: {selectedTccApp.bo_attachment_name || 'Attachment'}
                   </a>
                 )}
               </div>

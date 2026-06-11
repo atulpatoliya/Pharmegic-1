@@ -108,6 +108,8 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
         )
       : [];
 
+  const dashboardHome = role === 'CLIENT' ? '/client' : '/admin';
+
   const navLinkClass = (active: boolean, isSub = false) =>
     `flex items-center gap-3 rounded-lg text-sm font-medium transition-all ${
       isSub ? 'pl-9 pr-4 py-2.5' : 'px-4 py-3'
@@ -121,7 +123,7 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     <div className="flex flex-col h-full bg-primary text-primary-foreground border-r border-primary/20">
       <div className="flex items-center justify-between p-6 border-b border-primary-hover">
         <div className="rounded-lg bg-white px-2.5 py-1.5 shadow-xs">
-          <BrandLogo variant="sidebar" href="/" />
+          <BrandLogo variant="sidebar" href={dashboardHome} />
         </div>
         <button
           onClick={() => setSidebarOpen(false)}

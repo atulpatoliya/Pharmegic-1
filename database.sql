@@ -169,6 +169,10 @@ CREATE TABLE IF NOT EXISTS public.tcc_applications (
     remarks TEXT,
     bo_attachment_url TEXT,
     bo_attachment_name TEXT,
+    eu_importer_company_name TEXT,
+    eu_importer_address TEXT,
+    purchase_order_number TEXT,
+    invoice_number TEXT,
     status public.tcc_status DEFAULT 'pending',
     rejection_reason TEXT,
     approved_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
@@ -287,6 +291,10 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS login_password TEXT;
 
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_url TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_name TEXT;
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS eu_importer_company_name TEXT;
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS eu_importer_address TEXT;
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS purchase_order_number TEXT;
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS invoice_number TEXT;
 
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_host TEXT DEFAULT '';
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_port INTEGER DEFAULT 587;

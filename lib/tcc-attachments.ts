@@ -29,7 +29,7 @@ const ALLOWED_MIME_PREFIXES = [
 
 export function validateBoAttachment(file: File): { ok: true } | { ok: false; error: string } {
   if (file.size > MAX_BO_BYTES) {
-    return { ok: false, error: 'BO file must be 10 MB or smaller.' };
+    return { ok: false, error: 'PO file must be 10 MB or smaller.' };
   }
 
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
@@ -46,7 +46,7 @@ export function validateBoAttachment(file: File): { ok: true } | { ok: false; er
     file.type === 'application/octet-stream';
 
   if (!mimeOk && file.type) {
-    return { ok: false, error: 'Unsupported file type for BO attachment.' };
+    return { ok: false, error: 'Unsupported file type for PO attachment.' };
   }
 
   return { ok: true };
@@ -72,7 +72,7 @@ export async function uploadBoAttachment(
     });
 
   if (uploadError) {
-    throw new Error(`BO upload failed: ${uploadError.message}`);
+    throw new Error(`PO upload failed: ${uploadError.message}`);
   }
 
   const { data } = supabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(fileName);

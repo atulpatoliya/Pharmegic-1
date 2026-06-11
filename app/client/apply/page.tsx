@@ -12,8 +12,13 @@ import {
   REACH_CERTIFICATE_TYPE,
   getReachCertificateStatus,
 } from '@/lib/reach-certificate';
+import { canClientEditTccApplication } from '@/lib/tcc-application';
 
-export default async function ApplyPage() {
+export default async function ApplyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ edit?: string }>;
+}) {
   const session = await getSession();
   if (!session || session.role !== 'CLIENT') redirect('/login');
 
@@ -26,26 +31,45 @@ export default async function ApplyPage() {
     );
   }
 
+  const { edit: editId } = await searchParams;
   const adminSupabase = createAdminClient();
 
-  const [{ data: mappings }, { data: approvedTccs }, { data: reachCerts }] = await Promise.all([
-    adminSupabase
-      .from('client_chemicals')
-      .select('chemical_id, available_quantity, validity_date, chemicals(*)')
-      .eq('client_id', clientId)
-      .eq('status', 'active'),
-    adminSupabase
+  const [{ data: mappings }, { data: approvedTccs }, { data: reachCerts }, { data: client }] =
+    await Promise.all([
+      adminSupabase
+        .from('client_chemicals')
+        .select('chemical_id, available_quantity, validity_date, chemicals(*)')
+        .eq('client_id', clientId)
+        .eq('status', 'active'),
+      adminSupabase
+        .from('tcc_applications')
+        .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+        .eq('client_id', clientId)
+        .eq('status', 'approved'),
+      adminSupabase
+        .from('certificates')
+        .select('id, chemical_id, certificate_number, issued_at, expires_at, status, type, file_url')
+        .eq('client_id', clientId)
+        .eq('type', REACH_CERTIFICATE_TYPE)
+        .order('issued_at', { ascending: false }),
+      adminSupabase.from('clients').select('company_name').eq('id', clientId).single(),
+    ]);
+
+  let editApplication = null;
+  if (editId) {
+    const { data: existingApp } = await adminSupabase
       .from('tcc_applications')
-      .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+      .select(
+        'id, chemical_id, quantity_mt, export_date, eu_importer_company_name, eu_importer_address, purchase_order_number, invoice_number, bo_attachment_url, bo_attachment_name, status'
+      )
+      .eq('id', editId)
       .eq('client_id', clientId)
-      .eq('status', 'approved'),
-    adminSupabase
-      .from('certificates')
-      .select('id, chemical_id, certificate_number, issued_at, expires_at, status, type, file_url')
-      .eq('client_id', clientId)
-      .eq('type', REACH_CERTIFICATE_TYPE)
-      .order('issued_at', { ascending: false }),
-  ]);
+      .maybeSingle();
+
+    if (existingApp && canClientEditTccApplication(existingApp.status)) {
+      editApplication = existingApp;
+    }
+  }
 
   const reachByChemical = mapLatestReachByChemical(reachCerts || []);
 
@@ -77,5 +101,11 @@ export default async function ApplyPage() {
     })
     .filter(Boolean);
 
-  return <TccApplicationForm authorizedSubstances={authorizedSubstances as any} />;
+  return (
+    <TccApplicationForm
+      authorizedSubstances={authorizedSubstances as any}
+      clientCompanyName={client?.company_name || ''}
+      editApplication={editApplication}
+    />
+  );
 }
