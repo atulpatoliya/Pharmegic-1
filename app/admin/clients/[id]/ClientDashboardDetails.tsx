@@ -36,7 +36,7 @@ import {
   getLastDateOfYear,
   getTodayDateString,
 } from '@/lib/reach-certificate';
-import { deleteReachCertificateAction } from '@/actions/reach';
+import { deleteReachCertificateAction, sendBulkReachCertificatesEmailAction } from '@/actions/reach';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
@@ -206,6 +206,30 @@ export default function ClientDashboardDetails({
     | { kind: 'pending'; chemicalId: string; chemical_name: string }
     | null
   >(null);
+  const [selectedRcCertIds, setSelectedRcCertIds] = useState<string[]>([]);
+
+  const issuedRcCertIds = useMemo(
+    () =>
+      rcListRows
+        .filter((row): row is { kind: 'issued'; cert: { id: string } } => row.kind === 'issued')
+        .map((row) => row.cert.id),
+    [rcListRows]
+  );
+
+  const allIssuedRcSelected =
+    issuedRcCertIds.length > 0 && issuedRcCertIds.every((id) => selectedRcCertIds.includes(id));
+
+  const toggleRcCertSelection = (certificateId: string) => {
+    setSelectedRcCertIds((current) =>
+      current.includes(certificateId)
+        ? current.filter((id) => id !== certificateId)
+        : [...current, certificateId]
+    );
+  };
+
+  const toggleAllIssuedRcSelection = () => {
+    setSelectedRcCertIds(allIssuedRcSelected ? [] : [...issuedRcCertIds]);
+  };
 
   const [isTccViewOpen, setIsTccViewOpen] = useState(false);
   const [viewTccApp, setViewTccApp] = useState<TccViewApplication | null>(null);
@@ -569,6 +593,24 @@ export default function ClientDashboardDetails({
         else toast.error(res.error || 'Error');
       });
     }
+  };
+
+  const handleBulkSendRcCertificates = () => {
+    if (selectedRcCertIds.length === 0) {
+      toast.error('Select at least one RC certificate.');
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await sendBulkReachCertificatesEmailAction(client.id, selectedRcCertIds);
+      if (res.success) {
+        toast.success(res.message || 'RC certificates sent successfully.');
+        setSelectedRcCertIds([]);
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to send RC certificates.');
+      }
+    });
   };
 
   const handleDeleteRcCertificate = () => {
@@ -1102,26 +1144,53 @@ export default function ClientDashboardDetails({
       {/* RC Certificates List */}
       {showRcCertificatesSection && (
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-3">
           <h2 className="font-bold text-slate-700 text-sm">RC Compliance Certificates</h2>
           {currentUserRole !== 'CLIENT' && (
-            <Button
-              size="sm"
-              className="h-8 bg-teal-700 hover:bg-teal-800"
-              onClick={() => {
-                setModalError('assignChem', null);
-                setAssignChemData(emptyAssignChemData());
-                setAssignChemModalOpen(true);
-              }}
-            >
-              + Assign Substance &amp; Issue RC
-            </Button>
+            <div className="flex items-center gap-2">
+              {selectedRcCertIds.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-teal-200 text-teal-800 hover:bg-teal-50"
+                  onClick={handleBulkSendRcCertificates}
+                  disabled={isPending}
+                  isLoading={isPending}
+                >
+                  <Mail className="h-3.5 w-3.5 mr-1.5" />
+                  Send Mail ({selectedRcCertIds.length})
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="h-8 bg-teal-700 hover:bg-teal-800"
+                onClick={() => {
+                  setModalError('assignChem', null);
+                  setAssignChemData(emptyAssignChemData());
+                  setAssignChemModalOpen(true);
+                }}
+              >
+                + Assign Substance &amp; Issue RC
+              </Button>
+            </div>
           )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-white text-slate-500 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
               <tr>
+                {currentUserRole !== 'CLIENT' && (
+                  <th className="px-4 py-4 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allIssuedRcSelected}
+                      onChange={toggleAllIssuedRcSelection}
+                      disabled={issuedRcCertIds.length === 0}
+                      aria-label="Select all issued RC certificates"
+                      className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                    />
+                  </th>
+                )}
                 <th className="px-6 py-4">Certificate No.</th>
                 <th className="px-6 py-4">Registration No.</th>
                 <th className="px-6 py-4">Chemical</th>
@@ -1138,7 +1207,7 @@ export default function ClientDashboardDetails({
             <tbody className="divide-y divide-slate-100">
               {rcListRows.length === 0 ? (
                 <tr>
-                  <td colSpan={currentUserRole !== 'CLIENT' ? 9 : 8} className="px-6 py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={currentUserRole !== 'CLIENT' ? 10 : 8} className="px-6 py-12 text-center text-slate-400 font-medium">
                     No substances assigned yet. Assign a substance to issue an RC certificate.
                   </td>
                 </tr>
@@ -1150,6 +1219,7 @@ export default function ClientDashboardDetails({
 
                     return (
                       <tr key={`pending-${row.chemicalId}`} className="hover:bg-slate-50/50 transition-colors bg-amber-50/30">
+                        {currentUserRole !== 'CLIENT' && <td className="px-4 py-4" />}
                         <td className="px-6 py-4 font-mono text-xs text-slate-400">—</td>
                         <td className="px-6 py-4 text-slate-400">—</td>
                         <td className="px-6 py-4 font-semibold text-slate-800">{chemName}</td>
@@ -1200,8 +1270,24 @@ export default function ClientDashboardDetails({
                   const isValid = isActiveReachCertificate(cert);
                   const status = getReachCertificateStatus(cert);
 
+                  const isSelected = selectedRcCertIds.includes(cert.id);
+
                   return (
-                    <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr
+                      key={cert.id}
+                      className={`hover:bg-slate-50/50 transition-colors ${isSelected ? 'bg-teal-50/40' : ''}`}
+                    >
+                      {currentUserRole !== 'CLIENT' && (
+                        <td className="px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleRcCertSelection(cert.id)}
+                            aria-label={`Select ${cert.certificate_number}`}
+                            className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                          />
+                        </td>
+                      )}
                       <td className="px-6 py-4 font-mono font-bold text-teal-900 text-xs">{cert.certificate_number}</td>
                       <td className="px-6 py-4 font-medium text-slate-700">{cert.registration_number || '—'}</td>
                       <td className="px-6 py-4 font-semibold text-slate-800">{chemName}</td>

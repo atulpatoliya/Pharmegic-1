@@ -10,7 +10,7 @@ import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
-import { sendCertificateEmail as sendCertEmail } from '@/services/email';
+import { sendBulkReachCertificatesEmail, sendCertificateEmail as sendCertEmail } from '@/services/email';
 import {
   REACH_CERTIFICATE_TYPE,
   getLastDateOfYear,
@@ -536,6 +536,152 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
     return { success: true, message: 'Certificate email resent successfully.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+export async function sendBulkReachCertificatesEmailAction(
+  clientId: string,
+  certificateIds: string[]
+) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const uniqueIds = [...new Set(certificateIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return { success: false, error: 'Select at least one RC certificate.' };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  try {
+    const [{ data: certs, error }, { data: settings }] = await Promise.all([
+      adminSupabase
+        .from('certificates')
+        .select(`
+          *,
+          chemicals (id, chemical_name, cas_number, ec_number, tonnage_band),
+          clients (
+            id,
+            company_name,
+            email,
+            uuid_number,
+            address,
+            city,
+            state,
+            postal_code,
+            country,
+            client_contacts (email)
+          )
+        `)
+        .in('id', uniqueIds)
+        .eq('client_id', clientId)
+        .eq('type', REACH_CERTIFICATE_TYPE),
+      adminSupabase
+        .from('admin_settings')
+        .select(
+          'rc_smtp_host, rc_smtp_port, rc_smtp_user, rc_smtp_pass, rc_smtp_from, rc_smtp_cc_default'
+        )
+        .eq('id', 1)
+        .single(),
+    ]);
+
+    if (error || !certs?.length) {
+      throw new Error('Selected RC certificates were not found.');
+    }
+    if (certs.length !== uniqueIds.length) {
+      throw new Error('Some selected RC certificates could not be found.');
+    }
+
+    const client = certs[0].clients;
+    if (!client?.email) {
+      throw new Error('Client primary email is not configured.');
+    }
+
+    const contactEmails =
+      client.client_contacts?.map((c: { email: string }) => c.email).filter(Boolean) || [];
+
+    const recipients = buildCertificateRecipients({
+      primaryEmail: client.email,
+      contactEmails,
+      defaultCcEmails: settings?.rc_smtp_cc_default,
+      senderEmail: settings?.rc_smtp_from,
+    });
+
+    const attachmentItems = await Promise.all(
+      certs.map(async (cert) => {
+        const attachment = await downloadReachCertificateAttachment(adminSupabase, cert);
+        return {
+          certificateNumber: cert.certificate_number,
+          chemicalName: cert.chemicals?.chemical_name || 'N/A',
+          pdfBuffer: attachment.buffer,
+          pdfFileName: attachment.fileName,
+          attachmentContentType: attachment.contentType,
+        };
+      })
+    );
+
+    const subject =
+      certs.length === 1
+        ? `REACH Compliance Certificate Issued — ${certs[0].certificate_number}`
+        : `REACH Compliance Certificates Issued — ${certs.length} Certificates`;
+
+    await sendBulkReachCertificatesEmail({
+      to: recipients.to,
+      cc: recipients.cc,
+      subject,
+      companyName: client.company_name,
+      items: attachmentItems,
+      smtpConfig: buildRcSmtpConfig(settings),
+    });
+
+    const now = new Date().toISOString();
+    for (const cert of certs) {
+      const alreadySent = Boolean(cert.mail_sent);
+      await adminSupabase
+        .from('certificates')
+        .update(
+          alreadySent
+            ? {
+                mail_resend_count: (cert.mail_resend_count || 0) + 1,
+                last_resend_at: now,
+                last_resend_by: session.userId,
+                mail_sent_history: appendMailSentHistory(cert.mail_sent_history, now),
+              }
+            : {
+                mail_sent: true,
+                mail_sent_at: now,
+                mail_sent_by: session.userId,
+                mail_sent_history: [now],
+              }
+        )
+        .eq('id', cert.id);
+
+      await adminSupabase.from('activity_logs').insert({
+        client_id: clientId,
+        user_id: session.userId,
+        action: alreadySent ? 'REACH_CERTIFICATE_EMAIL_RESENT' : 'REACH_CERTIFICATE_EMAIL_SENT',
+        entity_type: 'certificates',
+        entity_id: cert.id,
+        description: alreadySent
+          ? `RC certificate email resent via bulk send (${(cert.mail_resend_count || 0) + 1}x)`
+          : `RC certificate email sent via bulk send to ${recipients.to}`,
+      });
+
+      if (cert.chemical_id) {
+        revalidatePath(`/admin/clients/${clientId}/rc-preview/${cert.chemical_id}`);
+      }
+    }
+
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+
+    return {
+      success: true,
+      message: `${certs.length} RC certificate${certs.length > 1 ? 's' : ''} sent to ${recipients.to} in one email.`,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[SEND BULK REACH CERT EMAIL ERROR]:', err);
     return { success: false, error: message };
   }
 }

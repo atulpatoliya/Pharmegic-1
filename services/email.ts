@@ -197,6 +197,125 @@ function getCertificateEmailHtml(companyName: string, chemicalName: string, cert
 </html>`;
 }
 
+export interface BulkReachCertificateEmailItem {
+  certificateNumber: string;
+  chemicalName: string;
+  pdfBuffer: Buffer;
+  pdfFileName: string;
+  attachmentContentType?: string;
+}
+
+export async function sendBulkReachCertificatesEmail({
+  to,
+  cc,
+  subject,
+  companyName,
+  items,
+  smtpConfig,
+}: {
+  to: string;
+  cc?: string[];
+  subject: string;
+  companyName: string;
+  items: BulkReachCertificateEmailItem[];
+  smtpConfig?: SmtpConfig;
+}) {
+  const { transporter, from } = buildTransporter(smtpConfig);
+  const html = getBulkReachCertificateEmailHtml(
+    companyName,
+    items.map((item) => ({
+      certificateNumber: item.certificateNumber,
+      chemicalName: item.chemicalName,
+    }))
+  );
+
+  const attachments = items.map((item) => ({
+    filename: item.pdfFileName,
+    content: item.pdfBuffer,
+    contentType: item.attachmentContentType || 'application/pdf',
+  }));
+
+  if (transporter) {
+    try {
+      const info = await transporter.sendMail({
+        from,
+        to,
+        cc: cc?.filter(Boolean).join(', ') || undefined,
+        subject,
+        html,
+        attachments,
+      });
+      console.log(`[SMTP] Bulk RC certificate email sent: ${info.messageId}`);
+      return { success: true };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[SMTP] Bulk RC certificate email failed:', msg);
+      logFallbackEmail(to, subject);
+      return { success: true, fallback: true, error: msg };
+    }
+  }
+
+  logFallbackEmail(to, subject);
+  return { success: true, fallback: true };
+}
+
+function getBulkReachCertificateEmailHtml(
+  companyName: string,
+  certificates: { certificateNumber: string; chemicalName: string }[]
+): string {
+  const rows = certificates
+    .map(
+      (cert) => `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-family:monospace;font-weight:700;color:#064e3b;">${cert.certificateNumber}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;">${cert.chemicalName}</td>
+        </tr>`
+    )
+    .join('');
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
+    .container { max-width: 580px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+    .header { background: #064e3b; padding: 32px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.05em; }
+    .header p { margin: 8px 0 0; font-size: 13px; opacity: 0.8; }
+    .body { padding: 32px; }
+    .footer { padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>PHARMEGIC HEALTHCARE</h1>
+      <p>REACH Compliance Certificate Registry</p>
+    </div>
+    <div class="body">
+      <p>Dear <strong>${companyName}</strong>,</p>
+      <p>Your <strong>REACH Compliance Certificates (RC)</strong> have been issued. Please find <strong>${certificates.length}</strong> official certificate${certificates.length > 1 ? 's' : ''} attached to this email.</p>
+      <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:8px;overflow:hidden;margin:20px 0;font-size:14px;">
+        <thead>
+          <tr>
+            <th style="padding:10px 12px;text-align:left;background:#ecfdf5;color:#064e3b;font-size:11px;letter-spacing:0.08em;">CERTIFICATE NO.</th>
+            <th style="padding:10px 12px;text-align:left;background:#ecfdf5;color:#064e3b;font-size:11px;letter-spacing:0.08em;">CHEMICAL</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="font-size:13px;color:#64748b;">Each RC certificate is attached as a separate PDF file. These certificates are required before applying for a Tonnage Compliance Certificate (TCC).</p>
+    </div>
+    <div class="footer">
+      Pharmegic Healthcare Compliance Division | This is an automated compliance notification.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 function getReachCertificateEmailHtml(
   companyName: string,
   chemicalName: string,
