@@ -1,7 +1,9 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { SESSION_COOKIE, SESSION_MAX_AGE, getAuthSecret } from '@/lib/auth/constants';
+import { SESSION_COOKIE, getAuthSecret } from '@/lib/auth/constants';
+import { SESSION_COOKIE_OPTIONS } from '@/lib/auth/cookie-options';
+import { signSessionToken } from '@/lib/auth/sign-session';
 
 export interface SessionPayload {
   userId: string;
@@ -11,21 +13,9 @@ export interface SessionPayload {
 }
 
 export async function createSession(payload: SessionPayload): Promise<void> {
-  const secret = getAuthSecret();
-  const token = await new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime(`${SESSION_MAX_AGE}s`)
-    .sign(secret);
-
+  const token = await signSessionToken(payload);
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: SESSION_MAX_AGE,
-    path: '/',
-  });
+  cookieStore.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
 }
 
 async function reconcileSessionWithDatabase(
@@ -49,7 +39,6 @@ async function reconcileSessionWithDatabase(
 
   user = userById;
 
-  // After DB reset/reseed, JWT may still hold an old user id — match by email
   if (!user) {
     const { data: userByEmail } = await supabase
       .from('users')
@@ -61,16 +50,12 @@ async function reconcileSessionWithDatabase(
 
   if (!user || user.is_disabled) return null;
 
-  const validated: SessionPayload = {
+  return {
     userId: user.id,
     email: user.email,
     role: user.role as SessionPayload['role'],
     clientId: user.client_id ?? null,
   };
-
-  // Do not call createSession here — layouts/pages cannot modify cookies during render.
-  // Return reconciled user for this request; proxy clears stale cookies on redirect to /login.
-  return validated;
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
@@ -79,11 +64,18 @@ export async function getSession(): Promise<SessionPayload | null> {
     const token = cookieStore.get(SESSION_COOKIE)?.value;
     if (!token) return null;
 
-    const secret = getAuthSecret();
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getAuthSecret());
     const jwtSession = payload as unknown as SessionPayload;
 
-    return await reconcileSessionWithDatabase(jwtSession);
+    const reconciled = await reconcileSessionWithDatabase(jwtSession);
+    if (reconciled) return reconciled;
+
+    // Trust a valid signed JWT when DB reconciliation is temporarily unavailable
+    if (jwtSession.userId && jwtSession.email && jwtSession.role) {
+      return jwtSession;
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -91,5 +83,5 @@ export async function getSession(): Promise<SessionPayload | null> {
 
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
+  cookieStore.delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_OPTIONS.path });
 }

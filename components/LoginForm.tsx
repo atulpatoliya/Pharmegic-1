@@ -1,8 +1,6 @@
 'use client';
 
-import { login } from '@/actions/auth';
 import { Button } from './ui/Button';
-import { Input } from './ui/Input';
 import { toast } from '@/store/toast';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
@@ -19,7 +17,7 @@ export default function LoginForm() {
       ? 'Your session expired. Please sign in again.'
       : errorParam === 'Unauthorized'
         ? 'You are not authorized to access that area.'
-        : errorParam || '';
+        : '';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,24 +34,39 @@ export default function LoginForm() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('email', email);
-    formData.append('password', password);
-    if (redirectTo) {
-      formData.append('redirectTo', redirectTo);
-    }
-
     startTransition(async () => {
-      const res = await login(null, formData);
-      if (!res.success) {
-        setErrorMsg(res.error || 'Invalid credentials.');
-        toast.error(res.error || 'Login failed.');
-        return;
-      }
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            email,
+            password,
+            redirectTo: redirectTo || undefined,
+          }),
+        });
 
-      toast.success('Successfully logged in!');
-      // Full page navigation ensures the session cookie is sent on the next request
-      window.location.assign(res.redirectTo || '/login');
+        const data = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          redirectTo?: string;
+        };
+
+        if (!response.ok || !data.success) {
+          const message = data.error || 'Invalid credentials.';
+          setErrorMsg(message);
+          toast.error(message);
+          return;
+        }
+
+        toast.success('Successfully logged in!');
+        window.location.assign(data.redirectTo || '/login');
+      } catch {
+        const message = 'Unable to sign in right now. Please try again.';
+        setErrorMsg(message);
+        toast.error(message);
+      }
     });
   };
 

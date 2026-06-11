@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { SESSION_COOKIE, getAuthSecret } from '@/lib/auth/constants';
+import { SESSION_COOKIE_OPTIONS } from '@/lib/auth/cookie-options';
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'MASTER_ADMIN'];
 const CLIENT_ROLE = 'CLIENT';
@@ -21,7 +22,10 @@ function redirectToLogin(
   }
   const response = NextResponse.redirect(loginUrl);
   if (options?.clearCookie) {
-    response.cookies.delete(SESSION_COOKIE);
+    response.cookies.delete({
+      name: SESSION_COOKIE,
+      path: SESSION_COOKIE_OPTIONS.path,
+    });
   }
   return response;
 }
@@ -62,7 +66,7 @@ function requireSession(
 ): NextResponse | null {
   if (result.status === 'ok') return null;
   return redirectToLogin(request, {
-    error: 'SessionExpired',
+    error: result.status === 'invalid' ? 'SessionExpired' : undefined,
     clearCookie: result.status === 'invalid',
     rememberPath: true,
   });
@@ -74,7 +78,7 @@ export async function middleware(request: NextRequest) {
   // Public routes
   if (
     pathname.startsWith('/verify') ||
-    pathname.startsWith('/api/auth/clear') ||
+    pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
   ) {
