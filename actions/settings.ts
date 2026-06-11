@@ -72,17 +72,19 @@ export async function updateAdminProfileSettingsAction(profileData: {
   }
 }
 
-// ============================================================================
-// UPDATE SMTP SETTINGS
-// ============================================================================
-export async function updateSmtpSettingsAction(smtpData: {
+type SmtpFormPayload = {
   smtp_host?: string;
   smtp_port?: number;
   smtp_user?: string;
   smtp_pass?: string;
   smtp_from?: string;
   smtp_cc_default?: string;
-}) {
+};
+
+// ============================================================================
+// UPDATE TCC SMTP SETTINGS
+// ============================================================================
+export async function updateTccSmtpSettingsAction(smtpData: SmtpFormPayload) {
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
 
@@ -94,7 +96,46 @@ export async function updateSmtpSettingsAction(smtpData: {
 
     if (error) throw error;
     revalidatePath('/admin/settings');
-    return { success: true, message: 'SMTP settings saved. Certificate emails will now use these settings.' };
+    return { success: true, message: 'TCC certificate SMTP settings saved.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+/** @deprecated Use updateTccSmtpSettingsAction */
+export async function updateSmtpSettingsAction(smtpData: SmtpFormPayload) {
+  return updateTccSmtpSettingsAction(smtpData);
+}
+
+// ============================================================================
+// UPDATE RC (REACH) SMTP SETTINGS
+// ============================================================================
+export async function updateRcSmtpSettingsAction(smtpData: SmtpFormPayload) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase
+      .from('admin_settings')
+      .upsert(
+        {
+          id: 1,
+          rc_smtp_host: smtpData.smtp_host,
+          rc_smtp_port: smtpData.smtp_port,
+          rc_smtp_user: smtpData.smtp_user,
+          rc_smtp_pass: smtpData.smtp_pass,
+          rc_smtp_from: smtpData.smtp_from,
+          rc_smtp_cc_default: smtpData.smtp_cc_default,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+
+    if (error) throw error;
+    revalidatePath('/admin/settings');
+    return { success: true, message: 'RC certificate SMTP settings saved.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

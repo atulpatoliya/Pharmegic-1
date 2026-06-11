@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { buildReachCertificateStoredFile } from '@/lib/reach-pdf-data';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
+import { buildRcSmtpConfig } from '@/lib/certificate-smtp-settings';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
 import { revalidatePath } from 'next/cache';
@@ -346,7 +347,9 @@ async function fetchReachCertificateMailContext(certificateId: string) {
       .single(),
     adminSupabase
       .from('admin_settings')
-      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, cc_emails, bcc_emails')
+      .select(
+        'rc_smtp_host, rc_smtp_port, rc_smtp_user, rc_smtp_pass, rc_smtp_from, rc_smtp_cc_default, cc_emails, bcc_emails'
+      )
       .eq('id', 1)
       .single(),
   ]);
@@ -368,7 +371,7 @@ async function fetchReachCertificateMailContext(certificateId: string) {
 
   return {
     cert,
-    settings,
+    smtpConfig: buildRcSmtpConfig(settings),
     recipients,
     attachment,
     chemicalName: cert.chemicals?.chemical_name || 'N/A',
@@ -427,7 +430,7 @@ export async function sendReachCertificateEmailAction(certificateId: string) {
   const adminSupabase = createAdminClient();
 
   try {
-    const { cert, settings, recipients, attachment, chemicalName } =
+    const { cert, smtpConfig, recipients, attachment, chemicalName } =
       await fetchReachCertificateMailContext(certificateId);
 
     await sendCertEmail({
@@ -441,7 +444,7 @@ export async function sendReachCertificateEmailAction(certificateId: string) {
       pdfBuffer: attachment.buffer,
       pdfFileName: attachment.fileName,
       attachmentContentType: attachment.contentType,
-      smtpConfig: settings || undefined,
+      smtpConfig,
       certificateType: 'REACH',
     });
 
@@ -485,7 +488,7 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
   const adminSupabase = createAdminClient();
 
   try {
-    const { cert, settings, recipients, attachment, chemicalName } =
+    const { cert, smtpConfig, recipients, attachment, chemicalName } =
       await fetchReachCertificateMailContext(certificateId);
 
     if (!cert.mail_sent) {
@@ -503,7 +506,7 @@ export async function resendReachCertificateEmailAction(certificateId: string) {
       pdfBuffer: attachment.buffer,
       pdfFileName: attachment.fileName,
       attachmentContentType: attachment.contentType,
-      smtpConfig: settings || undefined,
+      smtpConfig,
       certificateType: 'REACH',
     });
 

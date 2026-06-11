@@ -57,6 +57,12 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     smtp_pass TEXT DEFAULT '',
     smtp_from TEXT DEFAULT '',
     smtp_cc_default TEXT DEFAULT '',
+    rc_smtp_host TEXT DEFAULT '',
+    rc_smtp_port INTEGER DEFAULT 587,
+    rc_smtp_user TEXT DEFAULT '',
+    rc_smtp_pass TEXT DEFAULT '',
+    rc_smtp_from TEXT DEFAULT '',
+    rc_smtp_cc_default TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT single_row CHECK (id = 1)
@@ -280,6 +286,13 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS login_password TEXT;
 
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_url TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS bo_attachment_name TEXT;
+
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_host TEXT DEFAULT '';
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_port INTEGER DEFAULT 587;
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_user TEXT DEFAULT '';
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_pass TEXT DEFAULT '';
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_from TEXT DEFAULT '';
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_cc_default TEXT DEFAULT '';
 
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;

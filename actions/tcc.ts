@@ -9,6 +9,7 @@ import {
 } from '@/lib/tcc-certificate-pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
+import { buildTccSmtpConfig } from '@/lib/certificate-smtp-settings';
 import { tccApplicationSchema } from '@/lib/validations';
 import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
@@ -485,7 +486,9 @@ export async function sendCertificateEmailAction(certificateId: string) {
     // Get SMTP settings from admin_settings
     const { data: settings } = await adminSupabase
       .from('admin_settings')
-      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, cc_emails, bcc_emails')
+      .select(
+        'smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default, cc_emails, bcc_emails'
+      )
       .eq('id', 1)
       .single();
 
@@ -514,7 +517,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
       pdfBuffer: certFile.buffer,
       pdfFileName: certFile.fileName,
       attachmentContentType: certFile.contentType,
-      smtpConfig: settings || undefined,
+      smtpConfig: buildTccSmtpConfig(settings),
     });
 
     // Update mail tracking
@@ -583,7 +586,9 @@ export async function resendCertificateEmailAction(certificateId: string) {
 
     const { data: settings } = await adminSupabase
       .from('admin_settings')
-      .select('smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, cc_emails, bcc_emails')
+      .select(
+        'smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_cc_default, cc_emails, bcc_emails'
+      )
       .eq('id', 1)
       .single();
 
@@ -611,7 +616,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
       pdfBuffer: certFile.buffer,
       pdfFileName: certFile.fileName,
       attachmentContentType: certFile.contentType,
-      smtpConfig: settings || undefined,
+      smtpConfig: buildTccSmtpConfig(settings),
     });
 
     const now = new Date().toISOString();

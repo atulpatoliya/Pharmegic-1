@@ -2,7 +2,17 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { updateAdminProfileSettingsAction, updateAdminAuthAction, updateSmtpSettingsAction } from '@/actions/settings';
+import {
+  updateAdminProfileSettingsAction,
+  updateAdminAuthAction,
+  updateTccSmtpSettingsAction,
+  updateRcSmtpSettingsAction,
+} from '@/actions/settings';
+import {
+  mapRcSmtpFormFromSettings,
+  mapTccSmtpFormFromSettings,
+  type CertificateSmtpFormData,
+} from '@/lib/certificate-smtp-settings';
 import { updateTemplateAction } from '@/actions/templates';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
@@ -20,7 +30,8 @@ import {
   Mail,
   Palette,
   Image as ImageIcon,
-  Server
+  FileSignature,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface SettingsData {
@@ -37,6 +48,12 @@ interface SettingsData {
   smtp_pass?: string | null;
   smtp_from?: string | null;
   smtp_cc_default?: string | null;
+  rc_smtp_host?: string | null;
+  rc_smtp_port?: number | null;
+  rc_smtp_user?: string | null;
+  rc_smtp_pass?: string | null;
+  rc_smtp_from?: string | null;
+  rc_smtp_cc_default?: string | null;
 }
 
 interface TemplateData {
@@ -57,9 +74,12 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
   const [isProfilePending, startProfileTransition] = useTransition();
   const [isBrandingPending, startBrandingTransition] = useTransition();
   const [isAuthPending, startAuthTransition] = useTransition();
-  const [isSmtpPending, startSmtpTransition] = useTransition();
+  const [isTccSmtpPending, startTccSmtpTransition] = useTransition();
+  const [isRcSmtpPending, startRcSmtpTransition] = useTransition();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'branding' | 'security' | 'smtp'>('profile');
+  const [activeTab, setActiveTab] = useState<
+    'profile' | 'branding' | 'security' | 'smtp-tcc' | 'smtp-rc'
+  >('profile');
 
   // 1. Profile Settings State
   const [profile, setProfile] = useState({
@@ -80,15 +100,13 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
   const [emailUpdate, setEmailUpdate] = useState('');
   const [passwordForm, setPasswordForm] = useState({ password: '', confirmPassword: '' });
 
-  // 4. SMTP State
-  const [smtp, setSmtp] = useState({
-    smtp_host: initialSettings?.smtp_host || '',
-    smtp_port: initialSettings?.smtp_port ?? 587,
-    smtp_user: initialSettings?.smtp_user || '',
-    smtp_pass: initialSettings?.smtp_pass || '',
-    smtp_from: initialSettings?.smtp_from || '',
-    smtp_cc_default: initialSettings?.smtp_cc_default || '',
-  });
+  // 4. SMTP State (TCC + RC)
+  const [tccSmtp, setTccSmtp] = useState<CertificateSmtpFormData>(
+    mapTccSmtpFormFromSettings(initialSettings)
+  );
+  const [rcSmtp, setRcSmtp] = useState<CertificateSmtpFormData>(
+    mapRcSmtpFormFromSettings(initialSettings)
+  );
 
   // Image Upload Handler (Base64 conversion)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
@@ -195,24 +213,93 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     toast.info('Branding inputs reset to default template.');
   };
 
-  const handleSaveSmtp = () => {
-    startSmtpTransition(async () => {
-      const res = await updateSmtpSettingsAction({
-        smtp_host: smtp.smtp_host,
-        smtp_port: Number(smtp.smtp_port),
-        smtp_user: smtp.smtp_user,
-        smtp_pass: smtp.smtp_pass,
-        smtp_from: smtp.smtp_from,
-        smtp_cc_default: smtp.smtp_cc_default,
+  const handleSaveTccSmtp = () => {
+    startTccSmtpTransition(async () => {
+      const res = await updateTccSmtpSettingsAction({
+        smtp_host: tccSmtp.smtp_host,
+        smtp_port: Number(tccSmtp.smtp_port),
+        smtp_user: tccSmtp.smtp_user,
+        smtp_pass: tccSmtp.smtp_pass,
+        smtp_from: tccSmtp.smtp_from,
+        smtp_cc_default: tccSmtp.smtp_cc_default,
       });
       if (res.success) {
-        toast.success(res.message || 'SMTP settings saved.');
+        toast.success(res.message || 'TCC SMTP settings saved.');
         router.refresh();
       } else {
-        toast.error(res.error || 'Failed to save SMTP settings.');
+        toast.error(res.error || 'Failed to save TCC SMTP settings.');
       }
     });
   };
+
+  const handleSaveRcSmtp = () => {
+    startRcSmtpTransition(async () => {
+      const res = await updateRcSmtpSettingsAction({
+        smtp_host: rcSmtp.smtp_host,
+        smtp_port: Number(rcSmtp.smtp_port),
+        smtp_user: rcSmtp.smtp_user,
+        smtp_pass: rcSmtp.smtp_pass,
+        smtp_from: rcSmtp.smtp_from,
+        smtp_cc_default: rcSmtp.smtp_cc_default,
+      });
+      if (res.success) {
+        toast.success(res.message || 'RC SMTP settings saved.');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to save RC SMTP settings.');
+      }
+    });
+  };
+
+  const renderSmtpFields = (
+    smtp: CertificateSmtpFormData,
+    setSmtp: React.Dispatch<React.SetStateAction<CertificateSmtpFormData>>
+  ) => (
+    <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+      <div className="md:col-span-2">
+        <Input
+          label="SMTP Host"
+          placeholder="smtp.gmail.com"
+          value={smtp.smtp_host}
+          onChange={(e) => setSmtp({ ...smtp, smtp_host: e.target.value })}
+        />
+      </div>
+      <Input
+        label="SMTP Port"
+        type="number"
+        placeholder="587"
+        value={String(smtp.smtp_port)}
+        onChange={(e) => setSmtp({ ...smtp, smtp_port: Number(e.target.value) })}
+      />
+      <Input
+        label="SMTP Username"
+        placeholder="smtp@company.com"
+        value={smtp.smtp_user}
+        onChange={(e) => setSmtp({ ...smtp, smtp_user: e.target.value })}
+      />
+      <Input
+        type="password"
+        label="SMTP Password"
+        placeholder="••••••••"
+        value={smtp.smtp_pass}
+        onChange={(e) => setSmtp({ ...smtp, smtp_pass: e.target.value })}
+      />
+      <Input
+        type="email"
+        label="From Email Address"
+        placeholder="noreply@pharmegic.com"
+        value={smtp.smtp_from}
+        onChange={(e) => setSmtp({ ...smtp, smtp_from: e.target.value })}
+      />
+      <Input
+        type="email"
+        label="Default CC Email (Admin)"
+        placeholder="admin@company.com"
+        value={smtp.smtp_cc_default}
+        onChange={(e) => setSmtp({ ...smtp, smtp_cc_default: e.target.value })}
+      />
+    </div>
+  );
 
   return (
     <div className="space-y-8 animate-slide-in">
@@ -261,15 +348,26 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
             Security &amp; Login
           </button>
           <button
-            onClick={() => setActiveTab('smtp')}
+            onClick={() => setActiveTab('smtp-tcc')}
             className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
-              activeTab === 'smtp'
+              activeTab === 'smtp-tcc'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <Server className="h-4.5 w-4.5" />
-            Email Settings
+            <FileSignature className="h-4.5 w-4.5" />
+            TCC Email SMTP
+          </button>
+          <button
+            onClick={() => setActiveTab('smtp-rc')}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+              activeTab === 'smtp-rc'
+                ? 'bg-primary text-white'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <ShieldCheck className="h-4.5 w-4.5" />
+            RC Email SMTP
           </button>
         </div>
 
@@ -603,69 +701,60 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
               </Card>
             </div>
           )}
-          {/* TAB 4: SMTP EMAIL SETTINGS */}
-          {activeTab === 'smtp' && (
+          {/* TAB 4: TCC SMTP */}
+          {activeTab === 'smtp-tcc' && (
             <Card className="border-slate-100 shadow-xs">
               <CardHeader>
                 <div className="flex items-center gap-2 text-primary">
-                  <Server className="h-5 w-5" />
-                  <CardTitle>Certificate Email Settings</CardTitle>
+                  <FileSignature className="h-5 w-5" />
+                  <CardTitle>TCC Certificate Email SMTP</CardTitle>
                 </div>
                 <CardDescription>
-                  Configure SMTP settings for sending TCC certificate emails to clients. Only used for certificate delivery.
+                  SMTP used when sending Tonnage Compliance Certificate (TCC) emails to clients.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs font-semibold text-amber-700">
-                  ⚠ SMTP is used only for certificate delivery. No invite, reset, or password emails are sent.
+                  Used only for TCC certificate delivery. Separate from RC certificate email settings.
                 </div>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                  <div className="md:col-span-2">
-                    <Input
-                      label="SMTP Host"
-                      placeholder="smtp.gmail.com"
-                      value={smtp.smtp_host}
-                      onChange={(e) => setSmtp({ ...smtp, smtp_host: e.target.value })}
-                    />
-                  </div>
-                  <Input
-                    label="SMTP Port"
-                    type="number"
-                    placeholder="587"
-                    value={String(smtp.smtp_port)}
-                    onChange={(e) => setSmtp({ ...smtp, smtp_port: Number(e.target.value) })}
-                  />
-                  <Input
-                    label="SMTP Username"
-                    placeholder="smtp@company.com"
-                    value={smtp.smtp_user}
-                    onChange={(e) => setSmtp({ ...smtp, smtp_user: e.target.value })}
-                  />
-                  <Input
-                    type="password"
-                    label="SMTP Password"
-                    placeholder="••••••••"
-                    value={smtp.smtp_pass}
-                    onChange={(e) => setSmtp({ ...smtp, smtp_pass: e.target.value })}
-                  />
-                  <Input
-                    type="email"
-                    label="From Email Address"
-                    placeholder="noreply@pharmegic.com"
-                    value={smtp.smtp_from}
-                    onChange={(e) => setSmtp({ ...smtp, smtp_from: e.target.value })}
-                  />
-                  <Input
-                    type="email"
-                    label="Default CC Email (Admin)"
-                    placeholder="directoratulpatoliya@gmail.com"
-                    value={smtp.smtp_cc_default}
-                    onChange={(e) => setSmtp({ ...smtp, smtp_cc_default: e.target.value })}
-                  />
-                </div>
+                {renderSmtpFields(tccSmtp, setTccSmtp)}
                 <div className="flex justify-end pt-4 border-t border-slate-100">
-                  <Button onClick={handleSaveSmtp} isLoading={isSmtpPending} disabled={isSmtpPending}>
-                    Save SMTP Settings
+                  <Button
+                    onClick={handleSaveTccSmtp}
+                    isLoading={isTccSmtpPending}
+                    disabled={isTccSmtpPending}
+                  >
+                    Save TCC SMTP Settings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 5: RC SMTP */}
+          {activeTab === 'smtp-rc' && (
+            <Card className="border-slate-100 shadow-xs">
+              <CardHeader>
+                <div className="flex items-center gap-2 text-primary">
+                  <ShieldCheck className="h-5 w-5" />
+                  <CardTitle>RC Certificate Email SMTP</CardTitle>
+                </div>
+                <CardDescription>
+                  SMTP used when sending REACH Compliance Certificate (RC) emails to clients.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 text-xs font-semibold text-teal-800">
+                  Used only for RC certificate delivery. Configure independently from TCC SMTP.
+                </div>
+                {renderSmtpFields(rcSmtp, setRcSmtp)}
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <Button
+                    onClick={handleSaveRcSmtp}
+                    isLoading={isRcSmtpPending}
+                    disabled={isRcSmtpPending}
+                  >
+                    Save RC SMTP Settings
                   </Button>
                 </div>
               </CardContent>
