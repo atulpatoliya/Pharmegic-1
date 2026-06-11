@@ -3,7 +3,10 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { buildTccCertificateStoredFile } from '@/lib/tcc-pdf-data';
-import { resolveTccCertificatePdfBuffer, buildTccCertificatePdfInputFromCert } from '@/lib/tcc-certificate-pdf';
+import {
+  resolveTccCertificateDownloadFile,
+  buildTccCertificatePdfInputFromCert,
+} from '@/lib/tcc-certificate-pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { tccApplicationSchema } from '@/lib/validations';
@@ -497,7 +500,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
     });
 
     const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
-    const pdfBuffer = await resolveTccCertificatePdfBuffer(adminSupabase, pdfInput);
+    const certFile = await resolveTccCertificateDownloadFile(adminSupabase, pdfInput);
 
     // Send email
     await sendCertEmail({
@@ -508,8 +511,9 @@ export async function sendCertificateEmailAction(certificateId: string) {
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
       chemicalName: cert.tcc_applications?.chemicals?.chemical_name || 'N/A',
-      pdfBuffer,
-      pdfFileName: `${cert.certificate_number}.pdf`,
+      pdfBuffer: certFile.buffer,
+      pdfFileName: certFile.fileName,
+      attachmentContentType: certFile.contentType,
       smtpConfig: settings || undefined,
     });
 
@@ -594,7 +598,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
     });
 
     const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
-    const pdfBuffer = await resolveTccCertificatePdfBuffer(adminSupabase, pdfInput);
+    const certFile = await resolveTccCertificateDownloadFile(adminSupabase, pdfInput);
 
     await sendCertEmail({
       to: recipients.to,
@@ -604,8 +608,9 @@ export async function resendCertificateEmailAction(certificateId: string) {
       certificateNumber: cert.certificate_number,
       companyName: cert.clients.company_name,
       chemicalName: cert.tcc_applications?.chemicals?.chemical_name || 'N/A',
-      pdfBuffer,
-      pdfFileName: `${cert.certificate_number}.pdf`,
+      pdfBuffer: certFile.buffer,
+      pdfFileName: certFile.fileName,
+      attachmentContentType: certFile.contentType,
       smtpConfig: settings || undefined,
     });
 

@@ -97,9 +97,11 @@ const { data, error } = await supabase.auth.signUp({
 
 ---
 
-## 4. RC Certificate PDF conversion (production server)
+## 4. Certificate PDF conversion (production server — RC & TCC)
 
-The RC certificate **preview** works in the browser (DOCX template). To **issue** certificates and attach **PDF** files to emails, the server needs a document converter.
+Certificate **preview** works in the browser (DOCX template). **PDF download** and **email attachments** require DOCX→PDF conversion on the server.
+
+If PDF download shows a JSON error or downloads `.docx` instead of `.pdf`, the production server is missing a converter — complete one of the options below and redeploy/restart.
 
 ### Option A — LibreOffice (recommended on Linux/VPS)
 
@@ -118,8 +120,17 @@ Restart the app after install.
 Run [Gotenberg](https://gotenberg.dev/) and set in `.env`:
 
 ```env
-GOTENBERG_URL=http://localhost:3000
+# Internal URL to your Gotenberg instance (recommended for VPS / Docker)
+GOTENBERG_URL=http://127.0.0.1:3001
 ```
+
+Example (Docker on the same server):
+
+```bash
+docker run -d --name gotenberg -p 3001:3000 gotenberg/gotenberg:8
+```
+
+Add `GOTENBERG_URL=http://127.0.0.1:3001` to your production `.env`, then restart the portal.
 
 ### Windows development
 

@@ -220,6 +220,14 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
   fs.writeFileSync(docxPath, docxBuffer);
 
   try {
+    if (process.env.GOTENBERG_URL) {
+      try {
+        return await convertWithGotenberg(docxBuffer);
+      } catch {
+        // fall through to local converters
+      }
+    }
+
     try {
       const cliPdf = await convertWithLibreOfficeCli(docxPath, workDir);
       return fs.readFileSync(cliPdf);
@@ -230,15 +238,7 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
     try {
       return await convertWithLibreOfficeConvert(docxBuffer);
     } catch {
-      // try Gotenberg or Word COM
-    }
-
-    if (process.env.GOTENBERG_URL) {
-      try {
-        return await convertWithGotenberg(docxBuffer);
-      } catch {
-        // fall through
-      }
+      // try Word COM on Windows
     }
 
     if (process.platform === 'win32') {
