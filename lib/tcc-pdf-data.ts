@@ -8,6 +8,7 @@ import {
 } from '@/services/tcc-certificate-docx';
 import { buildReachAddressLines } from '@/services/reach-certificate-docx';
 import { getTodayDateString } from '@/lib/reach-certificate';
+import { splitEuImporterAddress } from '@/lib/tcc-eu-importer';
 
 const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -42,6 +43,9 @@ export type TccPdfApplication = {
   tracking_id?: string | null;
   registration_number?: string | null;
   remarks?: string | null;
+  eu_importer_company_name?: string | null;
+  eu_importer_address?: string | null;
+  purchase_order_number?: string | null;
 };
 
 export function buildTccDocxData(input: {
@@ -53,8 +57,31 @@ export function buildTccDocxData(input: {
   deliveryChallanNo?: string | null;
 }): TccCertificateDocxData {
   const address = buildReachAddressLines(input.client);
-  const euImporter = parseEuImporterFields(input.application.remarks, input.application.registration_number);
   const exportDateRaw = input.application.export_date || getTodayDateString();
+
+  const euCompanyName = input.application.eu_importer_company_name?.trim();
+  const euAddress = input.application.eu_importer_address?.trim();
+  let euImporterName: string;
+  let euImporterAddr1: string;
+  let euImporterAddr2: string;
+  let euImporterAddr3: string;
+
+  if (euCompanyName) {
+    euImporterName = euCompanyName;
+    const split = splitEuImporterAddress(euAddress || '');
+    euImporterAddr1 = split.addr1;
+    euImporterAddr2 = split.addr2;
+    euImporterAddr3 = split.addr3;
+  } else {
+    const legacy = parseEuImporterFields(
+      input.application.remarks,
+      input.application.registration_number
+    );
+    euImporterName = legacy.name;
+    euImporterAddr1 = legacy.addr1;
+    euImporterAddr2 = legacy.addr2;
+    euImporterAddr3 = legacy.addr3;
+  }
 
   return {
     companyName: input.client.company_name,
@@ -68,13 +95,14 @@ export function buildTccDocxData(input: {
     registrationNumber: input.registrationNumber?.trim() || '—',
     tonnageBand: input.chemical.tonnage_band || '—',
     uuidNumber: input.client.uuid_number || '—',
-    euImporterName: euImporter.name,
-    euImporterAddr1: euImporter.addr1,
-    euImporterAddr2: euImporter.addr2,
-    euImporterAddr3: euImporter.addr3,
+    euImporterName,
+    euImporterAddr1,
+    euImporterAddr2,
+    euImporterAddr3,
     volumeMt: `${Number(input.application.quantity_mt)} MT`,
     deliveryChallanNo:
       input.deliveryChallanNo?.trim() ||
+      input.application.purchase_order_number?.trim() ||
       input.application.tracking_id?.trim() ||
       '—',
     exportDate: formatTccCertDate(exportDateRaw),

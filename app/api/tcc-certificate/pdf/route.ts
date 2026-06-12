@@ -58,6 +58,9 @@ export async function GET(request: NextRequest) {
         tracking_id,
         registration_number,
         remarks,
+        eu_importer_company_name,
+        eu_importer_address,
+        purchase_order_number,
         chemicals (
           chemical_name,
           cas_number,

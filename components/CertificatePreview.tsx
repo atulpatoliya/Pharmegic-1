@@ -1,14 +1,24 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { sendCertificateEmailAction, resendCertificateEmailAction } from '@/actions/tcc';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/store/toast';
 import {
-  Download, ArrowLeft, Mail, RefreshCw, CheckCircle2,
-  Building, FlaskConical, Calendar, FileText, Shield, AlertCircle
+  Download,
+  ArrowLeft,
+  Mail,
+  RefreshCw,
+  CheckCircle2,
+  Building,
+  FlaskConical,
+  Calendar,
+  FileText,
+  Shield,
+  AlertCircle,
+  Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
@@ -22,6 +32,33 @@ import {
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
+import {
+  TccApplicationAdminEditForm,
+  buildTccAdminEditValues,
+} from '@/components/TccApplicationAdminEditForm';
+import type { TccViewApplication } from '@/components/TccApplicationViewDialog';
+
+type TccApplicationPreview = {
+  id: string;
+  quantity_mt: number;
+  registration_number: string | null;
+  export_date: string | null;
+  remarks?: string | null;
+  status?: string;
+  eu_importer_company_name?: string | null;
+  eu_importer_address?: string | null;
+  purchase_order_number?: string | null;
+  invoice_number?: string | null;
+  tracking_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  chemicals: {
+    chemical_name: string;
+    cas_number: string;
+    ec_number: string | null;
+    tonnage_band: string | null;
+  };
+};
 
 interface CertificatePreviewClientProps {
   cert: {
@@ -49,19 +86,49 @@ interface CertificatePreviewClientProps {
       ec_number: string | null;
       tonnage_band: string | null;
     } | null;
-    tcc_applications?: {
-      quantity_mt: number;
-      registration_number: string | null;
-      export_date: string | null;
-      chemicals: {
-        chemical_name: string;
-        cas_number: string;
-        ec_number: string | null;
-        tonnage_band: string | null;
-      };
-    } | null;
+    tcc_applications?: TccApplicationPreview | null;
   };
   mailSentHistory?: string[];
+}
+
+function buildViewApplicationFromCert(
+  cert: CertificatePreviewClientProps['cert'],
+  tccApp: TccApplicationPreview
+): TccViewApplication {
+  const chemical = cert.chemicals || tccApp.chemicals;
+  return {
+    id: tccApp.id,
+    tracking_id: tccApp.tracking_id,
+    quantity_mt: tccApp.quantity_mt,
+    registration_number: tccApp.registration_number || '',
+    export_date: tccApp.export_date,
+    remarks: tccApp.remarks,
+    status: tccApp.status || 'approved',
+    eu_importer_company_name: tccApp.eu_importer_company_name,
+    eu_importer_address: tccApp.eu_importer_address,
+    purchase_order_number: tccApp.purchase_order_number,
+    invoice_number: tccApp.invoice_number,
+    created_at: tccApp.created_at || cert.issued_at,
+    updated_at: tccApp.updated_at || cert.issued_at,
+    clients: {
+      company_name: cert.clients.company_name,
+      email: cert.clients.email,
+    },
+    chemicals: {
+      chemical_name: chemical?.chemical_name || 'N/A',
+      cas_number: chemical?.cas_number || 'N/A',
+      ec_number: chemical?.ec_number ?? null,
+      tonnage_band: chemical?.tonnage_band ?? null,
+      validity_date: null,
+      available_quantity: 0,
+    },
+    certificates: {
+      id: cert.id,
+      certificate_number: cert.certificate_number,
+      file_url: cert.file_url,
+      issued_at: cert.issued_at,
+    },
+  };
 }
 
 export default function CertificatePreviewClient({
@@ -71,15 +138,29 @@ export default function CertificatePreviewClient({
   const router = useRouter();
   const [isSending, startSendTransition] = useTransition();
   const [isResending, startResendTransition] = useTransition();
+  const [tccApp, setTccApp] = useState(cert.tcc_applications ?? null);
+  const [issuedAt, setIssuedAt] = useState(cert.issued_at);
+  const [expiresAt, setExpiresAt] = useState(cert.expires_at);
+  const [isEditing, setIsEditing] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState(0);
 
   const isReach = cert.type === 'REACH';
-  const chemical = cert.chemicals || cert.tcc_applications?.chemicals;
+  const chemical = cert.chemicals || tccApp?.chemicals;
   const backHref =
     isReach && cert.client_id
       ? `/admin/clients/${cert.client_id}/rc-certificates`
       : '/admin/approvals';
 
   const totalSent = cert.mail_resend_count + (cert.mail_sent ? 1 : 0);
+  const docxPreviewUrl = `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`;
+
+  const viewApplication = useMemo(() => {
+    if (!tccApp) return null;
+    return buildViewApplicationFromCert(
+      { ...cert, issued_at: issuedAt, expires_at: expiresAt },
+      tccApp
+    );
+  }, [cert, tccApp, issuedAt, expiresAt]);
 
   const handleSendMail = () => {
     startSendTransition(async () => {
@@ -105,11 +186,8 @@ export default function CertificatePreviewClient({
     });
   };
 
-  const accentColor = '#064e3b';
-
   return (
     <div className="space-y-6 animate-slide-in">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link href={backHref}>
@@ -125,13 +203,12 @@ export default function CertificatePreviewClient({
             <p className="text-sm text-slate-500 font-medium">
               {isReach
                 ? 'REACH Compliance Certificate — valid for 1 year. Required before TCC application.'
-                : 'TCC Import Certificate — review and send to the client'}
+                : 'TCC Import Certificate — review, edit application data, and send to the client'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Download */}
           <CertificatePdfDownloadLink
             pdfUrl={
               isReach
@@ -149,9 +226,14 @@ export default function CertificatePreviewClient({
             <Download className="h-4 w-4" /> Download PDF
           </CertificatePdfDownloadLink>
 
-          {/* Send / Resend — TCC only */}
-          {!isReach && (
-            !cert.mail_sent ? (
+          {!isReach && viewApplication && !isEditing && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsEditing(true)}>
+              <Pencil className="h-4 w-4" /> Edit application data
+            </Button>
+          )}
+
+          {!isReach &&
+            (!cert.mail_sent ? (
               <Button onClick={handleSendMail} isLoading={isSending} disabled={isSending} className="gap-1.5">
                 <Mail className="h-4 w-4" /> Send Mail To Client
               </Button>
@@ -163,16 +245,21 @@ export default function CertificatePreviewClient({
                     Sent {totalSent > 1 ? `(${totalSent}x)` : ''}
                   </span>
                 </div>
-                <Button variant="outline" onClick={handleResendMail} isLoading={isResending} disabled={isResending} size="sm" className="gap-1.5">
+                <Button
+                  variant="outline"
+                  onClick={handleResendMail}
+                  isLoading={isResending}
+                  disabled={isResending}
+                  size="sm"
+                  className="gap-1.5"
+                >
                   <RefreshCw className="h-4 w-4" /> Resend Mail
                 </Button>
               </div>
-            )
-          )}
+            ))}
         </div>
       </div>
 
-      {/* Email History */}
       {cert.mail_sent && !isReach && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
@@ -182,10 +269,30 @@ export default function CertificatePreviewClient({
         </div>
       )}
 
+      {!isReach && isEditing && viewApplication && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+          <TccApplicationAdminEditForm
+            values={buildTccAdminEditValues(viewApplication)}
+            onCancel={() => setIsEditing(false)}
+            onSaved={(updates) => {
+              const { certificateIssuedAt, ...appUpdates } = updates;
+              setTccApp((prev) => (prev ? { ...prev, ...appUpdates } : prev));
+              if (certificateIssuedAt) {
+                setIssuedAt(certificateIssuedAt);
+                const nextExpiry = new Date(certificateIssuedAt);
+                nextExpiry.setFullYear(nextExpiry.getFullYear() + 1);
+                setExpiresAt(nextExpiry.toISOString());
+              }
+              setIsEditing(false);
+              setPreviewVersion((v) => v + 1);
+              router.refresh();
+            }}
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Certificate Details Panel */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Client Info */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Building className="h-4 w-4 text-primary" />
@@ -203,7 +310,6 @@ export default function CertificatePreviewClient({
             </div>
           </div>
 
-          {/* Chemical Info */}
           {chemical && (
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
               <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
@@ -229,16 +335,28 @@ export default function CertificatePreviewClient({
                     </div>
                   )}
                 </div>
-                {!isReach && cert.tcc_applications && (
+                {!isReach && tccApp && (
                   <>
                     <div>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Quantity</p>
-                      <p className="text-lg font-black text-slate-800">{cert.tcc_applications.quantity_mt} MT</p>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">EU importer</p>
+                      <p className="font-semibold text-slate-800">{tccApp.eu_importer_company_name || '—'}</p>
                     </div>
-                    {cert.tcc_applications.registration_number && (
+                    <div>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Quantity</p>
+                      <p className="text-lg font-black text-slate-800">{tccApp.quantity_mt} MT</p>
+                    </div>
+                    {tccApp.purchase_order_number && (
                       <div>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Registration Number</p>
-                        <p className="font-mono font-semibold text-slate-700">{cert.tcc_applications.registration_number}</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">PO number</p>
+                        <p className="font-semibold text-slate-700">{tccApp.purchase_order_number}</p>
+                      </div>
+                    )}
+                    {tccApp.registration_number && (
+                      <div>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">
+                          Registration Number
+                        </p>
+                        <p className="font-mono font-semibold text-slate-700">{tccApp.registration_number}</p>
                       </div>
                     )}
                   </>
@@ -253,7 +371,6 @@ export default function CertificatePreviewClient({
             </div>
           )}
 
-          {/* Certificate Validity */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Calendar className="h-4 w-4 text-primary" />
@@ -262,24 +379,21 @@ export default function CertificatePreviewClient({
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Issue Date</p>
-                <p className="font-semibold text-slate-800">{new Date(cert.issued_at).toLocaleDateString()}</p>
+                <p className="font-semibold text-slate-800">{new Date(issuedAt).toLocaleDateString()}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Expiry Date</p>
                 <p className="font-semibold text-slate-800">
-                  {cert.expires_at ? new Date(cert.expires_at).toLocaleDateString() : 'N/A'}
+                  {expiresAt ? new Date(expiresAt).toLocaleDateString() : 'N/A'}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={cert.status === 'active' ? 'success' : 'warning'}>
-                {cert.status}
-              </Badge>
+              <Badge variant={cert.status === 'active' ? 'success' : 'warning'}>{cert.status}</Badge>
             </div>
           </div>
         </div>
 
-        {/* PDF Preview */}
         <div className="lg:col-span-3">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 p-4 border-b border-slate-100">
@@ -287,7 +401,7 @@ export default function CertificatePreviewClient({
               <h3 className="text-sm font-bold text-slate-800">Certificate Document Preview</h3>
             </div>
             {cert.id ? (
-              <ReachCertificateDocxViewer docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)} />
+              <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
             ) : (
               <div className="flex flex-col items-center justify-center h-96 text-slate-400">
                 <Shield className="h-12 w-12 mb-3 opacity-30" />

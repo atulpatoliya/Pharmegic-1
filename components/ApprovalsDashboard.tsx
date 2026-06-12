@@ -621,6 +621,10 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
         onApprove={() => handleViewThenAction('approved')}
         onReject={() => handleViewThenAction('rejected')}
         onRequestChanges={() => handleViewThenAction('changes_required')}
+        allowAdminEdit
+        onApplicationUpdated={(updates) => {
+          setViewApp((prev) => (prev ? ({ ...prev, ...updates } as Application) : prev));
+        }}
         emailDefaults={emailDefaults}
       />
 

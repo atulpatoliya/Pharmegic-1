@@ -16,7 +16,6 @@ import { Badge } from './ui/Badge';
 import { formatDisplayDate } from '@/lib/date-filter';
 import {
   Building,
-  FlaskConical,
   FileText,
   Paperclip,
   Shield,
@@ -25,7 +24,12 @@ import {
   Mail,
   RefreshCw,
   CheckCircle2,
+  Pencil,
 } from 'lucide-react';
+import {
+  TccApplicationAdminEditForm,
+  buildTccAdminEditValues,
+} from '@/components/TccApplicationAdminEditForm';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import {
   buildTccCertificateDocxPreviewUrl,
@@ -123,6 +127,8 @@ interface TccApplicationViewDialogProps {
   onRequestChanges: () => void;
   getStatusBadge: (status: string) => React.ReactNode;
   allowReview?: boolean;
+  allowAdminEdit?: boolean;
+  onApplicationUpdated?: (updates: Partial<TccViewApplication>) => void;
   emailDefaults?: TccEmailDefaults;
 }
 
@@ -135,9 +141,14 @@ export function TccApplicationViewDialog({
   onRequestChanges,
   getStatusBadge,
   allowReview = true,
+  allowAdminEdit = false,
+  onApplicationUpdated,
   emailDefaults,
 }: TccApplicationViewDialogProps) {
   const router = useRouter();
+  const [displayApp, setDisplayApp] = useState<TccViewApplication | null>(app);
+  const [isEditing, setIsEditing] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState(0);
   const [isSending, startSendTransition] = useTransition();
   const [isResending, startResendTransition] = useTransition();
   const [mailState, setMailState] = useState({
@@ -148,7 +159,13 @@ export function TccApplicationViewDialog({
     mail_sent_history: [] as string[],
   });
 
-  const cert = app ? resolveCertificate(app) : null;
+  useEffect(() => {
+    setDisplayApp(app);
+    setIsEditing(false);
+    setPreviewVersion(0);
+  }, [app]);
+
+  const cert = displayApp ? resolveCertificate(displayApp) : null;
 
   useEffect(() => {
     if (!cert) return;
@@ -176,21 +193,24 @@ export function TccApplicationViewDialog({
   ]);
 
   const mailRecipients = useMemo(() => {
-    if (!app?.clients.email) return null;
+    if (!displayApp?.clients.email) return null;
     return buildCertificateRecipients({
-      primaryEmail: app.clients.email,
+      primaryEmail: displayApp.clients.email,
       contactEmails: emailDefaults?.contactEmails,
       defaultCcEmails: emailDefaults?.defaultCcEmails,
       senderEmail: emailDefaults?.senderEmail,
     });
-  }, [app?.clients.email, emailDefaults]);
+  }, [displayApp?.clients.email, emailDefaults]);
 
-  if (!app) return null;
+  if (!displayApp) return null;
 
   const availableQuota =
-    app.client_chemicals?.available_quantity ?? app.chemicals.available_quantity;
-  const showActions = allowReview && canReviewActions(app.status);
-  const boUrl = app.bo_attachment_url;
+    displayApp.client_chemicals?.available_quantity ?? displayApp.chemicals.available_quantity;
+  const showActions = allowReview && canReviewActions(displayApp.status) && !isEditing;
+  const boUrl = displayApp.bo_attachment_url;
+  const docxPreviewUrl = cert?.id
+    ? `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`
+    : '';
   const totalSent = mailState.mail_resend_count + (mailState.mail_sent ? 1 : 0);
 
   const handleSendMail = () => {
@@ -239,26 +259,68 @@ export function TccApplicationViewDialog({
       isOpen={isOpen}
       onClose={onClose}
       size="wide"
-      title={`Application Review — ${app.tracking_id || app.id.slice(0, 8).toUpperCase()}`}
+      title={`Application Review — ${displayApp.tracking_id || displayApp.id.slice(0, 8).toUpperCase()}`}
     >
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center gap-3">
-          {getStatusBadge(app.status)}
-          <span className="text-xs text-slate-500 font-medium">
-            Submitted {formatDisplayDate(app.created_at)}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {getStatusBadge(displayApp.status)}
+            <span className="text-xs text-slate-500 font-medium">
+              Submitted {formatDisplayDate(displayApp.created_at)}
+            </span>
+          </div>
+          {allowAdminEdit && !isEditing && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setIsEditing(true)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          )}
         </div>
 
+        {isEditing ? (
+          <TccApplicationAdminEditForm
+            values={buildTccAdminEditValues(displayApp)}
+            onCancel={() => setIsEditing(false)}
+            onSaved={(updates) => {
+              const { certificateIssuedAt, ...appUpdates } = updates;
+              setDisplayApp((prev) => {
+                if (!prev) return prev;
+                let next = { ...prev, ...appUpdates };
+                if (certificateIssuedAt) {
+                  const existingCert = resolveCertificate(prev);
+                  if (existingCert) {
+                    next = {
+                      ...next,
+                      certificates: { ...existingCert, issued_at: certificateIssuedAt },
+                    };
+                  }
+                }
+                return next;
+              });
+              setIsEditing(false);
+              setPreviewVersion((v) => v + 1);
+              onApplicationUpdated?.(appUpdates);
+              router.refresh();
+            }}
+          />
+        ) : (
+          <>
         <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
             <Building className="h-4 w-4 text-teal-700" />
             EU Importer Information
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <DetailItem label="Company name">{app.eu_importer_company_name || '—'}</DetailItem>
-            <DetailItem label="Address">{app.eu_importer_address || '—'}</DetailItem>
-            <DetailItem label="Purchase order number">{app.purchase_order_number || '—'}</DetailItem>
-            <DetailItem label="Invoice number">{app.invoice_number || '—'}</DetailItem>
+            <DetailItem label="Company name">{displayApp.eu_importer_company_name || '—'}</DetailItem>
+            <DetailItem label="Address">{displayApp.eu_importer_address || '—'}</DetailItem>
+            <DetailItem label="Purchase order number">{displayApp.purchase_order_number || '—'}</DetailItem>
+            <DetailItem label="Invoice number">{displayApp.invoice_number || '—'}</DetailItem>
           </div>
         </div>
 
@@ -270,38 +332,38 @@ export function TccApplicationViewDialog({
               Client submission
             </h3>
             <div className="grid grid-cols-2 gap-4 bg-slate-50/80 rounded-xl border border-slate-100 p-4">
-              <DetailItem label="Company">{app.clients.company_name}</DetailItem>
-              <DetailItem label="Contact email">{app.clients.email}</DetailItem>
-              <DetailItem label="Chemical substance">{app.chemicals.chemical_name}</DetailItem>
+              <DetailItem label="Company">{displayApp.clients.company_name}</DetailItem>
+              <DetailItem label="Contact email">{displayApp.clients.email}</DetailItem>
+              <DetailItem label="Chemical substance">{displayApp.chemicals.chemical_name}</DetailItem>
               <DetailItem label="CAS number">
-                <span className="font-mono text-xs">{app.chemicals.cas_number}</span>
+                <span className="font-mono text-xs">{displayApp.chemicals.cas_number}</span>
               </DetailItem>
-              {app.chemicals.ec_number && (
+              {displayApp.chemicals.ec_number && (
                 <DetailItem label="EC number">
-                  <span className="font-mono text-xs">{app.chemicals.ec_number}</span>
+                  <span className="font-mono text-xs">{displayApp.chemicals.ec_number}</span>
                 </DetailItem>
               )}
-              {app.chemicals.tonnage_band && (
-                <DetailItem label="Tonnage band">{app.chemicals.tonnage_band}</DetailItem>
+              {displayApp.chemicals.tonnage_band && (
+                <DetailItem label="Tonnage band">{displayApp.chemicals.tonnage_band}</DetailItem>
               )}
               <DetailItem label="Substance validity">
-                {formatDisplayDate(app.chemicals.validity_date)}
+                {formatDisplayDate(displayApp.chemicals.validity_date)}
               </DetailItem>
               <DetailItem label="Quantity requested">
-                <span className="text-lg font-black text-teal-800">{app.quantity_mt} MT</span>
+                <span className="text-lg font-black text-teal-800">{displayApp.quantity_mt} MT</span>
               </DetailItem>
               <DetailItem label="Available quota (client)">
                 {availableQuota} MT
               </DetailItem>
               <DetailItem label="Registration Number">
-                <span className="font-mono text-xs">{app.registration_number}</span>
+                <span className="font-mono text-xs">{displayApp.registration_number}</span>
               </DetailItem>
               <DetailItem label="Expected export date">
-                {formatDisplayDate(app.export_date)}
+                {formatDisplayDate(displayApp.export_date)}
               </DetailItem>
-              {app.remarks && (
+              {displayApp.remarks && (
                 <div className="col-span-2">
-                  <DetailItem label="Remarks / notes">{app.remarks}</DetailItem>
+                  <DetailItem label="Remarks / notes">{displayApp.remarks}</DetailItem>
                 </div>
               )}
             </div>
@@ -330,7 +392,7 @@ export function TccApplicationViewDialog({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={boUrl}
-                      alt={app.bo_attachment_name || 'PO attachment'}
+                      alt={displayApp.bo_attachment_name || 'PO attachment'}
                       className="max-h-[280px] w-full object-contain rounded"
                     />
                   ) : isPdfUrl(boUrl) ? (
@@ -342,7 +404,7 @@ export function TccApplicationViewDialog({
                   ) : (
                     <div className="p-6 text-center text-sm text-slate-500">
                       <FileText className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                      <p className="font-medium">{app.bo_attachment_name || 'Attachment file'}</p>
+                      <p className="font-medium">{displayApp.bo_attachment_name || 'Attachment file'}</p>
                       <a
                         href={boUrl}
                         target="_blank"
@@ -432,7 +494,7 @@ export function TccApplicationViewDialog({
                   </div>
                 )}
 
-                <ReachCertificateDocxViewer docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)} />
+                <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
@@ -445,14 +507,16 @@ export function TccApplicationViewDialog({
               </div>
             )}
 
-            {app.rejection_reason && app.status !== 'approved' && (
+            {displayApp.rejection_reason && displayApp.status !== 'approved' && (
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-100 text-xs text-amber-900 font-medium">
                 <span className="font-bold block mb-1">Previous feedback</span>
-                {app.rejection_reason}
+                {displayApp.rejection_reason}
               </div>
             )}
           </div>
         </div>
+          </>
+        )}
 
         {/* Review actions */}
         {showActions && (

@@ -91,6 +91,25 @@ export const tccApplicationSchema = z.object({
     .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
 });
 
+export const adminTccApplicationUpdateSchema = z.object({
+  application_id: z.string().uuid({ message: 'Application id is required' }),
+  eu_importer_company_name: z.string().min(1, { message: 'EU importer company name is required' }),
+  eu_importer_address: z.string().min(1, { message: 'EU importer address is required' }),
+  purchase_order_number: z.string().min(1, { message: 'Purchase order number is required' }),
+  invoice_number: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
+  quantity_mt: z.coerce.number().positive({ message: 'Quantity must be greater than 0' }),
+  export_date: z.string().min(1, { message: 'Expected export date is required' }),
+  issue_date: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
+  certificate_id: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().uuid().optional()),
+  registration_number: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
+  remarks: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
+});
+
 // ============================================================================
 // SMTP SETTINGS
 // ============================================================================

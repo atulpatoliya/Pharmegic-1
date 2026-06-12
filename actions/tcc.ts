@@ -11,7 +11,7 @@ import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { appendMailSentHistory } from '@/lib/certificate-mail-history';
 import { buildTccSmtpConfig } from '@/lib/certificate-smtp-settings';
-import { tccApplicationSchema } from '@/lib/validations';
+import { adminTccApplicationUpdateSchema, tccApplicationSchema } from '@/lib/validations';
 import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
@@ -354,6 +354,298 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
   }
 }
 
+const TCC_CERTIFICATE_RELATION_SELECT = `
+  id,
+  certificate_number,
+  expires_at,
+  registration_number,
+  client_id,
+  type,
+  clients (
+    company_name,
+    uuid_number,
+    address,
+    city,
+    state,
+    postal_code,
+    country
+  ),
+  chemicals (
+    chemical_name,
+    cas_number,
+    ec_number,
+    tonnage_band
+  ),
+  tcc_applications (
+    quantity_mt,
+    export_date,
+    tracking_id,
+    registration_number,
+    remarks,
+    eu_importer_company_name,
+    eu_importer_address,
+    purchase_order_number,
+    chemicals (
+      chemical_name,
+      cas_number,
+      ec_number,
+      tonnage_band
+    )
+  )
+`;
+
+async function syncQuotaForClientChemical(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  chemicalId: string,
+  clientChemicalId: string | null
+) {
+  const { data: allApproved } = await adminSupabase
+    .from('tcc_applications')
+    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+    .eq('client_id', clientId)
+    .eq('chemical_id', chemicalId)
+    .eq('status', 'approved');
+
+  const exportedAfter = sumApprovedExports(allApproved || [], chemicalId);
+
+  const { data: chem } = await adminSupabase
+    .from('chemicals')
+    .select('tonnage_band')
+    .eq('id', chemicalId)
+    .single();
+
+  const syncedAvailable = getRemainingQuota(0, exportedAfter, chem?.tonnage_band ?? null);
+
+  let ccId = clientChemicalId;
+  if (!ccId) {
+    const { data: clientChem } = await adminSupabase
+      .from('client_chemicals')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId)
+      .eq('status', 'active')
+      .maybeSingle();
+    ccId = clientChem?.id ?? null;
+  }
+
+  if (ccId) {
+    await adminSupabase
+      .from('client_chemicals')
+      .update({ available_quantity: syncedAvailable })
+      .eq('id', ccId);
+  }
+
+  const { data: globalApproved } = await adminSupabase
+    .from('tcc_applications')
+    .select('quantity_mt')
+    .eq('chemical_id', chemicalId)
+    .eq('status', 'approved');
+
+  const totalExported = (globalApproved || []).reduce(
+    (sum, row) => sum + Number(row.quantity_mt),
+    0
+  );
+
+  await adminSupabase
+    .from('chemicals')
+    .update({ exported_quantity: totalExported })
+    .eq('id', chemicalId);
+}
+
+async function regenerateTccCertificateFile(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  certificateId: string
+) {
+  const { data: cert, error } = await adminSupabase
+    .from('certificates')
+    .select(TCC_CERTIFICATE_RELATION_SELECT)
+    .eq('id', certificateId)
+    .eq('type', 'TCC')
+    .single();
+
+  if (error || !cert) {
+    throw new Error('Certificate not found for regeneration.');
+  }
+
+  const input = buildTccCertificatePdfInputFromCert(cert as never);
+  const certFile = await resolveTccCertificateDownloadFile(adminSupabase, input);
+
+  await ensureCertificatesBucket(adminSupabase);
+  const { error: uploadError } = await adminSupabase.storage
+    .from(CERTIFICATES_BUCKET)
+    .upload(certFile.fileName, certFile.buffer, {
+      contentType: certFile.contentType,
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error(`Certificate regeneration failed: ${uploadError.message}`);
+  }
+}
+
+function parseAdminTccUpdateFormData(formData: FormData) {
+  return adminTccApplicationUpdateSchema.safeParse({
+    application_id: formData.get('application_id'),
+    eu_importer_company_name: formData.get('eu_importer_company_name') ?? '',
+    eu_importer_address: formData.get('eu_importer_address') ?? '',
+    purchase_order_number: formData.get('purchase_order_number') ?? '',
+    invoice_number: formData.get('invoice_number') ?? '',
+    quantity_mt: formData.get('quantity_mt'),
+    export_date: formData.get('export_date'),
+    issue_date: formData.get('issue_date') ?? '',
+    certificate_id: formData.get('certificate_id') ?? '',
+    registration_number: formData.get('registration_number') ?? '',
+    remarks: formData.get('remarks') ?? '',
+  });
+}
+
+// ============================================================================
+// ADMIN UPDATE TCC APPLICATION (Edit in Application Review / Preview)
+// ============================================================================
+export async function adminUpdateTccApplicationAction(prevState: unknown, formData: FormData) {
+  const session = await getSession();
+  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
+    return { success: false, error: 'Unauthorized.' };
+  }
+
+  const result = parseAdminTccUpdateFormData(formData);
+  if (!result.success) {
+    return { success: false, error: result.error.flatten().fieldErrors };
+  }
+
+  const adminSupabase = createAdminClient();
+  const applicationId = result.data.application_id;
+
+  try {
+    const { data: existing, error: loadError } = await adminSupabase
+      .from('tcc_applications')
+      .select('id, client_id, chemical_id, client_chemical_id, status, quantity_mt')
+      .eq('id', applicationId)
+      .maybeSingle();
+
+    if (loadError) throw loadError;
+    if (!existing) {
+      return { success: false, error: 'Application not found.' };
+    }
+
+    const newQuantity = result.data.quantity_mt;
+    const quantityChanged = Number(existing.quantity_mt) !== newQuantity;
+
+    if (existing.status === 'approved' && quantityChanged) {
+      const { data: chem } = await adminSupabase
+        .from('chemicals')
+        .select('tonnage_band')
+        .eq('id', existing.chemical_id)
+        .single();
+
+      const { data: approvedForChem } = await adminSupabase
+        .from('tcc_applications')
+        .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+        .eq('client_id', existing.client_id)
+        .eq('chemical_id', existing.chemical_id)
+        .eq('status', 'approved')
+        .neq('id', applicationId);
+
+      const exportedMt = sumApprovedExports(approvedForChem || [], existing.chemical_id);
+      const bandMax = getTonnageBandMaxQuota(chem?.tonnage_band ?? null);
+
+      if (bandMax != null && exportedMt + newQuantity > bandMax) {
+        return {
+          success: false,
+          error: `Quantity exceeds annual limit. Only ${Math.max(0, bandMax - exportedMt)} MT remaining for this substance.`,
+        };
+      }
+    }
+
+    const { error: updateError } = await adminSupabase
+      .from('tcc_applications')
+      .update({
+        eu_importer_company_name: result.data.eu_importer_company_name.trim(),
+        eu_importer_address: result.data.eu_importer_address.trim(),
+        purchase_order_number: result.data.purchase_order_number.trim(),
+        invoice_number: result.data.invoice_number?.trim() || null,
+        quantity_mt: newQuantity,
+        export_date: result.data.export_date,
+        registration_number: result.data.registration_number?.trim() || null,
+        remarks: result.data.remarks?.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', applicationId);
+
+    if (updateError) throw updateError;
+
+    if (existing.status === 'approved' && quantityChanged) {
+      await syncQuotaForClientChemical(
+        adminSupabase,
+        existing.client_id,
+        existing.chemical_id,
+        existing.client_chemical_id
+      );
+    }
+
+    let certId = result.data.certificate_id ?? null;
+
+    if (result.data.issue_date && certId) {
+      const issueDate = new Date(`${result.data.issue_date}T12:00:00`);
+      const expiresAt = new Date(issueDate);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+      const { error: certDateError } = await adminSupabase
+        .from('certificates')
+        .update({
+          issued_at: issueDate.toISOString(),
+          expires_at: expiresAt.toISOString(),
+        })
+        .eq('id', certId)
+        .eq('tcc_application_id', applicationId)
+        .eq('type', 'TCC');
+
+      if (certDateError) throw certDateError;
+    }
+
+    if (!certId) {
+      const { data: cert } = await adminSupabase
+        .from('certificates')
+        .select('id')
+        .eq('tcc_application_id', applicationId)
+        .eq('type', 'TCC')
+        .maybeSingle();
+      certId = cert?.id ?? null;
+    }
+
+    if (certId) {
+      await regenerateTccCertificateFile(adminSupabase, certId);
+    }
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: existing.client_id,
+      user_id: session.userId,
+      action: 'TCC_ADMIN_EDIT',
+      entity_type: 'tcc_applications',
+      entity_id: applicationId,
+      description: 'Application data updated by administrator',
+    });
+
+    revalidatePath('/admin/approvals');
+    revalidatePath(`/admin/clients/${existing.client_id}`);
+    revalidatePath('/client');
+    if (certId) {
+      revalidatePath(`/admin/certificate-preview/${certId}`);
+    }
+
+    return {
+      success: true,
+      message: certId
+        ? 'Application updated and certificate preview regenerated.'
+        : 'Application updated successfully.',
+      certificateId: certId,
+    };
+  } catch (err: unknown) {
+    return { success: false, error: tccSaveErrorMessage(err) };
+  }
+}
+
 // ============================================================================
 // PROCESS TCC APPLICATION (Admin Action)
 // ============================================================================
@@ -641,6 +933,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
         chemicals (chemical_name, cas_number, ec_number, tonnage_band),
         tcc_applications (
           id, quantity_mt, registration_number, export_date, tracking_id, remarks,
+          eu_importer_company_name, eu_importer_address, purchase_order_number,
           chemicals (chemical_name, cas_number, ec_number, tonnage_band)
         ),
         clients (
@@ -739,6 +1032,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
         chemicals (chemical_name, cas_number, ec_number, tonnage_band),
         tcc_applications (
           quantity_mt, registration_number, export_date, tracking_id, remarks,
+          eu_importer_company_name, eu_importer_address, purchase_order_number,
           chemicals (chemical_name, cas_number, ec_number, tonnage_band)
         ),
         clients (

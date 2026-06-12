@@ -49,9 +49,19 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
         tonnage_band
       ),
       tcc_applications (
+        id,
         quantity_mt,
         registration_number,
         export_date,
+        remarks,
+        eu_importer_company_name,
+        eu_importer_address,
+        purchase_order_number,
+        invoice_number,
+        tracking_id,
+        status,
+        created_at,
+        updated_at,
         chemicals (
           chemical_name,
           cas_number,

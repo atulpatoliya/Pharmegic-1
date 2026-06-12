@@ -1971,6 +1971,10 @@ export default function ClientDashboardDetails({
         isOpen={isTccViewOpen}
         onClose={() => setIsTccViewOpen(false)}
         allowReview={canReviewTcc}
+        allowAdminEdit={currentUserRole === 'MASTER_ADMIN' || currentUserRole === 'SUPER_ADMIN'}
+        onApplicationUpdated={(updates) => {
+          setViewTccApp((prev) => (prev ? { ...prev, ...updates } : prev));
+        }}
         getStatusBadge={getTccStatusBadge}
         onApprove={() => handleTccViewThenAction('approved')}
         onReject={() => handleTccViewThenAction('rejected')}

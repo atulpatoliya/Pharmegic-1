@@ -199,7 +199,8 @@ export function buildTccCertificatePdfInputFromCert(cert: {
     application,
     registrationNumber: cert.registration_number,
     validUntilDate: cert.expires_at?.split('T')[0] || application.export_date || '',
-    deliveryChallanNo: application.tracking_id,
+    deliveryChallanNo:
+      application.purchase_order_number?.trim() || application.tracking_id || undefined,
   };
 }
 
