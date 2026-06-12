@@ -7,6 +7,7 @@ import {
   issueReachCertificateFromPreviewAction,
   sendReachCertificateEmailAction,
   resendReachCertificateEmailAction,
+  updateReachCertificateAction,
 } from '@/actions/reach';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -22,6 +23,7 @@ import {
   Mail,
   RefreshCw,
   CheckCircle2,
+  PenLine,
 } from 'lucide-react';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import {
@@ -86,8 +88,10 @@ export default function ReachCertificatePreviewClient({
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
   const [isIssuing, startIssueTransition] = useTransition();
+  const [isUpdating, startUpdateTransition] = useTransition();
   const [isSending, startSendTransition] = useTransition();
   const [isResending, startResendTransition] = useTransition();
+  const [isEditing, setIsEditing] = useState(false);
   const isPending = !cert;
   const totalSent = cert ? cert.mail_resend_count + (cert.mail_sent ? 1 : 0) : 0;
 
@@ -124,6 +128,33 @@ export default function ReachCertificatePreviewClient({
   const downloadLabel = 'Download PDF';
 
   const backHref = `/admin/clients/${clientId}/rc-certificates`;
+
+  const handleUpdate = () => {
+    if (!cert) return;
+    if (!registrationNumber.trim()) {
+      toast.error('Registration number is required.');
+      return;
+    }
+    if (!issuedDate || !validatedDate) {
+      toast.error('Issued date and validated date are required.');
+      return;
+    }
+
+    startUpdateTransition(async () => {
+      const res = await updateReachCertificateAction(cert.id, {
+        registrationNumber: registrationNumber.trim(),
+        issuedDate,
+        validatedDate,
+      });
+      if (res.success) {
+        toast.success(res.message || 'RC Certificate updated.');
+        setIsEditing(false);
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to update RC certificate.');
+      }
+    });
+  };
 
   const handleIssue = () => {
     if (!registrationNumber.trim()) {
@@ -214,6 +245,18 @@ export default function ReachCertificatePreviewClient({
           </CertificatePdfDownloadLink>
 
           {!isPending && cert && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing((prev) => !prev)}
+              className="gap-1.5"
+            >
+              <PenLine className="h-4 w-4" />
+              {isEditing ? 'Cancel Edit' : 'Edit Details'}
+            </Button>
+          )}
+
+          {!isPending && cert && (
             <>
             {!cert.mail_sent ? (
               <Button onClick={handleSendMail} isLoading={isSending} disabled={isSending} className="gap-1.5">
@@ -256,11 +299,13 @@ export default function ReachCertificatePreviewClient({
         </div>
       )}
 
-      {isPending && (
+      {(isPending || (cert && isEditing)) && (
         <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
           <div className="flex items-center gap-2 pb-4 border-b border-slate-100 mb-4">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-bold text-slate-800">Confirm details before issuing</h3>
+            <h3 className="text-sm font-bold text-slate-800">
+              {isPending ? 'Confirm details before issuing' : 'Update certificate details'}
+            </h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -286,8 +331,23 @@ export default function ReachCertificatePreviewClient({
             </div>
           </div>
           <p className="text-xs text-slate-500 mt-3">
-            Review the certificate preview below. Update fields if needed, then issue the RC certificate.
+            {isPending
+              ? 'Review the certificate preview below. Update fields if needed, then issue the RC certificate.'
+              : 'Save changes to update the stored certificate and regenerate the PDF/DOCX files.'}
           </p>
+          {cert && isEditing && (
+            <div className="flex justify-end mt-4">
+              <Button
+                onClick={handleUpdate}
+                isLoading={isUpdating}
+                disabled={isUpdating}
+                className="bg-teal-700 hover:bg-teal-800 gap-2"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Save Certificate Changes
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -308,7 +368,7 @@ export default function ReachCertificatePreviewClient({
             className="bg-teal-700 hover:bg-teal-800 gap-2"
           >
             <ShieldCheck className="h-4 w-4" />
-            Issue RC Certificate
+            Issue Certificate
           </Button>
         </div>
       )}

@@ -1,8 +1,49 @@
 export const REACH_CERTIFICATE_TYPE = 'REACH';
 
+export function isReachCertificateType(cert: {
+  type?: string | null;
+  certificate_number?: string | null;
+}): boolean {
+  const type = cert.type?.trim().toUpperCase();
+  if (type === REACH_CERTIFICATE_TYPE || type === 'RC') return true;
+  const number = cert.certificate_number?.trim().toUpperCase() ?? '';
+  return number.startsWith('RC-');
+}
+
+export function getLatestReachCertForChemical(
+  certificates: ReachCertificateRecord[],
+  chemicalId: string,
+  casNumber?: string | null
+): ReachCertificateRecord | null {
+  let matches = certificates.filter(
+    (cert) =>
+      cert.chemical_id === chemicalId &&
+      isReachCertificateType(cert) &&
+      cert.status !== 'revoked'
+  );
+
+  if (matches.length === 0 && casNumber?.trim()) {
+    const cas = casNumber.trim().toLowerCase();
+    matches = certificates.filter((cert) => {
+      if (!isReachCertificateType(cert) || cert.status === 'revoked') return false;
+      const certCas =
+        (cert as { chemicals?: { cas_number?: string | null } }).chemicals?.cas_number ??
+        (cert as { chemical?: { cas_number?: string | null } }).chemical?.cas_number;
+      return certCas?.trim().toLowerCase() === cas;
+    });
+  }
+
+  if (matches.length === 0) return null;
+  return [...matches].sort(
+    (a, b) =>
+      new Date(b.issued_at || 0).getTime() - new Date(a.issued_at || 0).getTime()
+  )[0];
+}
+
 export type ReachCertificateRecord = {
   id: string;
   certificate_number: string;
+  registration_number?: string | null;
   chemical_id?: string | null;
   issued_at: string;
   expires_at: string | null;
@@ -47,13 +88,33 @@ export function getSubstanceRcBadgeStatus(
   return 'missing';
 }
 
+export function hasNewerReachCertificate(
+  certs: ReachCertificateRecord[],
+  cert: ReachCertificateRecord
+): boolean {
+  const issuedAt = new Date(cert.issued_at).getTime();
+  return certs.some(
+    (other) => other.id !== cert.id && new Date(other.issued_at).getTime() > issuedAt
+  );
+}
+
+/** True when admin may issue a renewed RC (no active cert; at least one expired or past validity). */
+export function canRenewReachForChemical(
+  certs: ReachCertificateRecord[],
+  validityDate: string | null | undefined
+): boolean {
+  if (certs.some((c) => isActiveReachCertificate(c))) return false;
+  if (certs.some((c) => getReachCertificateStatus(c) === 'expired')) return true;
+  return getSubstanceRcBadgeStatus(null, validityDate) === 'expired';
+}
+
 /** Latest REACH certificate per chemical_id for a client. */
 export function mapLatestReachByChemical(
   certificates: ReachCertificateRecord[]
 ): Map<string, ReachCertificateRecord> {
   const map = new Map<string, ReachCertificateRecord>();
   for (const cert of certificates) {
-    if (cert.type !== REACH_CERTIFICATE_TYPE || !cert.chemical_id) continue;
+    if (!isReachCertificateType(cert) || !cert.chemical_id) continue;
     const existing = map.get(cert.chemical_id);
     if (!existing || new Date(cert.issued_at) > new Date(existing.issued_at)) {
       map.set(cert.chemical_id, cert);
@@ -68,7 +129,7 @@ export function mapAllReachByChemical(
 ): Map<string, ReachCertificateRecord[]> {
   const map = new Map<string, ReachCertificateRecord[]>();
   for (const cert of certificates) {
-    if (cert.type !== REACH_CERTIFICATE_TYPE || !cert.chemical_id) continue;
+    if (!isReachCertificateType(cert) || !cert.chemical_id) continue;
     if (cert.status === 'revoked') continue;
     const list = map.get(cert.chemical_id) ?? [];
     list.push(cert);
@@ -117,7 +178,7 @@ export function findReachCertificateForExportDate(
     .filter(
       (cert) =>
         cert.chemical_id === chemicalId &&
-        cert.type === REACH_CERTIFICATE_TYPE &&
+        isReachCertificateType(cert) &&
         cert.status !== 'revoked' &&
         isDateInReachWindow(exportDate, cert.issued_at, cert.expires_at)
     )

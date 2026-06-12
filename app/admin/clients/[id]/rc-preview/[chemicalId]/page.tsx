@@ -14,10 +14,13 @@ export const revalidate = 0;
 
 export default async function ReachCertificatePreviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; chemicalId: string }>;
+  searchParams: Promise<{ certId?: string }>;
 }) {
   const { id: clientId, chemicalId } = await params;
+  const { certId: requestedCertId } = await searchParams;
   const session = await getSession();
 
   if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
@@ -46,22 +49,33 @@ export default async function ReachCertificatePreviewPage({
         .single(),
       adminSupabase
         .from('client_chemicals')
-        .select('id, validity_date, status')
+        .select('id, validity_date, status, registration_number, issued_date, created_at')
         .eq('client_id', clientId)
         .eq('chemical_id', chemicalId)
         .eq('status', 'active')
         .maybeSingle(),
-      adminSupabase
-        .from('certificates')
-        .select(
-          'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
-        )
-        .eq('client_id', clientId)
-        .eq('chemical_id', chemicalId)
-        .eq('type', REACH_CERTIFICATE_TYPE)
-        .order('issued_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      requestedCertId
+        ? adminSupabase
+            .from('certificates')
+            .select(
+              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
+            )
+            .eq('id', requestedCertId)
+            .eq('client_id', clientId)
+            .eq('chemical_id', chemicalId)
+            .eq('type', REACH_CERTIFICATE_TYPE)
+            .maybeSingle()
+        : adminSupabase
+            .from('certificates')
+            .select(
+              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
+            )
+            .eq('client_id', clientId)
+            .eq('chemical_id', chemicalId)
+            .eq('type', REACH_CERTIFICATE_TYPE)
+            .order('issued_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
       adminSupabase
         .from('client_contacts')
         .select('email')
@@ -96,10 +110,13 @@ export default async function ReachCertificatePreviewPage({
     : null;
 
   const defaults = {
-    registrationNumber: cert?.registration_number?.trim() || '',
+    registrationNumber:
+      cert?.registration_number?.trim() || clientChem.registration_number?.trim() || '',
     issuedDate: cert?.issued_at
       ? cert.issued_at.split('T')[0]
-      : getTodayDateString(),
+      : clientChem.issued_date?.split('T')[0] ||
+        clientChem.created_at?.split('T')[0] ||
+        getTodayDateString(),
     validatedDate:
       cert?.expires_at?.split('T')[0] ||
       clientChem.validity_date?.split('T')[0] ||

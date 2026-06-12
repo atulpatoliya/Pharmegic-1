@@ -494,6 +494,8 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         .update({
           available_quantity: assignable,
           validity_date: data.validated_date || data.validity_date || null,
+          registration_number: registrationNumber,
+          issued_date: data.issued_date.trim(),
           status: 'active',
           assigned_by: session.userId,
         })
@@ -506,6 +508,8 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         chemical_id: chemicalId,
         available_quantity: assignable,
         validity_date: data.validated_date || data.validity_date || null,
+        registration_number: registrationNumber,
+        issued_date: data.issued_date.trim(),
         status: 'active',
         assigned_by: session.userId,
       });
@@ -678,11 +682,22 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
 
   const adminSupabase = createAdminClient();
   try {
-    const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
+    const { data: existingLink } = await adminSupabase
+      .from('client_chemicals')
+      .select('available_quantity')
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId)
+      .maybeSingle();
+
     const exportedMt = await getClientYearExportedMt(adminSupabase, clientId, chemicalId);
-    const { assignable, error: quotaError } = computeAssignableQuota(calcQuota, exportedMt);
-    if (quotaError) {
-      return { success: false, error: quotaError };
+    const bandMax = getTonnageBandMaxQuota(data.tonnage_band);
+    let nextQuota = existingLink?.available_quantity;
+
+    if (bandMax != null && bandMax > 0) {
+      const { assignable, error: quotaError } = computeAssignableQuota(bandMax, exportedMt);
+      if (!quotaError) {
+        nextQuota = assignable;
+      }
     }
 
     const { error: chemError } = await adminSupabase
@@ -697,12 +712,27 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
 
     if (chemError) throw chemError;
 
+    const clientChemUpdate: {
+      validity_date: string | null;
+      available_quantity?: number;
+      registration_number?: string | null;
+      issued_date?: string | null;
+    } = {
+      validity_date: data.validity_date || null,
+    };
+    if (data.registration_number !== undefined) {
+      clientChemUpdate.registration_number = data.registration_number?.trim() || null;
+    }
+    if (data.issued_date !== undefined) {
+      clientChemUpdate.issued_date = data.issued_date || null;
+    }
+    if (nextQuota !== undefined && nextQuota !== null) {
+      clientChemUpdate.available_quantity = nextQuota;
+    }
+
     const { error } = await adminSupabase
       .from('client_chemicals')
-      .update({
-        available_quantity: assignable,
-        validity_date: data.validity_date || null,
-      })
+      .update(clientChemUpdate)
       .eq('client_id', clientId)
       .eq('chemical_id', chemicalId);
 
@@ -718,6 +748,8 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
     });
 
     revalidatePath(`/admin/clients/${clientId}`);
+    revalidatePath(`/admin/clients/${clientId}/chemicals`);
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
     return { success: true, message: 'Substance allocation updated.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -172,6 +172,7 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   }
 
   revalidatePath(`/admin/clients/${clientId}`);
+  revalidatePath(`/admin/clients/${clientId}/chemicals`);
   revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
   revalidatePath('/client');
 
@@ -275,7 +276,12 @@ export async function issueReachCertificateFromPreviewAction(
 export async function renewReachCertificateAction(
   clientId: string,
   chemicalId: string,
-  data: { issuedDate: string; validatedDate: string; available_quantity: number }
+  data: {
+    issuedDate: string;
+    validatedDate: string;
+    available_quantity: number;
+    registrationNumber?: string;
+  }
 ) {
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
@@ -291,20 +297,25 @@ export async function renewReachCertificateAction(
   }
 
   const adminSupabase = createAdminClient();
-  const { data: prevCert } = await adminSupabase
-    .from('certificates')
-    .select('registration_number')
-    .eq('client_id', clientId)
-    .eq('chemical_id', chemicalId)
-    .eq('type', REACH_CERTIFICATE_TYPE)
-    .order('issued_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let registrationNumber = data.registrationNumber?.trim() || '';
 
-  if (!prevCert?.registration_number?.trim()) {
+  if (!registrationNumber) {
+    const { data: prevCert } = await adminSupabase
+      .from('certificates')
+      .select('registration_number')
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .order('issued_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    registrationNumber = prevCert?.registration_number?.trim() || '';
+  }
+
+  if (!registrationNumber) {
     return {
       success: false,
-      error: 'Registration number not found. Re-assign the substance with registration details.',
+      error: 'Registration number is required. Enter it in the renewal form.',
     };
   }
 
@@ -313,7 +324,7 @@ export async function renewReachCertificateAction(
       clientId,
       chemicalId,
       userId: session.userId,
-      registrationNumber: prevCert.registration_number,
+      registrationNumber,
       issuedDate: data.issuedDate,
       validatedDate: data.validatedDate,
     });
@@ -359,6 +370,103 @@ export async function renewReachCertificateAction(
       message: result.message || 'RC Certificate renewed successfully.',
       certificateId: result.certificateId,
       certificateNumber: result.certNumber,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// UPDATE RC CERTIFICATE (Admin — edit issued certificate metadata)
+// ============================================================================
+export async function updateReachCertificateAction(
+  certId: string,
+  data: { registrationNumber: string; issuedDate: string; validatedDate: string }
+) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const registrationNumber = data.registrationNumber?.trim();
+  if (!registrationNumber) return { success: false, error: 'Registration number is required.' };
+  if (!data.issuedDate || !data.validatedDate) {
+    return { success: false, error: 'Issue date and expiry date are required.' };
+  }
+  if (new Date(data.validatedDate) < new Date(data.issuedDate)) {
+    return { success: false, error: 'Expiry date cannot be before issue date.' };
+  }
+
+  const adminSupabase = createAdminClient();
+  const { data: cert } = await adminSupabase
+    .from('certificates')
+    .select('id, client_id, chemical_id, certificate_number, type')
+    .eq('id', certId)
+    .eq('type', REACH_CERTIFICATE_TYPE)
+    .single();
+
+  if (!cert?.client_id || !cert.chemical_id) {
+    return { success: false, error: 'Certificate not found.' };
+  }
+
+  try {
+    const issueDate = new Date(data.issuedDate);
+    const expiryDate = new Date(data.validatedDate);
+
+    const { error: updateError } = await adminSupabase
+      .from('certificates')
+      .update({
+        registration_number: registrationNumber,
+        issued_at: issueDate.toISOString(),
+        expires_at: expiryDate.toISOString(),
+      })
+      .eq('id', certId);
+
+    if (updateError) throw updateError;
+
+    const { data: latestCert } = await adminSupabase
+      .from('certificates')
+      .select('id')
+      .eq('client_id', cert.client_id)
+      .eq('chemical_id', cert.chemical_id)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .order('issued_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latestCert?.id === certId) {
+      await adminSupabase
+        .from('client_chemicals')
+        .update({ validity_date: data.validatedDate })
+        .eq('client_id', cert.client_id)
+        .eq('chemical_id', cert.chemical_id);
+    }
+
+    const regen = await regenerateReachCertificateFile(certId);
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: cert.client_id,
+      user_id: session.userId,
+      action: 'REACH_CERTIFICATE_UPDATED',
+      entity_type: 'certificates',
+      entity_id: certId,
+      description: `RC ${cert.certificate_number} details updated`,
+    });
+
+    revalidatePath(`/admin/clients/${cert.client_id}`);
+    revalidatePath(`/admin/clients/${cert.client_id}/chemicals`);
+    revalidatePath(`/admin/clients/${cert.client_id}/rc-certificates`);
+    revalidatePath(`/admin/clients/${cert.client_id}/rc-preview/${cert.chemical_id}`);
+
+    if (!regen.success) {
+      return {
+        success: true,
+        message: `RC Certificate ${cert.certificate_number} updated. PDF could not be regenerated: ${regen.error}`,
+      };
+    }
+
+    return {
+      success: true,
+      message: `RC Certificate ${cert.certificate_number} updated successfully.`,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
