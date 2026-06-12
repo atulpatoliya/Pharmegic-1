@@ -13,7 +13,8 @@ export function isReachCertificateType(cert: {
 export function getLatestReachCertForChemical(
   certificates: ReachCertificateRecord[],
   chemicalId: string,
-  casNumber?: string | null
+  casNumber?: string | null,
+  registrationNumber?: string | null
 ): ReachCertificateRecord | null {
   let matches = certificates.filter(
     (cert) =>
@@ -22,15 +23,34 @@ export function getLatestReachCertForChemical(
       cert.status !== 'revoked'
   );
 
+  if (matches.length === 0 && chemicalId) {
+    matches = certificates.filter(
+      (cert) =>
+        cert.chemical_id === chemicalId &&
+        cert.status !== 'revoked' &&
+        Boolean(cert.certificate_number?.trim())
+    );
+  }
+
   if (matches.length === 0 && casNumber?.trim()) {
     const cas = casNumber.trim().toLowerCase();
     matches = certificates.filter((cert) => {
-      if (!isReachCertificateType(cert) || cert.status === 'revoked') return false;
+      if (cert.status === 'revoked' || !cert.certificate_number?.trim()) return false;
       const certCas =
         (cert as { chemicals?: { cas_number?: string | null } }).chemicals?.cas_number ??
         (cert as { chemical?: { cas_number?: string | null } }).chemical?.cas_number;
       return certCas?.trim().toLowerCase() === cas;
     });
+  }
+
+  if (matches.length === 0 && registrationNumber?.trim()) {
+    const reg = registrationNumber.trim().toLowerCase();
+    matches = certificates.filter(
+      (cert) =>
+        cert.status !== 'revoked' &&
+        Boolean(cert.certificate_number?.trim()) &&
+        cert.registration_number?.trim().toLowerCase() === reg
+    );
   }
 
   if (matches.length === 0) return null;

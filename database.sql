@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS public.client_chemicals (
     validity_date DATE,
     registration_number TEXT,
     issued_date DATE,
+    certificate_number TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'suspended', 'trashed')),
     assigned_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -325,6 +326,7 @@ END $$;
 
 ALTER TABLE public.client_chemicals ADD COLUMN IF NOT EXISTS registration_number TEXT;
 ALTER TABLE public.client_chemicals ADD COLUMN IF NOT EXISTS issued_date DATE;
+ALTER TABLE public.client_chemicals ADD COLUMN IF NOT EXISTS certificate_number TEXT;
 
 -- Allow trashed status on client_chemicals (existing DBs may have old constraint)
 ALTER TABLE public.client_chemicals DROP CONSTRAINT IF EXISTS client_chemicals_status_check;

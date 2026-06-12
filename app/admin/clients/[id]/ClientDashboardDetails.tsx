@@ -521,6 +521,7 @@ export default function ClientDashboardDetails({
     validity_date?: string | null;
     registration_number?: string | null;
     issued_date?: string | null;
+    certificate_number?: string | null;
     created_at?: string | null;
     chemicals?: {
       chemical_name?: string;
@@ -1444,12 +1445,16 @@ export default function ClientDashboardDetails({
                     getLatestReachCertForChemical(
                       certificates || [],
                       cc.chemical_id,
-                      cc.chemicals?.cas_number
+                      cc.chemicals?.cas_number,
+                      cc.registration_number
                     ) ??
                     reachCert ??
                     chemCerts[0] ??
                     null;
-                  const certNumber = latestRc?.certificate_number || '—';
+                  const certNumber =
+                    cc.certificate_number?.trim() ||
+                    latestRc?.certificate_number?.trim() ||
+                    '—';
                   const registrationNo =
                     latestRc?.registration_number?.trim() || cc.registration_number?.trim() || '—';
                   const issueDateDisplay = latestRc?.issued_at

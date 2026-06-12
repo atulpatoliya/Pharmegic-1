@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
+import { getLatestReachCertForChemical, type ReachCertificateRecord } from '@/lib/reach-certificate';
 
 export async function loadClientProfileData(clientId: string) {
   const session = await getSession();
@@ -76,10 +77,34 @@ export async function loadClientProfileData(clientId: string) {
       : row.tcc_applications,
   }));
 
-  const normalizedClientChemicals = (clientChemicals || []).map((row: { chemicals?: unknown }) => ({
-    ...row,
-    chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
-  }));
+  const normalizedClientChemicals = (clientChemicals || []).map(
+    (row: {
+      chemical_id: string;
+      registration_number?: string | null;
+      certificate_number?: string | null;
+      chemicals?: unknown;
+    }) => {
+      const chemicals = Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals;
+      const casNumber =
+        chemicals && typeof chemicals === 'object' && 'cas_number' in chemicals
+          ? (chemicals as { cas_number?: string | null }).cas_number
+          : null;
+      const latestCert = getLatestReachCertForChemical(
+        normalizedCertificates as unknown as ReachCertificateRecord[],
+        row.chemical_id,
+        casNumber,
+        row.registration_number
+      );
+      const resolvedCertNumber =
+        latestCert?.certificate_number?.trim() || row.certificate_number?.trim() || null;
+
+      return {
+        ...row,
+        chemicals,
+        certificate_number: resolvedCertNumber,
+      };
+    }
+  );
 
   return {
     session,

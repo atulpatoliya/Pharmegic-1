@@ -147,6 +147,17 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
 
   if (certError) throw certError;
 
+  await adminSupabase
+    .from('client_chemicals')
+    .update({
+      registration_number: registrationNumber.trim(),
+      issued_date: issuedDate,
+      validity_date: validatedDate,
+      certificate_number: certNumber,
+    })
+    .eq('client_id', clientId)
+    .eq('chemical_id', chemicalId);
+
   await adminSupabase.from('activity_logs').insert({
     client_id: clientId,
     user_id: userId,
@@ -336,6 +347,7 @@ export async function renewReachCertificateAction(
       .update({
         available_quantity: data.available_quantity,
         validity_date: data.validatedDate,
+        certificate_number: result.certNumber,
         status: 'active',
       })
       .eq('client_id', clientId)
@@ -436,7 +448,12 @@ export async function updateReachCertificateAction(
     if (latestCert?.id === certId) {
       await adminSupabase
         .from('client_chemicals')
-        .update({ validity_date: data.validatedDate })
+        .update({
+          validity_date: data.validatedDate,
+          registration_number: registrationNumber,
+          issued_date: data.issuedDate,
+          certificate_number: cert.certificate_number,
+        })
         .eq('client_id', cert.client_id)
         .eq('chemical_id', cert.chemical_id);
     }
