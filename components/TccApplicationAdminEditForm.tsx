@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { adminUpdateTccApplicationAction } from '@/actions/tcc';
 import { Input } from './ui/Input';
+import { DatePicker } from './ui/DatePicker';
 import { Button } from './ui/Button';
 import { FormLabel } from './ui/FormLabel';
 import { ModalErrorBox } from './ui/ModalErrorBox';
@@ -180,10 +181,9 @@ export function TccApplicationAdminEditForm({
           </div>
           <div className="space-y-2">
             <FormLabel required={Boolean(form.certificateId)}>Issue date</FormLabel>
-            <Input
-              type="date"
+            <DatePicker
               value={form.issue_date}
-              onChange={(e) => updateField('issue_date', e.target.value)}
+              onChange={(value) => updateField('issue_date', value)}
               disabled={!form.certificateId}
               required={Boolean(form.certificateId)}
             />
@@ -195,10 +195,9 @@ export function TccApplicationAdminEditForm({
           </div>
           <div className="space-y-2">
             <FormLabel required>Expected export date</FormLabel>
-            <Input
-              type="date"
+            <DatePicker
               value={form.export_date}
-              onChange={(e) => updateField('export_date', e.target.value)}
+              onChange={(value) => updateField('export_date', value)}
               required
             />
           </div>

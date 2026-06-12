@@ -77,7 +77,7 @@ const EXPORT_COLUMNS: CsvColumn<RcCertificateListRow>[] = [
   { header: 'CAS Number', value: (row) => row.chemicals?.cas_number },
   { header: 'EC Number', value: (row) => row.chemicals?.ec_number },
   { header: 'Issued Date', value: (row) => formatDisplayDate(row.issued_at) },
-  { header: 'Validated Date', value: (row) => formatDisplayDate(row.expires_at) },
+  { header: 'Expiry Date', value: (row) => formatDisplayDate(row.expires_at) },
   {
     header: 'Status',
     value: (row) => (isActiveReachCertificate(row) ? 'Valid' : getReachCertificateStatus(row)),

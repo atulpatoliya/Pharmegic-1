@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS public.tcc_applications (
     client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
     chemical_id UUID NOT NULL REFERENCES public.chemicals(id) ON DELETE CASCADE,
     client_chemical_id UUID REFERENCES public.client_chemicals(id) ON DELETE SET NULL,
+    reach_certificate_id UUID REFERENCES public.certificates(id) ON DELETE SET NULL,
     quantity_mt NUMERIC(12, 2) NOT NULL CHECK (quantity_mt > 0),
     export_date DATE,
     registration_number TEXT,
@@ -295,6 +296,7 @@ ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS eu_importer_company
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS eu_importer_address TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS purchase_order_number TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS reach_certificate_id UUID REFERENCES public.certificates(id) ON DELETE SET NULL;
 
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_host TEXT DEFAULT '';
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_port INTEGER DEFAULT 587;

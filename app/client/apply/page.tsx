@@ -5,13 +5,7 @@ import { redirect } from 'next/navigation';
 
 export const revalidate = 0;
 
-import { getRemainingQuota, sumApprovedExports } from '@/lib/quota';
-import {
-  isActiveReachCertificate,
-  mapLatestReachByChemical,
-  REACH_CERTIFICATE_TYPE,
-  getReachCertificateStatus,
-} from '@/lib/reach-certificate';
+import { mapAllReachByChemical, REACH_CERTIFICATE_TYPE, getReachCertificateStatus } from '@/lib/reach-certificate';
 import { canClientEditTccApplication } from '@/lib/tcc-application';
 
 export default async function ApplyPage({
@@ -43,7 +37,9 @@ export default async function ApplyPage({
         .eq('status', 'active'),
       adminSupabase
         .from('tcc_applications')
-        .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+        .select(
+          'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates(issued_at)'
+        )
         .eq('client_id', clientId)
         .eq('status', 'approved'),
       adminSupabase
@@ -70,32 +66,31 @@ export default async function ApplyPage({
     }
   }
 
-  const reachByChemical = mapLatestReachByChemical(reachCerts || []);
+  const reachByChemical = mapAllReachByChemical(reachCerts || []);
 
   const authorizedSubstances = (mappings || [])
     .map((m: { chemical_id: string; available_quantity?: number; validity_date?: string | null; chemicals?: unknown }) => {
       const chem = Array.isArray(m.chemicals) ? m.chemicals[0] : m.chemicals;
       if (!chem || (chem as { status?: string }).status !== 'active') return null;
-      const tonnageBand = (chem as { tonnage_band?: string | null }).tonnage_band ?? null;
-      const exported = sumApprovedExports(approvedTccs || [], m.chemical_id);
-      const reachCert = reachByChemical.get(m.chemical_id) ?? null;
-      const reachStatus = getReachCertificateStatus(reachCert);
-      const hasValidReach = isActiveReachCertificate(reachCert);
+
+      const chemicalReachCerts = reachByChemical.get(m.chemical_id) ?? [];
+      const reachCertificates = chemicalReachCerts.map((cert) => ({
+        id: cert.id,
+        certificate_number: cert.certificate_number,
+        issued_at: cert.issued_at,
+        expires_at: cert.expires_at,
+        file_url: cert.file_url,
+        status: getReachCertificateStatus(cert),
+      }));
+
       return {
         ...chem,
         id: m.chemical_id,
-        available_quantity: getRemainingQuota(Number(m.available_quantity ?? 0), exported, tonnageBand),
+        available_quantity: Number(m.available_quantity ?? 0),
         validity_date: m.validity_date ?? (chem as { validity_date?: string | null }).validity_date ?? null,
-        reach_certificate: reachCert
-          ? {
-              id: reachCert.id,
-              certificate_number: reachCert.certificate_number,
-              expires_at: reachCert.expires_at,
-              file_url: reachCert.file_url,
-              status: reachStatus,
-            }
-          : null,
-        has_valid_reach: hasValidReach,
+        tonnage_band: (chem as { tonnage_band?: string | null }).tonnage_band ?? null,
+        reach_certificates: reachCertificates,
+        has_reach_history: reachCertificates.length > 0,
       };
     })
     .filter(Boolean);
@@ -103,6 +98,7 @@ export default async function ApplyPage({
   return (
     <TccApplicationForm
       authorizedSubstances={authorizedSubstances as any}
+      approvedExports={approvedTccs || []}
       editApplication={editApplication}
     />
   );

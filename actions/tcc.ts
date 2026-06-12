@@ -16,8 +16,15 @@ import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments'
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
 import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
-import { getRemainingQuota, getTonnageBandMaxQuota, sumApprovedExports } from '@/lib/quota';
-import { isActiveReachCertificate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
+import {
+  computeTccQuotaForExportDate,
+  getRemainingQuota,
+  getRemainingQuotaForReachPeriod,
+  getTonnageBandMaxQuota,
+  sumApprovedExports,
+  sumApprovedExportsInReachWindow,
+} from '@/lib/quota';
+import { findReachCertificateForExportDate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 import { canClientEditTccApplication } from '@/lib/tcc-application';
 import { formatErrorMessage } from '@/lib/format-error';
 import type { z } from 'zod';
@@ -39,6 +46,7 @@ function tccSaveErrorMessage(err: unknown): string {
     message.includes('eu_importer') ||
     message.includes('purchase_order_number') ||
     message.includes('invoice_number') ||
+    message.includes('reach_certificate_id') ||
     message.includes('PGRST204')
   ) {
     return 'Database is missing EU Importer columns. Run the latest database.sql migration in Supabase, then try again.';
@@ -67,7 +75,8 @@ async function validateClientTccSubmission(
     chemical_id: string;
     quantity_mt: number;
     export_date: string;
-  }
+  },
+  options?: { excludeApplicationId?: string }
 ) {
   const { data: authChem } = await adminSupabase
     .from('client_chemicals')
@@ -81,56 +90,57 @@ async function validateClientTccSubmission(
     return { ok: false as const, error: 'This chemical is not authorized for your company. Contact your administrator.' };
   }
 
-  const { data: reachCert } = await adminSupabase
-    .from('certificates')
-    .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
-    .eq('client_id', clientId)
-    .eq('chemical_id', data.chemical_id)
-    .eq('type', REACH_CERTIFICATE_TYPE)
-    .eq('status', 'active')
-    .order('issued_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [{ data: reachCerts }, { data: approvedForChem }] = await Promise.all([
+    adminSupabase
+      .from('certificates')
+      .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
+      .eq('client_id', clientId)
+      .eq('chemical_id', data.chemical_id)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .neq('status', 'revoked')
+      .order('issued_at', { ascending: false }),
+    adminSupabase
+      .from('tcc_applications')
+      .select(
+        'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates(issued_at)'
+      )
+      .eq('client_id', clientId)
+      .eq('chemical_id', data.chemical_id)
+      .eq('status', 'approved'),
+  ]);
 
-  if (!isActiveReachCertificate(reachCert)) {
+  const chem = Array.isArray(authChem.chemicals) ? authChem.chemicals[0] : authChem.chemicals;
+  const tonnageBand = (chem as { tonnage_band?: string | null } | null)?.tonnage_band ?? null;
+
+  const quotaResult = computeTccQuotaForExportDate({
+    reachCertificates: reachCerts || [],
+    approvedApplications: approvedForChem || [],
+    chemicalId: data.chemical_id,
+    exportDate: data.export_date,
+    tonnageBand,
+    excludeApplicationId: options?.excludeApplicationId,
+  });
+
+  if (!quotaResult.reachCert) {
     return {
       ok: false as const,
       error:
-        'A valid REACH Compliance Certificate is required before applying for TCC. Contact your administrator to issue one for this substance.',
+        quotaResult.error ||
+        'A REACH Compliance Certificate is required for the selected export shipment date.',
     };
   }
 
-  if (data.export_date && reachCert?.expires_at) {
-    const exportD = new Date(data.export_date);
-    const reachExpiry = new Date(reachCert.expires_at);
-    if (exportD > reachExpiry) {
-      return {
-        ok: false as const,
-        error: `Expected export date exceeds REACH Compliance Certificate validity (${reachExpiry.toLocaleDateString()}).`,
-      };
-    }
-  }
-
-  const { data: approvedForChem } = await adminSupabase
-    .from('tcc_applications')
-    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
-    .eq('client_id', clientId)
-    .eq('chemical_id', data.chemical_id)
-    .eq('status', 'approved');
-
-  const exportedMt = sumApprovedExports(approvedForChem || [], data.chemical_id);
-  const chem = Array.isArray(authChem.chemicals) ? authChem.chemicals[0] : authChem.chemicals;
-  const tonnageBand = (chem as { tonnage_band?: string | null } | null)?.tonnage_band ?? null;
-  const clientQuota = getRemainingQuota(Number(authChem.available_quantity ?? 0), exportedMt, tonnageBand);
-
-  if (clientQuota < data.quantity_mt) {
+  if (quotaResult.remainingQuota < data.quantity_mt) {
+    const periodLabel = quotaResult.reachCert.expires_at
+      ? `${new Date(quotaResult.reachCert.issued_at).toLocaleDateString()} – ${new Date(quotaResult.reachCert.expires_at).toLocaleDateString()}`
+      : new Date(quotaResult.reachCert.issued_at).toLocaleDateString();
     return {
       ok: false as const,
-      error: `Insufficient quota. Requested: ${data.quantity_mt} MT, Available: ${clientQuota} MT.`,
+      error: `Insufficient quota for RC period (${periodLabel}). Requested: ${data.quantity_mt} MT, Available: ${quotaResult.remainingQuota} MT.`,
     };
   }
 
-  return { ok: true as const, authChem };
+  return { ok: true as const, authChem, reachCert: quotaResult.reachCert };
 }
 
 // ============================================================================
@@ -165,6 +175,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       return { success: false, error: validation.error };
     }
     const authChem = validation.authChem;
+    const reachCert = validation.reachCert;
 
     const [{ data: chemical }, euImporter] = await Promise.all([
       adminSupabase
@@ -194,6 +205,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
         client_id: clientId,
         chemical_id: result.data.chemical_id,
         client_chemical_id: authChem.id,
+        reach_certificate_id: reachCert.id,
         quantity_mt: result.data.quantity_mt,
         registration_number: result.data.registration_number || null,
         export_date: result.data.export_date,
@@ -285,11 +297,14 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
       return { success: false, error: 'Approved applications cannot be edited.' };
     }
 
-    const validation = await validateClientTccSubmission(adminSupabase, clientId, result.data);
+    const validation = await validateClientTccSubmission(adminSupabase, clientId, result.data, {
+      excludeApplicationId: applicationId,
+    });
     if (!validation.ok) {
       return { success: false, error: validation.error };
     }
     const authChem = validation.authChem;
+    const reachCert = validation.reachCert;
 
     const boFile = formData.get('bo_attachment');
     const hasNewBo = boFile instanceof File && boFile.size > 0;
@@ -312,6 +327,7 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
       .update({
         chemical_id: result.data.chemical_id,
         client_chemical_id: authChem.id,
+        reach_certificate_id: reachCert.id,
         quantity_mt: result.data.quantity_mt,
         registration_number: result.data.registration_number || null,
         export_date: result.data.export_date,
@@ -676,23 +692,64 @@ export async function processTccAction(
     if (fetchError || !app) throw new Error('Application not found');
 
     if (status === 'approved') {
-      const { data: approvedForChem } = await adminSupabase
-        .from('tcc_applications')
-        .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
-        .eq('client_id', app.client_id)
-        .eq('chemical_id', app.chemical_id)
-        .eq('status', 'approved')
-        .neq('id', applicationId);
+      if (!app.export_date) {
+        return { success: false, error: 'Cannot approve: export shipment date is missing.' };
+      }
 
-      const exportedMt = sumApprovedExports(approvedForChem || [], app.chemical_id);
-      const bandMax = getTonnageBandMaxQuota(app.chemicals.tonnage_band);
-      const requested = Number(app.quantity_mt);
+      const [{ data: reachCerts }, { data: approvedForChem }] = await Promise.all([
+        adminSupabase
+          .from('certificates')
+          .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
+          .eq('client_id', app.client_id)
+          .eq('chemical_id', app.chemical_id)
+          .eq('type', REACH_CERTIFICATE_TYPE)
+          .neq('status', 'revoked'),
+        adminSupabase
+          .from('tcc_applications')
+          .select(
+            'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates(issued_at)'
+          )
+          .eq('client_id', app.client_id)
+          .eq('chemical_id', app.chemical_id)
+          .eq('status', 'approved')
+          .neq('id', applicationId),
+      ]);
 
-      if (bandMax != null && exportedMt + requested > bandMax) {
+      const reachCert =
+        (app.reach_certificate_id
+          ? (reachCerts || []).find((c) => c.id === app.reach_certificate_id)
+          : null) ||
+        findReachCertificateForExportDate(reachCerts || [], app.chemical_id, app.export_date);
+
+      if (!reachCert) {
         return {
           success: false,
-          error: `Cannot approve: ${exportedMt} MT already issued this year. Limit is ${bandMax} MT — only ${Math.max(0, bandMax - exportedMt)} MT remaining.`,
+          error:
+            'Cannot approve: no REACH Compliance Certificate covers the export shipment date.',
         };
+      }
+
+      const exportedMt = sumApprovedExportsInReachWindow(
+        approvedForChem || [],
+        app.chemical_id,
+        reachCert
+      );
+      const bandMax = getTonnageBandMaxQuota(app.chemicals.tonnage_band);
+      const requested = Number(app.quantity_mt);
+      const remaining = getRemainingQuotaForReachPeriod(exportedMt, app.chemicals.tonnage_band);
+
+      if (bandMax != null && requested > remaining) {
+        return {
+          success: false,
+          error: `Cannot approve: ${exportedMt} MT already used for this RC period. Only ${remaining} MT remaining.`,
+        };
+      }
+
+      if (!app.reach_certificate_id) {
+        await adminSupabase
+          .from('tcc_applications')
+          .update({ reach_certificate_id: reachCert.id })
+          .eq('id', applicationId);
       }
     }
 

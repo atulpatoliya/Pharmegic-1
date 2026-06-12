@@ -33,6 +33,20 @@ export function getReachCertificateStatus(
   return 'expired';
 }
 
+/** RC badge status for substance table — falls back to client_chemicals.validity_date when no cert exists. */
+export function getSubstanceRcBadgeStatus(
+  cert: ReachCertificateRecord | null | undefined,
+  validityDate: string | null | undefined,
+  asOf: Date = new Date()
+): 'valid' | 'expired' | 'revoked' | 'missing' {
+  if (cert) return getReachCertificateStatus(cert, asOf);
+  if (validityDate?.trim()) {
+    const end = endOfDay(new Date(validityDate.trim().split('T')[0] + 'T12:00:00'));
+    if (!Number.isNaN(end.getTime()) && end < asOf) return 'expired';
+  }
+  return 'missing';
+}
+
 /** Latest REACH certificate per chemical_id for a client. */
 export function mapLatestReachByChemical(
   certificates: ReachCertificateRecord[]
@@ -46,6 +60,83 @@ export function mapLatestReachByChemical(
     }
   }
   return map;
+}
+
+/** All REACH certificates grouped by chemical_id (newest first per chemical). */
+export function mapAllReachByChemical(
+  certificates: ReachCertificateRecord[]
+): Map<string, ReachCertificateRecord[]> {
+  const map = new Map<string, ReachCertificateRecord[]>();
+  for (const cert of certificates) {
+    if (cert.type !== REACH_CERTIFICATE_TYPE || !cert.chemical_id) continue;
+    if (cert.status === 'revoked') continue;
+    const list = map.get(cert.chemical_id) ?? [];
+    list.push(cert);
+    map.set(cert.chemical_id, list);
+  }
+  for (const [chemicalId, list] of map) {
+    list.sort((a, b) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime());
+    map.set(chemicalId, list);
+  }
+  return map;
+}
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+/** Whether a calendar date falls within an RC validity window (inclusive). */
+export function isDateInReachWindow(
+  date: string | Date,
+  issuedAt: string,
+  expiresAt: string | null
+): boolean {
+  const d = startOfDay(new Date(date));
+  const issued = startOfDay(new Date(issuedAt));
+  if (d < issued) return false;
+  if (!expiresAt) return true;
+  const expires = endOfDay(new Date(expiresAt));
+  return d <= expires;
+}
+
+/** RC certificate whose validity window contains the export shipment date. */
+export function findReachCertificateForExportDate(
+  certificates: ReachCertificateRecord[],
+  chemicalId: string,
+  exportDate: string | Date
+): ReachCertificateRecord | null {
+  const matches = certificates
+    .filter(
+      (cert) =>
+        cert.chemical_id === chemicalId &&
+        cert.type === REACH_CERTIFICATE_TYPE &&
+        cert.status !== 'revoked' &&
+        isDateInReachWindow(exportDate, cert.issued_at, cert.expires_at)
+    )
+    .sort((a, b) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime());
+
+  return matches[0] ?? null;
+}
+
+export function doReachValidityPeriodsOverlap(
+  issuedA: string | Date,
+  expiresA: string | Date | null,
+  issuedB: string | Date,
+  expiresB: string | Date | null
+): boolean {
+  const startA = startOfDay(new Date(issuedA)).getTime();
+  const endA = expiresA ? endOfDay(new Date(expiresA)).getTime() : Number.POSITIVE_INFINITY;
+  const startB = startOfDay(new Date(issuedB)).getTime();
+  const endB = expiresB ? endOfDay(new Date(expiresB)).getTime() : Number.POSITIVE_INFINITY;
+  return startA <= endB && startB <= endA;
 }
 
 export function addOneYear(from: Date = new Date()): Date {

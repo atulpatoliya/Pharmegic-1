@@ -12,6 +12,7 @@ import {
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { DatePicker } from './ui/DatePicker';
 import { Select } from './ui/Select';
 import { Badge } from './ui/Badge';
 import { Dialog } from './ui/Dialog';
@@ -744,11 +745,10 @@ export default function ChemicalsDashboard({
                 { value: '1000+ tonnes', label: '1000+ tonnes' },
               ]}
             />
-            <Input
-              type="date"
+            <DatePicker
               label="Validity Expiration Date"
               value={formData.validity_date}
-              onChange={(e) => setFormData({ ...formData, validity_date: e.target.value })}
+              onChange={(validity_date) => setFormData({ ...formData, validity_date })}
               required
             />
           </div>
@@ -833,11 +833,10 @@ export default function ChemicalsDashboard({
                 { value: '1000+ tonnes', label: '1000+ tonnes' },
               ]}
             />
-            <Input
-              type="date"
+            <DatePicker
               label="Validity Expiration Date"
               value={formData.validity_date}
-              onChange={(e) => setFormData({ ...formData, validity_date: e.target.value })}
+              onChange={(validity_date) => setFormData({ ...formData, validity_date })}
               required
             />
           </div>

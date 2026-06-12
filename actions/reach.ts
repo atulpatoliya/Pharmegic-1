@@ -13,9 +13,9 @@ import { notifyUser } from '@/lib/notifications';
 import { sendBulkReachCertificatesEmail, sendCertificateEmail as sendCertEmail } from '@/services/email';
 import {
   REACH_CERTIFICATE_TYPE,
+  doReachValidityPeriodsOverlap,
   getLastDateOfYear,
   getTodayDateString,
-  isActiveReachCertificate,
 } from '@/lib/reach-certificate';
 
 async function requireAdmin() {
@@ -78,31 +78,29 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   }
   if (!chemical) return { success: false as const, error: 'Chemical not found.' };
 
-  const { data: existingReach } = await adminSupabase
+  const { data: activeReachCerts } = await adminSupabase
     .from('certificates')
-    .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
-    .eq('client_id', clientId)
-    .eq('chemical_id', chemicalId)
-    .eq('type', REACH_CERTIFICATE_TYPE)
-    .eq('status', 'active')
-    .order('issued_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (isActiveReachCertificate(existingReach)) {
-    return {
-      success: false as const,
-      error: `An active RC Certificate already exists for ${chemical.chemical_name}. Renew after it expires.`,
-    };
-  }
-
-  await adminSupabase
-    .from('certificates')
-    .update({ status: 'expired' })
+    .select('id, issued_at, expires_at, status')
     .eq('client_id', clientId)
     .eq('chemical_id', chemicalId)
     .eq('type', REACH_CERTIFICATE_TYPE)
     .eq('status', 'active');
+
+  for (const existing of activeReachCerts || []) {
+    if (
+      doReachValidityPeriodsOverlap(
+        issuedDate,
+        validatedDate,
+        existing.issued_at,
+        existing.expires_at
+      )
+    ) {
+      return {
+        success: false as const,
+        error: `An active RC Certificate already covers this validity period for ${chemical.chemical_name}. Issue the new certificate with non-overlapping dates.`,
+      };
+    }
+  }
 
   const issueDate = new Date(issuedDate);
   const expiryDate = new Date(validatedDate);
@@ -264,6 +262,103 @@ export async function issueReachCertificateFromPreviewAction(
       success: true,
       message: result.message,
       certificateId: result.certificateId,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// RENEW RC CERTIFICATE (Admin — new period + quota from substance table)
+// ============================================================================
+export async function renewReachCertificateAction(
+  clientId: string,
+  chemicalId: string,
+  data: { issuedDate: string; validatedDate: string; available_quantity: number }
+) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  if (!data.issuedDate || !data.validatedDate) {
+    return { success: false, error: 'Issue date and expiry date are required.' };
+  }
+  if (new Date(data.validatedDate) < new Date(data.issuedDate)) {
+    return { success: false, error: 'Expiry date cannot be before issue date.' };
+  }
+  if (!data.available_quantity || data.available_quantity <= 0) {
+    return { success: false, error: 'Quota must be greater than 0 MT.' };
+  }
+
+  const adminSupabase = createAdminClient();
+  const { data: prevCert } = await adminSupabase
+    .from('certificates')
+    .select('registration_number')
+    .eq('client_id', clientId)
+    .eq('chemical_id', chemicalId)
+    .eq('type', REACH_CERTIFICATE_TYPE)
+    .order('issued_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!prevCert?.registration_number?.trim()) {
+    return {
+      success: false,
+      error: 'Registration number not found. Re-assign the substance with registration details.',
+    };
+  }
+
+  try {
+    const result = await createReachCertificate({
+      clientId,
+      chemicalId,
+      userId: session.userId,
+      registrationNumber: prevCert.registration_number,
+      issuedDate: data.issuedDate,
+      validatedDate: data.validatedDate,
+    });
+
+    if (!result.success) return result;
+
+    const { error: ccError } = await adminSupabase
+      .from('client_chemicals')
+      .update({
+        available_quantity: data.available_quantity,
+        validity_date: data.validatedDate,
+        status: 'active',
+      })
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId);
+
+    if (ccError) throw ccError;
+
+    await adminSupabase.from('quota_transactions').insert({
+      client_id: clientId,
+      chemical_id: chemicalId,
+      quantity_mt: data.available_quantity,
+      transaction_type: 'assign',
+      performed_by: session.userId,
+      notes: `RC renewed — quota set to ${data.available_quantity} MT`,
+    });
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'REACH_CERTIFICATE_RENEWED',
+      entity_type: 'certificates',
+      entity_id: result.certificateId,
+      description: `RC renewed with ${data.available_quantity} MT quota until ${data.validatedDate}`,
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+    revalidatePath('/client');
+
+    return {
+      success: true,
+      message: result.message || 'RC Certificate renewed successfully.',
+      certificateId: result.certificateId,
+      certificateNumber: result.certNumber,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

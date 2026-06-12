@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
+import { computeTccQuotaForExportDate } from '@/lib/quota';
+import type { TccExportRecord } from '@/lib/quota';
+import type { ReachCertificateRecord } from '@/lib/reach-certificate';
 import { useRouter } from 'next/navigation';
 import { applyForTccAction, updateTccApplicationAction } from '@/actions/tcc';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { DatePicker } from './ui/DatePicker';
 import { Select } from './ui/Select';
 import { toast } from '@/store/toast';
 import {
@@ -25,6 +29,7 @@ import { FormLabel } from './ui/FormLabel';
 interface ReachCertificateInfo {
   id: string;
   certificate_number: string;
+  issued_at: string;
   expires_at: string | null;
   file_url?: string | null;
   status: 'valid' | 'expired' | 'revoked' | 'missing';
@@ -38,8 +43,8 @@ interface Substance {
   tonnage_band: string | null;
   validity_date: string | null;
   available_quantity: number;
-  has_valid_reach?: boolean;
-  reach_certificate?: ReachCertificateInfo | null;
+  has_reach_history?: boolean;
+  reach_certificates?: ReachCertificateInfo[];
 }
 
 export interface TccApplicationEditData {
@@ -57,6 +62,7 @@ export interface TccApplicationEditData {
 
 interface TccApplicationFormProps {
   authorizedSubstances: Substance[];
+  approvedExports?: TccExportRecord[];
   editApplication?: TccApplicationEditData | null;
 }
 
@@ -67,6 +73,7 @@ function formatDateInput(value: string | null | undefined) {
 
 export default function TccApplicationForm({
   authorizedSubstances,
+  approvedExports = [],
   editApplication = null,
 }: TccApplicationFormProps) {
   const router = useRouter();
@@ -105,23 +112,77 @@ export default function TccApplicationForm({
   }, [editApplication]);
 
   const selectedSubstance = authorizedSubstances.find((s) => s.id === chemicalId);
-  const initialQuota = selectedSubstance ? Number(selectedSubstance.available_quantity) : 0;
+
+  const quotaContext = useMemo(() => {
+    if (!selectedSubstance || !exportDate) return null;
+    const reachRecords: ReachCertificateRecord[] = (selectedSubstance.reach_certificates ?? []).map(
+      (cert) => ({
+        id: cert.id,
+        certificate_number: cert.certificate_number,
+        chemical_id: selectedSubstance.id,
+        issued_at: cert.issued_at,
+        expires_at: cert.expires_at,
+        status: cert.status === 'revoked' ? 'revoked' : cert.status === 'valid' ? 'active' : 'expired',
+        file_url: cert.file_url ?? null,
+        type: 'REACH',
+      })
+    );
+
+    return computeTccQuotaForExportDate({
+      reachCertificates: reachRecords,
+      approvedApplications: approvedExports,
+      chemicalId: selectedSubstance.id,
+      exportDate,
+      tonnageBand: selectedSubstance.tonnage_band,
+      excludeApplicationId: editApplication?.id,
+    });
+  }, [selectedSubstance, exportDate, approvedExports, editApplication?.id]);
+
+  const matchedReachCert = quotaContext?.reachCert ?? null;
+  const initialQuota = quotaContext?.remainingQuota ?? 0;
   const requestedAmt = Number(quantity) || 0;
   const finalQuota = initialQuota - requestedAmt;
   const quotaExceeded = requestedAmt > 0 && requestedAmt > initialQuota;
-  const noQuotaLeft = selectedSubstance != null && initialQuota <= 0;
-  const noValidReach = selectedSubstance != null && !selectedSubstance.has_valid_reach;
-  const eligibleSubstances = authorizedSubstances.filter(
-    (s) => s.has_valid_reach && Number(s.available_quantity) > 0
-  );
+  const noQuotaLeft =
+    selectedSubstance != null && exportDate !== '' && quotaContext != null && initialQuota <= 0;
+  const noReachForExportDate =
+    selectedSubstance != null && exportDate !== '' && quotaContext != null && !matchedReachCert;
+  const eligibleSubstances = authorizedSubstances.filter((s) => s.has_reach_history);
   const hasExistingBo = Boolean(editApplication?.bo_attachment_url);
 
   const handleChemicalChange = (value: string) => {
     setChemicalId(value);
     setError(null);
-    const substance = authorizedSubstances.find((s) => s.id === value);
-    if (substance && quantity && Number(quantity) > Number(substance.available_quantity)) {
-      setQuantity('');
+  };
+
+  const handleExportDateChange = (value: string) => {
+    setExportDate(value);
+    setError(null);
+    if (selectedSubstance && quantity && exportDate) {
+      const substance = authorizedSubstances.find((s) => s.id === chemicalId);
+      if (!substance) return;
+      const reachRecords: ReachCertificateRecord[] = (substance.reach_certificates ?? []).map(
+        (cert) => ({
+          id: cert.id,
+          certificate_number: cert.certificate_number,
+          chemical_id: substance.id,
+          issued_at: cert.issued_at,
+          expires_at: cert.expires_at,
+          status: cert.status === 'revoked' ? 'revoked' : cert.status === 'valid' ? 'active' : 'expired',
+          type: 'REACH',
+        })
+      );
+      const next = computeTccQuotaForExportDate({
+        reachCertificates: reachRecords,
+        approvedApplications: approvedExports,
+        chemicalId: substance.id,
+        exportDate: value,
+        tonnageBand: substance.tonnage_band,
+        excludeApplicationId: editApplication?.id,
+      });
+      if (quantity && Number(quantity) > next.remainingQuota) {
+        setQuantity('');
+      }
     }
   };
 
@@ -146,25 +207,26 @@ export default function TccApplicationForm({
       return;
     }
 
-    if (noQuotaLeft) {
-      setError('No remaining quota for this substance. Contact your administrator.');
+    if (!exportDate) {
+      setError('Expected export shipment date is required.');
       return;
     }
 
-    if (noValidReach) {
+    if (noReachForExportDate) {
       setError(
-        'A valid REACH Compliance Certificate is required for this substance. Contact your administrator to issue one before applying for TCC.'
+        quotaContext?.error ||
+          'No REACH Compliance Certificate covers the selected export shipment date. Choose a date within an issued RC validity period.'
       );
       return;
     }
 
-    if (selectedSubstance && Number(quantity) > selectedSubstance.available_quantity) {
-      setError(`Quantity exceeds available quota. Maximum allowed: ${selectedSubstance.available_quantity} MT.`);
+    if (noQuotaLeft) {
+      setError('No remaining quota for this RC validity period. Contact your administrator.');
       return;
     }
 
-    if (!exportDate) {
-      setError('Expected export date is required.');
+    if (selectedSubstance && Number(quantity) > initialQuota) {
+      setError(`Quantity exceeds available quota. Maximum allowed: ${initialQuota} MT.`);
       return;
     }
 
@@ -193,17 +255,6 @@ export default function TccApplicationForm({
       const shipment = new Date(exportDate);
       if (shipment > expiry) {
         setError(`The expected export date exceeds the substance validity date (${expiry.toLocaleDateString()}).`);
-        return;
-      }
-    }
-
-    if (selectedSubstance?.reach_certificate?.expires_at) {
-      const reachExpiry = new Date(selectedSubstance.reach_certificate.expires_at);
-      const shipment = new Date(exportDate);
-      if (shipment > reachExpiry) {
-        setError(
-          `The expected export date exceeds the REACH Compliance Certificate validity (${reachExpiry.toLocaleDateString()}).`
-        );
         return;
       }
     }
@@ -330,20 +381,15 @@ export default function TccApplicationForm({
                     options={[
                       { value: '', label: 'Select authorized substance...' },
                       ...authorizedSubstances.map((s) => {
-                        const remaining = Number(s.available_quantity);
-                        const reachOk = s.has_valid_reach;
+                        const hasRc = (s.reach_certificates?.length ?? 0) > 0;
                         let label = `${s.chemical_name} (CAS: ${s.cas_number})`;
-                        if (!reachOk) {
-                          label += ' — REACH certificate required';
-                        } else if (remaining <= 0 && !isEditing) {
-                          label += ' — No quota left';
-                        } else {
-                          label += ` — ${remaining} MT available`;
+                        if (!hasRc) {
+                          label += ' — RC certificate required';
                         }
                         return {
                           value: s.id,
                           label,
-                          disabled: !reachOk || (remaining <= 0 && !isEditing),
+                          disabled: !hasRc,
                         };
                       }),
                     ]}
@@ -352,25 +398,50 @@ export default function TccApplicationForm({
                 </div>
 
                 <div className="space-y-2">
+                  <FormLabel required>Expected Export Shipment Date</FormLabel>
+                  <DatePicker
+                    value={exportDate}
+                    onChange={handleExportDateChange}
+                    required
+                  />
+                  {matchedReachCert && (
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      RC period:{' '}
+                      <span className="font-bold text-slate-700">
+                        {new Date(matchedReachCert.issued_at).toLocaleDateString()} –{' '}
+                        {matchedReachCert.expires_at
+                          ? new Date(matchedReachCert.expires_at).toLocaleDateString()
+                          : 'N/A'}
+                      </span>{' '}
+                      ({matchedReachCert.certificate_number})
+                    </p>
+                  )}
+                  {noReachForExportDate && (
+                    <p className="text-[11px] text-rose-600 font-semibold">
+                      No RC certificate covers this export date.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
                   <FormLabel required>Export Tonnage (Metric Tons - MT)</FormLabel>
                   <Input
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={selectedSubstance ? selectedSubstance.available_quantity : undefined}
+                    max={exportDate && initialQuota > 0 ? initialQuota : undefined}
                     placeholder={
-                      selectedSubstance
-                        ? `Max ${selectedSubstance.available_quantity} MT`
-                        : 'e.g. 25.50'
+                      exportDate && initialQuota > 0 ? `Max ${initialQuota} MT` : 'e.g. 25.50'
                     }
                     value={quantity}
                     onChange={(e) => handleQuantityChange(e.target.value)}
-                    disabled={noQuotaLeft && !isEditing}
+                    disabled={(noQuotaLeft || noReachForExportDate || !exportDate) && !isEditing}
                     required
                   />
-                  {selectedSubstance && (
+                  {selectedSubstance && exportDate && matchedReachCert && (
                     <p className="text-[10px] text-slate-500 font-medium">
-                      Maximum you can apply for: <span className="font-bold text-slate-700">{initialQuota} MT</span>
+                      Available for this RC period:{' '}
+                      <span className="font-bold text-slate-700">{initialQuota} MT</span>
                     </p>
                   )}
                   {quotaExceeded && (
@@ -379,16 +450,6 @@ export default function TccApplicationForm({
                       Request exceeds available quota by {(requestedAmt - initialQuota).toFixed(2)} MT.
                     </p>
                   )}
-                </div>
-
-                <div className="space-y-2">
-                  <FormLabel required>Expected Export Shipment Date</FormLabel>
-                  <Input
-                    type="date"
-                    value={exportDate}
-                    onChange={(e) => setExportDate(e.target.value)}
-                    required
-                  />
                 </div>
 
                 <div className="space-y-2">
@@ -443,7 +504,8 @@ export default function TccApplicationForm({
                       isPending ||
                       quotaExceeded ||
                       (noQuotaLeft && !isEditing) ||
-                      noValidReach ||
+                      noReachForExportDate ||
+                      !exportDate ||
                       !quantity ||
                       Number(quantity) <= 0
                     }
@@ -511,15 +573,25 @@ export default function TccApplicationForm({
                     </div>
                   </div>
 
-                  {noValidReach ? (
+                  {!exportDate ? (
+                    <div className="p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold flex gap-2 items-start">
+                      <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p>Select export shipment date</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                          Quota is calculated from the RC certificate period that matches your export date.
+                          A 2025 export uses 2025 RC quota; a 2026 export uses the 2026 RC certificate.
+                        </p>
+                      </div>
+                    </div>
+                  ) : noReachForExportDate ? (
                     <div className="p-3 bg-amber-50 text-amber-800 border border-amber-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
                       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                       <div>
-                        <p>REACH Certificate Required</p>
+                        <p>No RC Certificate For This Date</p>
                         <p className="text-[10px] text-amber-700 mt-0.5 font-medium">
-                          {selectedSubstance.reach_certificate?.status === 'expired'
-                            ? `REACH certificate expired on ${selectedSubstance.reach_certificate.expires_at ? new Date(selectedSubstance.reach_certificate.expires_at).toLocaleDateString() : 'N/A'}. Request renewal from your administrator.`
-                            : 'No valid REACH Compliance Certificate for this substance. Your administrator must issue one before TCC application.'}
+                          {quotaContext?.error ||
+                            'Choose an export date within an issued RC validity period, or ask your administrator to issue a new RC certificate.'}
                         </p>
                       </div>
                     </div>
@@ -529,7 +601,7 @@ export default function TccApplicationForm({
                       <div>
                         <p>Quota Limit Exceeded</p>
                         <p className="text-[10px] text-rose-600 mt-0.5 font-medium">
-                          You cannot request more than {initialQuota} MT for {selectedSubstance.chemical_name} this year.
+                          You cannot request more than {initialQuota} MT for this RC validity period.
                         </p>
                       </div>
                     </div>
@@ -547,16 +619,17 @@ export default function TccApplicationForm({
                     <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-xs font-semibold flex gap-2 items-start">
                       <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
                       <div>
-                        <p>REACH &amp; Substance Verified</p>
+                        <p>RC Period &amp; Quota Verified</p>
                         <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">
-                          REACH certificate valid until{' '}
-                          {selectedSubstance.reach_certificate?.expires_at
-                            ? new Date(selectedSubstance.reach_certificate.expires_at).toLocaleDateString()
-                            : 'N/A'}
-                          . Substance authorized until{' '}
-                          {selectedSubstance.validity_date
-                            ? new Date(selectedSubstance.validity_date).toLocaleDateString()
-                            : 'N/A'}.
+                          Using {matchedReachCert?.certificate_number} (
+                          {matchedReachCert?.issued_at
+                            ? new Date(matchedReachCert.issued_at).toLocaleDateString()
+                            : '—'}{' '}
+                          –{' '}
+                          {matchedReachCert?.expires_at
+                            ? new Date(matchedReachCert.expires_at).toLocaleDateString()
+                            : '—'}
+                          ). {initialQuota} MT available for this period.
                         </p>
                       </div>
                     </div>

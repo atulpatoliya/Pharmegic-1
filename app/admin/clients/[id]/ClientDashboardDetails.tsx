@@ -22,21 +22,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { Dialog } from '@/components/ui/Dialog';
 import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
 import { FormLabel } from '@/components/ui/FormLabel';
 import { formatErrorMessage } from '@/lib/format-error';
-import { resolveQuotaConsumption, sumApprovedExports, getRemainingQuota } from '@/lib/quota';
+import { resolveQuotaConsumption, sumApprovedExports, getRemainingQuota, getTonnageBandMaxQuota } from '@/lib/quota';
 import {
   isActiveReachCertificate,
   mapLatestReachByChemical,
   REACH_CERTIFICATE_TYPE,
   getReachCertificateStatus,
+  getSubstanceRcBadgeStatus,
   getLastDateOfYear,
   getTodayDateString,
 } from '@/lib/reach-certificate';
-import { deleteReachCertificateAction, sendBulkReachCertificatesEmailAction } from '@/actions/reach';
+import {
+  deleteReachCertificateAction,
+  renewReachCertificateAction,
+  sendBulkReachCertificatesEmailAction,
+} from '@/actions/reach';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
@@ -198,6 +204,32 @@ export default function ClientDashboardDetails({
     chemical_name: '', cas_number: '', ec_number: '', tonnage_band: '', validity_date: ''
   });
 
+  type RenewRcOldCertificate = {
+    id: string;
+    certificate_number: string;
+    issued_at: string;
+    expires_at: string | null;
+    status: 'valid' | 'expired' | 'revoked' | 'missing';
+  };
+  type RenewRcIssuedCertificate = {
+    certificate_number: string;
+    issued_at: string;
+    expires_at: string;
+    quota: number;
+  };
+  const emptyRenewRcData = () => ({
+    chemical_id: '',
+    chemical_name: '',
+    registration_number: '',
+    issued_date: getTodayDateString(),
+    validated_date: getLastDateOfYear(),
+    available_quantity: '',
+    old_certificates: [] as RenewRcOldCertificate[],
+    issued_new_certificate: null as RenewRcIssuedCertificate | null,
+  });
+  const [isRenewRcModalOpen, setRenewRcModalOpen] = useState(false);
+  const [renewRcData, setRenewRcData] = useState(emptyRenewRcData);
+
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [contactData, setContactData] = useState({
     first_name: '', last_name: '', email: '', phone: '', role: ''
@@ -308,12 +340,22 @@ export default function ClientDashboardDetails({
   const canReviewTcc = currentUserRole !== 'CLIENT';
   const canDeleteClient = currentUserRole === 'MASTER_ADMIN' || currentUserRole === 'SUPER_ADMIN';
 
-  type ModalErrorKey = 'email' | 'password' | 'assignChem' | 'editChem' | 'contact' | 'note' | 'security' | 'substances';
+  type ModalErrorKey =
+    | 'email'
+    | 'password'
+    | 'assignChem'
+    | 'editChem'
+    | 'renewRc'
+    | 'contact'
+    | 'note'
+    | 'security'
+    | 'substances';
   const [modalErrors, setModalErrors] = useState<Record<ModalErrorKey, string | null>>({
     email: null,
     password: null,
     assignChem: null,
     editChem: null,
+    renewRc: null,
     contact: null,
     note: null,
     security: null,
@@ -529,6 +571,78 @@ export default function ClientDashboardDetails({
         }
       } else {
         setModalError('assignChem', toErrorMessage(res.error, 'Failed to assign substance.'));
+      }
+    });
+  };
+
+  const openRenewRcModal = (cc: { chemical_id: string; chemicals?: { chemical_name?: string; tonnage_band?: string | null }; available_quantity?: number }) => {
+    const oldCertificates = rcCertificates
+      .filter((c) => c.chemical_id === cc.chemical_id)
+      .sort((a, b) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime())
+      .map((cert) => ({
+        id: cert.id,
+        certificate_number: cert.certificate_number,
+        issued_at: cert.issued_at,
+        expires_at: cert.expires_at ?? null,
+        status: getReachCertificateStatus(cert),
+      }));
+    const latestRc = oldCertificates[0]
+      ? rcCertificates.find((c) => c.id === oldCertificates[0].id)
+      : undefined;
+    const bandMax = getTonnageBandMaxQuota(cc.chemicals?.tonnage_band);
+    setRenewRcData({
+      chemical_id: cc.chemical_id,
+      chemical_name: cc.chemicals?.chemical_name || 'Unknown',
+      registration_number: latestRc?.registration_number || '',
+      issued_date: getTodayDateString(),
+      validated_date: getLastDateOfYear(new Date().getFullYear() + 1),
+      available_quantity: bandMax != null ? String(bandMax) : String(cc.available_quantity ?? ''),
+      old_certificates: oldCertificates,
+      issued_new_certificate: null,
+    });
+    setModalError('renewRc', null);
+    setRenewRcModalOpen(true);
+  };
+
+  const handleRenewRc = () => {
+    if (!renewRcData.issued_date) {
+      setModalError('renewRc', 'Issue date is required.');
+      return;
+    }
+    if (!renewRcData.validated_date) {
+      setModalError('renewRc', 'Expiry date is required.');
+      return;
+    }
+    if (new Date(renewRcData.validated_date) < new Date(renewRcData.issued_date)) {
+      setModalError('renewRc', 'Expiry date cannot be before issue date.');
+      return;
+    }
+    const quota = Number(renewRcData.available_quantity);
+    if (!quota || quota <= 0) {
+      setModalError('renewRc', 'Quota must be greater than 0 MT.');
+      return;
+    }
+    setModalError('renewRc', null);
+    startTransition(async () => {
+      const res = await renewReachCertificateAction(client.id, renewRcData.chemical_id, {
+        issuedDate: renewRcData.issued_date,
+        validatedDate: renewRcData.validated_date,
+        available_quantity: quota,
+      });
+      if (res.success) {
+        toast.success(res.message || 'RC Certificate renewed.');
+        setRenewRcData((prev) => ({
+          ...prev,
+          issued_new_certificate: {
+            certificate_number: res.certificateNumber || '—',
+            issued_at: prev.issued_date,
+            expires_at: prev.validated_date,
+            quota,
+          },
+        }));
+        router.refresh();
+      } else {
+        setModalError('renewRc', toErrorMessage(res.error, 'Failed to renew RC certificate.'));
       }
     });
   };
@@ -1049,8 +1163,8 @@ export default function ClientDashboardDetails({
                   const isCritical = isExceeded || pct >= 90 || cc.status === 'expired';
                   const isWarning = !isExceeded && pct >= 75 && pct < 90;
                   const reachCert = reachByChemical.get(cc.chemical_id) ?? null;
-                  const reachValid = isActiveReachCertificate(reachCert);
-                  const reachStatus = getReachCertificateStatus(reachCert);
+                  const reachStatus = getSubstanceRcBadgeStatus(reachCert, cc.validity_date);
+                  const reachValid = reachStatus === 'valid';
 
                   return (
                     <tr key={cc.id} className="hover:bg-slate-50/50 transition-colors">
@@ -1088,40 +1202,48 @@ export default function ClientDashboardDetails({
                         {cc.validity_date ? new Date(cc.validity_date).toLocaleDateString('en-GB') : 'N/A'}
                       </td>
                       <td className="px-6 py-4">
-                        {reachValid ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="success" className="text-[10px] uppercase font-bold flex items-center gap-1 w-fit">
-                              <ShieldCheck className="h-3 w-3" /> Valid
-                            </Badge>
-                            {reachCert?.id && cc.chemical_id && (
-                              <Link
-                                href={`/admin/clients/${client.id}/rc-preview/${cc.chemical_id}`}
-                                title="View certificate"
-                              >
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-teal-700 hover:bg-teal-50">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant={
+                              reachValid ? 'success' : reachStatus === 'expired' ? 'warning' : 'neutral'
+                            }
+                            className="text-[10px] uppercase font-bold flex items-center gap-1 w-fit"
+                          >
+                            {reachValid ? (
+                              <>
+                                <ShieldCheck className="h-3 w-3" /> Valid
+                              </>
+                            ) : reachStatus === 'expired' ? (
+                              'Expired'
+                            ) : (
+                              'Not Issued'
                             )}
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <Badge variant={reachStatus === 'expired' ? 'warning' : 'neutral'} className="text-[10px] uppercase font-bold">
-                              {reachStatus === 'expired' ? 'Expired' : 'Not Issued'}
-                            </Badge>
-                            {currentUserRole !== 'CLIENT' && (
+                          </Badge>
+                          {currentUserRole !== 'CLIENT' && cc.chemical_id && (
+                            <>
                               <Link href={`/admin/clients/${client.id}/rc-preview/${cc.chemical_id}`}>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-7 text-[10px] font-bold border-teal-200 text-teal-800 hover:bg-teal-50"
+                                  className="h-7 text-[10px] font-bold border-slate-200 text-slate-700 hover:bg-slate-50"
                                 >
                                   View
                                 </Button>
                               </Link>
-                            )}
-                          </div>
-                        )}
+                              {reachCert && (reachValid || reachStatus === 'expired') && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] font-bold border-teal-200 text-teal-800 hover:bg-teal-50 gap-1"
+                                  onClick={() => openRenewRcModal(cc)}
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                  Renew
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-center">
                         <Badge variant={isExceeded ? 'danger' : cc.status === 'active' && !isCritical ? 'success' : 'danger'} className={`text-[10px] uppercase font-bold py-1 ${isExceeded ? 'bg-red-100 text-red-700' : isCritical ? 'bg-red-100 text-red-700' : 'bg-lime-300 text-lime-900'}`}>
@@ -1271,8 +1393,8 @@ export default function ClientDashboardDetails({
                 <th className="px-6 py-4">Registration No.</th>
                 <th className="px-6 py-4">Chemical</th>
                 <th className="px-6 py-4">CAS Number</th>
-                <th className="px-6 py-4">Issued Date</th>
-                <th className="px-6 py-4">Validated Date</th>
+                <th className="px-6 py-4">Issue Date</th>
+                <th className="px-6 py-4">Expiry Date</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-center">Actions</th>
                 {currentUserRole !== 'CLIENT' && (
@@ -1845,19 +1967,20 @@ export default function ClientDashboardDetails({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">Issued Date</FormLabel>
-                <Input
-                  type="date"
+                <DatePicker
                   value={assignChemData.issued_date}
-                  onChange={(e) => setAssignChemData({ ...assignChemData, issued_date: e.target.value })}
+                  onChange={(issued_date) => setAssignChemData({ ...assignChemData, issued_date })}
                   required
                 />
               </div>
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">Validated Date</FormLabel>
-                <Input
-                  type="date"
+                <DatePicker
                   value={assignChemData.validated_date}
-                  onChange={(e) => setAssignChemData({ ...assignChemData, validated_date: e.target.value, validity_date: e.target.value })}
+                  onChange={(validated_date) =>
+                    setAssignChemData({ ...assignChemData, validated_date, validity_date: validated_date })
+                  }
+                  min={assignChemData.issued_date || undefined}
                   required
                 />
               </div>
@@ -1919,7 +2042,10 @@ export default function ClientDashboardDetails({
               </div>
               <div>
                 <FormLabel className="text-sm normal-case mb-1 block">Validity Date</FormLabel>
-                <Input type="date" value={editChemData.validity_date} onChange={(e) => setEditChemData({ ...editChemData, validity_date: e.target.value })} />
+                <DatePicker
+                  value={editChemData.validity_date}
+                  onChange={(validity_date) => setEditChemData({ ...editChemData, validity_date })}
+                />
               </div>
             </div>
           </div>
@@ -1930,6 +2056,209 @@ export default function ClientDashboardDetails({
           </div>
         </div>
       </Dialog>
+      <Dialog
+        isOpen={isRenewRcModalOpen}
+        onClose={() => {
+          setRenewRcModalOpen(false);
+          setModalError('renewRc', null);
+          setRenewRcData(emptyRenewRcData());
+        }}
+        title="Renew RC Certificate"
+      >
+        <div className="p-2 space-y-4">
+          <p className="text-sm text-slate-600 font-medium">
+            Issue a new RC certificate for{' '}
+            <span className="font-bold text-slate-800">{renewRcData.chemical_name}</span>. The previous
+            certificate is kept on record.
+          </p>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Old Certificate(s)</p>
+            {renewRcData.old_certificates.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                No previous RC certificate on record.
+              </div>
+            ) : (
+              renewRcData.old_certificates.map((cert) => (
+                <div
+                  key={cert.id}
+                  className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-bold text-slate-800">{cert.certificate_number}</span>
+                    <Badge
+                      variant={
+                        cert.status === 'valid' ? 'success' : cert.status === 'expired' ? 'warning' : 'neutral'
+                      }
+                      className="text-[10px] uppercase font-bold"
+                    >
+                      {cert.status === 'valid' ? (
+                        <span className="flex items-center gap-1">
+                          <ShieldCheck className="h-3 w-3" /> Valid
+                        </span>
+                      ) : cert.status === 'expired' ? (
+                        'Expired'
+                      ) : (
+                        cert.status
+                      )}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-slate-600">
+                    <div>
+                      <span className="font-semibold text-slate-500">Issue Date:</span>{' '}
+                      {formatDisplayDate(cert.issued_at)}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-500">Expiry Date:</span>{' '}
+                      {cert.expires_at ? formatDisplayDate(cert.expires_at) : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {!renewRcData.issued_new_certificate && (
+          <div className="space-y-4">
+            <div>
+              <FormLabel className="text-sm normal-case mb-1 block">Registration Number</FormLabel>
+              <Input value={renewRcData.registration_number} disabled />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <FormLabel required className="text-sm normal-case mb-1 block">
+                  Issue Date
+                </FormLabel>
+                <DatePicker
+                  value={renewRcData.issued_date}
+                  onChange={(issued_date) => setRenewRcData({ ...renewRcData, issued_date })}
+                  required
+                />
+              </div>
+              <div>
+                <FormLabel required className="text-sm normal-case mb-1 block">
+                  Expiry Date
+                </FormLabel>
+                <DatePicker
+                  value={renewRcData.validated_date}
+                  onChange={(validated_date) => setRenewRcData({ ...renewRcData, validated_date })}
+                  min={renewRcData.issued_date || undefined}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <FormLabel required className="text-sm normal-case mb-1 block">
+                Quota (MT)
+              </FormLabel>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={renewRcData.available_quantity}
+                onChange={(e) => setRenewRcData({ ...renewRcData, available_quantity: e.target.value })}
+                required
+              />
+              <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                Annual tonnage allocation for the new RC validity period.
+              </p>
+            </div>
+          </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-teal-800">New Certificate</p>
+            {renewRcData.issued_new_certificate ? (
+              <div className="rounded-xl border-2 border-teal-300 bg-teal-50/70 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-teal-900">
+                    {renewRcData.issued_new_certificate.certificate_number}
+                  </span>
+                  <Badge variant="success" className="text-[10px] uppercase font-bold">
+                    <span className="flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" /> Issued
+                    </span>
+                  </Badge>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-slate-700">
+                  <div>
+                    <span className="font-semibold text-slate-500">Issue Date:</span>{' '}
+                    {formatDisplayDate(renewRcData.issued_new_certificate.issued_at)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-500">Expiry Date:</span>{' '}
+                    {formatDisplayDate(renewRcData.issued_new_certificate.expires_at)}
+                  </div>
+                  <div className="col-span-2">
+                    <span className="font-semibold text-slate-500">Quota:</span>{' '}
+                    {renewRcData.issued_new_certificate.quota} MT
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border-2 border-dashed border-teal-300 bg-teal-50/40 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-teal-900">
+                    RC-{renewRcData.issued_date ? new Date(renewRcData.issued_date).getFullYear() : '—'}-••••
+                  </span>
+                  <Badge variant="neutral" className="text-[10px] uppercase font-bold">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Preview
+                    </span>
+                  </Badge>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-slate-700">
+                  <div>
+                    <span className="font-semibold text-slate-500">Issue Date:</span>{' '}
+                    {renewRcData.issued_date ? formatDisplayDate(renewRcData.issued_date) : '—'}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-500">Expiry Date:</span>{' '}
+                    {renewRcData.validated_date ? formatDisplayDate(renewRcData.validated_date) : '—'}
+                  </div>
+                  <div className="col-span-2">
+                    <span className="font-semibold text-slate-500">Quota:</span>{' '}
+                    {renewRcData.available_quantity ? `${renewRcData.available_quantity} MT` : '—'}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <ModalErrorBox message={modalErrors.renewRc} />
+          <div className="flex justify-end gap-3 mt-6">
+            {renewRcData.issued_new_certificate ? (
+              <Button
+                className="bg-teal-700 hover:bg-teal-800"
+                onClick={() => {
+                  setRenewRcModalOpen(false);
+                  setModalError('renewRc', null);
+                  setRenewRcData(emptyRenewRcData());
+                }}
+              >
+                Done
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setRenewRcModalOpen(false);
+                    setModalError('renewRc', null);
+                    setRenewRcData(emptyRenewRcData());
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button className="bg-teal-700 hover:bg-teal-800" onClick={handleRenewRc} isLoading={isPending}>
+                  Renew &amp; Issue RC
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </Dialog>
+
       {/* Add Contact Modal */}
       <Dialog isOpen={isContactModalOpen} onClose={() => { setContactModalOpen(false); setModalError('contact', null); }} title="Add Secondary Contact">
         <div className="p-2 space-y-4">

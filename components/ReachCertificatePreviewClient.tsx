@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { FormLabel } from '@/components/ui/FormLabel';
 import { toast } from '@/store/toast';
 import {
@@ -272,11 +273,16 @@ export default function ReachCertificatePreviewClient({
             </div>
             <div>
               <FormLabel required>Issued Date</FormLabel>
-              <Input type="date" value={issuedDate} onChange={(e) => setIssuedDate(e.target.value)} />
+              <DatePicker value={issuedDate} onChange={setIssuedDate} required />
             </div>
             <div>
               <FormLabel required>Validated Date</FormLabel>
-              <Input type="date" value={validatedDate} onChange={(e) => setValidatedDate(e.target.value)} />
+              <DatePicker
+                value={validatedDate}
+                onChange={setValidatedDate}
+                min={issuedDate || undefined}
+                required
+              />
             </div>
           </div>
           <p className="text-xs text-slate-500 mt-3">

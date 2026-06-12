@@ -3,22 +3,30 @@
 import { renderAsync } from 'docx-preview';
 
 function triggerBlobDownload(blob: Blob, fileName: string) {
+  const safeName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+  anchor.download = safeName;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(anchor);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export async function downloadPdfFromDocxUrl(docxUrl: string, fileName: string): Promise<void> {
-  const res = await fetch(docxUrl);
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error || 'Failed to load certificate document.');
-  }
+function triggerNativeDownload(url: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+}
 
-  const blob = await res.blob();
+async function convertDocxBlobToPdfAndDownload(blob: Blob, fileName: string): Promise<void> {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;';
   document.body.appendChild(host);
@@ -77,21 +85,64 @@ export async function downloadPdfFromDocxUrl(docxUrl: string, fileName: string):
   }
 }
 
+export async function downloadPdfFromDocxUrl(docxUrl: string, fileName: string): Promise<void> {
+  const res = await fetch(docxUrl, { credentials: 'same-origin' });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error || 'Failed to load certificate document.');
+  }
+
+  await convertDocxBlobToPdfAndDownload(await res.blob(), fileName);
+}
+
+function isDocxContentType(contentType: string) {
+  return (
+    contentType.includes('wordprocessingml') ||
+    contentType.includes('officedocument') ||
+    contentType.includes('application/vnd.openxmlformats')
+  );
+}
+
 export async function downloadCertificatePdf(params: {
   pdfUrl: string;
   docxUrl: string;
   fileName: string;
 }): Promise<void> {
+  let serverError: string | undefined;
+
   try {
-    const pdfRes = await fetch(params.pdfUrl);
+    const pdfRes = await fetch(params.pdfUrl, { credentials: 'same-origin' });
     const contentType = pdfRes.headers.get('Content-Type') || '';
-    if (pdfRes.ok && contentType.includes('application/pdf')) {
-      triggerBlobDownload(await pdfRes.blob(), params.fileName);
-      return;
+
+    if (pdfRes.ok) {
+      const blob = await pdfRes.blob();
+
+      if (contentType.includes('application/pdf')) {
+        triggerBlobDownload(blob, params.fileName);
+        return;
+      }
+
+      if (isDocxContentType(contentType)) {
+        await convertDocxBlobToPdfAndDownload(blob, params.fileName);
+        return;
+      }
+    } else {
+      const body = (await pdfRes.json().catch(() => null)) as { error?: string } | null;
+      serverError = body?.error;
     }
   } catch {
-    // Fall through to browser-side conversion.
+    // Fall through to DOCX conversion.
   }
 
-  await downloadPdfFromDocxUrl(params.docxUrl, params.fileName);
+  try {
+    await downloadPdfFromDocxUrl(params.docxUrl, params.fileName);
+    return;
+  } catch (docxErr) {
+    const docxMessage = docxErr instanceof Error ? docxErr.message : 'PDF download failed.';
+
+    // Last resort: let the browser open the authenticated file route directly.
+    triggerNativeDownload(params.pdfUrl);
+
+    throw new Error(serverError || docxMessage);
+  }
 }
