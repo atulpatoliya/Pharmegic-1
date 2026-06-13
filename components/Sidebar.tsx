@@ -91,12 +91,6 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
             isSub: true,
           },
           {
-            href: `/admin/clients/${clientProfileId}/rc-certificates`,
-            label: 'RC Certificate',
-            icon: FileText,
-            isSub: true,
-          },
-          {
             href: `/admin/clients/${clientProfileId}/certificates`,
             label: 'TCC Certificates',
             icon: Award,

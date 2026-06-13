@@ -148,7 +148,7 @@ export default function CertificatePreviewClient({
   const chemical = cert.chemicals || tccApp?.chemicals;
   const backHref =
     isReach && cert.client_id
-      ? `/admin/clients/${cert.client_id}/rc-certificates`
+      ? `/admin/clients/${cert.client_id}`
       : '/admin/approvals';
 
   const totalSent = cert.mail_resend_count + (cert.mail_sent ? 1 : 0);

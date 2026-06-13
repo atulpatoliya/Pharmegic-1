@@ -311,6 +311,10 @@ ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_cc_default TE
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS mail_sent_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS allocated_quantity NUMERIC(12, 2);
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
 DO $$
 BEGIN
   IF EXISTS (

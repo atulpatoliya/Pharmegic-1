@@ -14,50 +14,17 @@ export function getLatestReachCertForChemical(
   certificates: ReachCertificateRecord[],
   chemicalId: string,
   casNumber?: string | null,
-  registrationNumber?: string | null
+  registrationNumber?: string | null,
+  certificateNumber?: string | null
 ): ReachCertificateRecord | null {
-  let matches = certificates.filter(
-    (cert) =>
-      cert.chemical_id === chemicalId &&
-      isReachCertificateType(cert) &&
-      cert.status !== 'revoked'
+  const matches = getReachCertsForClientChemical(
+    certificates,
+    chemicalId,
+    casNumber,
+    registrationNumber,
+    certificateNumber
   );
-
-  if (matches.length === 0 && chemicalId) {
-    matches = certificates.filter(
-      (cert) =>
-        cert.chemical_id === chemicalId &&
-        cert.status !== 'revoked' &&
-        Boolean(cert.certificate_number?.trim())
-    );
-  }
-
-  if (matches.length === 0 && casNumber?.trim()) {
-    const cas = casNumber.trim().toLowerCase();
-    matches = certificates.filter((cert) => {
-      if (cert.status === 'revoked' || !cert.certificate_number?.trim()) return false;
-      const certCas =
-        (cert as { chemicals?: { cas_number?: string | null } }).chemicals?.cas_number ??
-        (cert as { chemical?: { cas_number?: string | null } }).chemical?.cas_number;
-      return certCas?.trim().toLowerCase() === cas;
-    });
-  }
-
-  if (matches.length === 0 && registrationNumber?.trim()) {
-    const reg = registrationNumber.trim().toLowerCase();
-    matches = certificates.filter(
-      (cert) =>
-        cert.status !== 'revoked' &&
-        Boolean(cert.certificate_number?.trim()) &&
-        cert.registration_number?.trim().toLowerCase() === reg
-    );
-  }
-
-  if (matches.length === 0) return null;
-  return [...matches].sort(
-    (a, b) =>
-      new Date(b.issued_at || 0).getTime() - new Date(a.issued_at || 0).getTime()
-  )[0];
+  return matches[0] ?? null;
 }
 
 export type ReachCertificateRecord = {
@@ -70,6 +37,11 @@ export type ReachCertificateRecord = {
   status: string;
   file_url?: string | null;
   type?: string | null;
+  allocated_quantity?: number | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
 };
 
 export function isActiveReachCertificate(
@@ -77,10 +49,20 @@ export function isActiveReachCertificate(
   asOf: Date = new Date()
 ): boolean {
   if (!cert) return false;
-  if (cert.type && cert.type !== REACH_CERTIFICATE_TYPE) return false;
+  if (cert.type && !isReachCertificateType(cert)) return false;
   if (cert.status !== 'active') return false;
   if (!cert.expires_at) return false;
   return new Date(cert.expires_at) > asOf;
+}
+
+function certLinkedChemicalMeta(cert: ReachCertificateRecord) {
+  const chem =
+    (cert as { chemicals?: { cas_number?: string | null; chemical_name?: string | null } }).chemicals ??
+    (cert as { chemical?: { cas_number?: string | null; chemical_name?: string | null } }).chemical;
+  return {
+    cas: chem?.cas_number?.trim().toLowerCase() ?? '',
+    name: chem?.chemical_name?.trim().toLowerCase() ?? '',
+  };
 }
 
 export function getReachCertificateStatus(
@@ -220,15 +202,190 @@ export function doReachValidityPeriodsOverlap(
   return startA <= endB && startB <= endA;
 }
 
+export function normalizeCertDate(value: string | null | undefined): string {
+  if (!value?.trim()) return '';
+  return value.trim().split('T')[0];
+}
+
+/** True when the given cert is the newest RC for its chemical (sorted list expected newest first). */
+export function isLatestReachCertificate(
+  certs: ReachCertificateRecord[],
+  cert: ReachCertificateRecord
+): boolean {
+  if (certs.length === 0) return true;
+  return certs[0].id === cert.id;
+}
+
+/** Block duplicate calendar-year RC entries for the same chemical. */
+export function findReachCertificateYearConflict(
+  certificates: ReachCertificateRecord[],
+  chemicalId: string,
+  year: number,
+  chemicalName: string,
+  casNumber?: string | null,
+  registrationNumber?: string | null,
+  excludeCertId?: string | null
+): string | null {
+  const siblings = getReachCertsForClientChemical(
+    certificates,
+    chemicalId,
+    casNumber,
+    registrationNumber
+  ).filter((cert) => !excludeCertId || cert.id !== excludeCertId);
+
+  for (const existing of siblings) {
+    const existingYear = getReachCertificateYear(existing.issued_at);
+    if (existingYear === year) {
+      return `Certificate already exists for selected Chemical and Year (${chemicalName} — ${year}).`;
+    }
+  }
+
+  return null;
+}
+
+/** All non-revoked RC certificates linked to a client substance (by chemical_id, CAS, name, registration, or cert number). */
+export function getReachCertsForClientChemical(
+  certificates: ReachCertificateRecord[],
+  chemicalId: string,
+  casNumber?: string | null,
+  registrationNumber?: string | null,
+  certificateNumber?: string | null,
+  chemicalName?: string | null
+): ReachCertificateRecord[] {
+  const isEligible = (cert: ReachCertificateRecord) =>
+    isReachCertificateType(cert) && cert.status !== 'revoked';
+
+  const byChemicalId = certificates.filter(
+    (cert) => isEligible(cert) && cert.chemical_id === chemicalId
+  );
+
+  const cas = casNumber?.trim().toLowerCase();
+  const name = chemicalName?.trim().toLowerCase();
+  const reg = registrationNumber?.trim().toLowerCase();
+  const certNum = certificateNumber?.trim().toLowerCase();
+  const seen = new Set(byChemicalId.map((cert) => cert.id));
+
+  const byCasRegNameOrNumber = certificates.filter((cert) => {
+    if (!isEligible(cert) || seen.has(cert.id)) return false;
+    const meta = certLinkedChemicalMeta(cert);
+    const certReg = cert.registration_number?.trim().toLowerCase() ?? '';
+    const certNo = cert.certificate_number?.trim().toLowerCase() ?? '';
+    if (cas && meta.cas && meta.cas === cas) return true;
+    if (name && meta.name && meta.name === name) return true;
+    if (reg && certReg && certReg === reg) return true;
+    if (certNum && certNo && certNo === certNum) return true;
+    return false;
+  });
+
+  return [...byChemicalId, ...byCasRegNameOrNumber].sort(
+    (a, b) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime()
+  );
+}
+
+/** Find an existing RC certificate with the exact same validity period for a substance. */
+export function findExactReachCertForPeriod(
+  certificates: ReachCertificateRecord[],
+  chemicalId: string,
+  issuedDate: string,
+  validatedDate: string,
+  casNumber?: string | null,
+  registrationNumber?: string | null,
+  chemicalName?: string | null
+): ReachCertificateRecord | null {
+  const newIssue = normalizeCertDate(issuedDate);
+  const newExpiry = normalizeCertDate(validatedDate);
+  const siblings = getReachCertsForClientChemical(
+    certificates,
+    chemicalId,
+    casNumber,
+    registrationNumber,
+    undefined,
+    chemicalName
+  );
+
+  return (
+    siblings.find((cert) => {
+      const existIssue = normalizeCertDate(cert.issued_at);
+      const existExpiry = normalizeCertDate(cert.expires_at);
+      return existIssue === newIssue && existExpiry === newExpiry;
+    }) ?? null
+  );
+}
+
+/** Returns an error message when dates duplicate or overlap an existing RC cert for the same chemical. */
+export function findReachCertificatePeriodConflict(
+  certificates: ReachCertificateRecord[],
+  chemicalId: string,
+  chemicalName: string,
+  issuedDate: string,
+  validatedDate: string,
+  excludeCertId?: string | null,
+  casNumber?: string | null,
+  registrationNumber?: string | null
+): string | null {
+  const newIssue = normalizeCertDate(issuedDate);
+  const newExpiry = normalizeCertDate(validatedDate);
+
+  const siblings = getReachCertsForClientChemical(
+    certificates,
+    chemicalId,
+    casNumber,
+    registrationNumber
+  ).filter((cert) => !excludeCertId || cert.id !== excludeCertId);
+
+  for (const existing of siblings) {
+    const existIssue = normalizeCertDate(existing.issued_at);
+    const existExpiry = normalizeCertDate(existing.expires_at);
+    const certLabel = existing.certificate_number?.trim() || existing.id;
+
+    if (existIssue === newIssue && existExpiry === newExpiry) {
+      return `Certificate ${certLabel} already uses issue date ${existIssue} and expiry date ${existExpiry} for ${chemicalName}. It is listed under RC Certificates — delete it there or choose different dates.`;
+    }
+
+    if (
+      doReachValidityPeriodsOverlap(
+        issuedDate,
+        validatedDate,
+        existing.issued_at,
+        existing.expires_at
+      )
+    ) {
+      return `Certificate ${certLabel} already covers ${existIssue} to ${existExpiry || 'open'} for ${chemicalName}. Choose non-overlapping dates or delete ${certLabel} from RC Certificates.`;
+    }
+  }
+
+  return null;
+}
+
 export function addOneYear(from: Date = new Date()): Date {
   const expiry = new Date(from);
   expiry.setFullYear(expiry.getFullYear() + 1);
   return expiry;
 }
 
+/** YYYY-MM-DD for January 1 of the given year (defaults to current year). */
+export function getFirstDateOfYear(year: number = new Date().getFullYear()): string {
+  return `${year}-01-01`;
+}
+
 /** YYYY-MM-DD for December 31 of the given year (defaults to current year). */
 export function getLastDateOfYear(year: number = new Date().getFullYear()): string {
   return `${year}-12-31`;
+}
+
+/** Calendar year from an RC certificate issue date. */
+export function getReachCertificateYear(issuedAt: string | null | undefined): number | null {
+  if (!issuedAt?.trim()) return null;
+  const year = new Date(issuedAt.trim().split('T')[0] + 'T12:00:00').getFullYear();
+  return Number.isNaN(year) ? null : year;
+}
+
+/** Default RC validity period for a calendar year. */
+export function getDefaultReachPeriodForYear(year: number = new Date().getFullYear()) {
+  return {
+    issuedDate: getFirstDateOfYear(year),
+    validatedDate: getLastDateOfYear(year),
+  };
 }
 
 /** YYYY-MM-DD for today (local date). */
@@ -237,4 +394,16 @@ export function getTodayDateString(date: Date = new Date()): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+/** Suggest the next calendar-year RC period when renewing. */
+export function suggestRenewCertificateDates(
+  latestCert: ReachCertificateRecord | null | undefined,
+  fallbackValidity?: string | null
+): { issuedDate: string; validatedDate: string } {
+  const expiryYear =
+    getReachCertificateYear(latestCert?.expires_at) ??
+    getReachCertificateYear(fallbackValidity) ??
+    new Date().getFullYear();
+  return getDefaultReachPeriodForYear(expiryYear + 1);
 }

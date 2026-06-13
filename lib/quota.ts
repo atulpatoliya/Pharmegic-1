@@ -89,13 +89,28 @@ export function sumApprovedExportsInReachWindow(
     .reduce((sum, app) => sum + Number(app.quantity_mt ?? 0), 0);
 }
 
+export function getReachCertAllocatedQuota(
+  cert: { allocated_quantity?: number | null },
+  tonnageBand?: string | null
+): number {
+  const explicit = cert.allocated_quantity;
+  if (explicit != null && Number(explicit) > 0) {
+    return Number(explicit);
+  }
+  return getTonnageBandMaxQuota(tonnageBand) ?? 0;
+}
+
 export function getRemainingQuotaForReachPeriod(
   exportedMt: number,
-  tonnageBand: string | null | undefined
+  tonnageBand: string | null | undefined,
+  allocatedQuantity?: number | null
 ): number {
-  const bandMax = getTonnageBandMaxQuota(tonnageBand);
-  if (bandMax == null) return 0;
-  return Math.max(0, bandMax - Number(exportedMt || 0));
+  const max =
+    allocatedQuantity != null && Number(allocatedQuantity) > 0
+      ? Number(allocatedQuantity)
+      : getTonnageBandMaxQuota(tonnageBand);
+  if (max == null) return 0;
+  return Math.max(0, max - Number(exportedMt || 0));
 }
 
 export function computeTccQuotaForExportDate(params: {
@@ -125,7 +140,7 @@ export function computeTccQuotaForExportDate(params: {
       exportedMt: 0,
       bandMax: getTonnageBandMaxQuota(params.tonnageBand),
       error:
-        'No REACH Compliance Certificate covers the selected export shipment date. Choose a date within an issued RC validity period.',
+        'No Active RC Certificate Available.',
     };
   }
 
@@ -135,8 +150,12 @@ export function computeTccQuotaForExportDate(params: {
     reachCert,
     params.excludeApplicationId
   );
-  const bandMax = getTonnageBandMaxQuota(params.tonnageBand);
-  const remainingQuota = getRemainingQuotaForReachPeriod(exportedMt, params.tonnageBand);
+  const bandMax = getReachCertAllocatedQuota(reachCert, params.tonnageBand);
+  const remainingQuota = getRemainingQuotaForReachPeriod(
+    exportedMt,
+    params.tonnageBand,
+    reachCert.allocated_quantity
+  );
 
   return { reachCert, remainingQuota, exportedMt, bandMax };
 }
@@ -144,9 +163,14 @@ export function computeTccQuotaForExportDate(params: {
 export function resolveQuotaConsumption(
   exportedMt: number,
   tonnageBand: string | null | undefined,
-  availableQuantity = 0
+  availableQuantity = 0,
+  allocatedQuantity?: number | null
 ) {
-  const bandMax = getTonnageBandMaxQuota(tonnageBand);
+  const explicitMax =
+    allocatedQuantity != null && Number(allocatedQuantity) > 0
+      ? Number(allocatedQuantity)
+      : null;
+  const bandMax = explicitMax ?? getTonnageBandMaxQuota(tonnageBand);
   const exported = Number(exportedMt || 0);
   const calculatedTotal = Number(availableQuantity || 0) + exported;
   const totalQuota = bandMax != null ? bandMax : calculatedTotal;

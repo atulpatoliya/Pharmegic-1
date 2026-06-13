@@ -215,7 +215,7 @@ export default function TccApplicationForm({
     if (noReachForExportDate) {
       setError(
         quotaContext?.error ||
-          'No REACH Compliance Certificate covers the selected export shipment date. Choose a date within an issued RC validity period.'
+          'No Active RC Certificate Available.'
       );
       return;
     }

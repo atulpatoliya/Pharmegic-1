@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import ReachCertificatePreviewClient from '@/components/ReachCertificatePreviewClient';
-import { REACH_CERTIFICATE_TYPE, getLastDateOfYear, getTodayDateString } from '@/lib/reach-certificate';
+import { getLastDateOfYear, getTodayDateString, isReachCertificateType, getDefaultReachPeriodForYear } from '@/lib/reach-certificate';
 import { regenerateReachCertificateFile } from '@/actions/reach';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import {
@@ -58,24 +58,21 @@ export default async function ReachCertificatePreviewPage({
         ? adminSupabase
             .from('certificates')
             .select(
-              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
+              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, chemical_id, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
             )
             .eq('id', requestedCertId)
             .eq('client_id', clientId)
-            .eq('chemical_id', chemicalId)
-            .eq('type', REACH_CERTIFICATE_TYPE)
             .maybeSingle()
         : adminSupabase
             .from('certificates')
             .select(
-              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
+              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, chemical_id, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
             )
             .eq('client_id', clientId)
             .eq('chemical_id', chemicalId)
-            .eq('type', REACH_CERTIFICATE_TYPE)
+            .neq('status', 'revoked')
             .order('issued_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
+            .limit(20),
       adminSupabase
         .from('client_contacts')
         .select('email')
@@ -89,16 +86,21 @@ export default async function ReachCertificatePreviewPage({
     ]);
 
   if (!client || !chemical || !clientChem) {
-    redirect(`/admin/clients/${clientId}/rc-certificates`);
+    redirect(`/admin/clients/${clientId}`);
   }
 
-  if (cert) {
-    await regenerateReachCertificateFile(cert.id);
+  const certList = Array.isArray(cert) ? cert : cert ? [cert] : [];
+  const resolvedCert =
+    certList.find((row) => isReachCertificateType(row)) ??
+    (requestedCertId && cert && !Array.isArray(cert) && isReachCertificateType(cert) ? cert : null);
+
+  if (resolvedCert) {
+    await regenerateReachCertificateFile(resolvedCert.id);
   }
 
   const contactEmails = (contacts || []).map((c) => c.email).filter(Boolean);
-  const mailSentHistory = cert
-    ? await loadCertificateMailSentHistory(adminSupabase, cert.id, cert, REACH_MAIL_LOG_ACTIONS)
+  const mailSentHistory = resolvedCert
+    ? await loadCertificateMailSentHistory(adminSupabase, resolvedCert.id, resolvedCert, REACH_MAIL_LOG_ACTIONS)
     : [];
   const mailRecipients = client.email
     ? buildCertificateRecipients({
@@ -109,18 +111,17 @@ export default async function ReachCertificatePreviewPage({
       })
     : null;
 
+  const defaultYearPeriod = getDefaultReachPeriodForYear(new Date().getFullYear());
   const defaults = {
     registrationNumber:
-      cert?.registration_number?.trim() || clientChem.registration_number?.trim() || '',
-    issuedDate: cert?.issued_at
-      ? cert.issued_at.split('T')[0]
-      : clientChem.issued_date?.split('T')[0] ||
-        clientChem.created_at?.split('T')[0] ||
-        getTodayDateString(),
+      resolvedCert?.registration_number?.trim() || clientChem.registration_number?.trim() || '',
+    issuedDate: resolvedCert?.issued_at
+      ? resolvedCert.issued_at.split('T')[0]
+      : clientChem.issued_date?.split('T')[0] || defaultYearPeriod.issuedDate,
     validatedDate:
-      cert?.expires_at?.split('T')[0] ||
+      resolvedCert?.expires_at?.split('T')[0] ||
       clientChem.validity_date?.split('T')[0] ||
-      getLastDateOfYear(),
+      defaultYearPeriod.validatedDate,
   };
 
   return (
@@ -138,7 +139,7 @@ export default async function ReachCertificatePreviewPage({
         ec_number: chemical.ec_number,
         tonnage_band: chemical.tonnage_band,
       }}
-      cert={cert ?? null}
+      cert={resolvedCert ?? null}
       defaults={defaults}
       mailRecipients={mailRecipients}
       mailSentHistory={mailSentHistory}

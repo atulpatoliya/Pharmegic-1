@@ -69,7 +69,9 @@ export async function loadClientProfileData(clientId: string) {
     author_email: note.users?.email || 'System',
   }));
 
-  const normalizedCertificates = (certificates || []).map((row: { chemicals?: unknown; tcc_applications?: unknown }) => ({
+  const normalizedCertificates = (certificates || [])
+    .filter((row: { status?: string | null }) => row.status !== 'revoked')
+    .map((row: { chemicals?: unknown; tcc_applications?: unknown }) => ({
     ...row,
     chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
     tcc_applications: Array.isArray(row.tcc_applications)
@@ -93,7 +95,8 @@ export async function loadClientProfileData(clientId: string) {
         normalizedCertificates as unknown as ReachCertificateRecord[],
         row.chemical_id,
         casNumber,
-        row.registration_number
+        row.registration_number,
+        row.certificate_number
       );
       const resolvedCertNumber =
         latestCert?.certificate_number?.trim() || row.certificate_number?.trim() || null;

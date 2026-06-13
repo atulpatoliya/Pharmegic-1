@@ -4,8 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
 import { formatErrorMessage } from '@/lib/format-error';
-import { getTonnageBandMaxQuota, sumApprovedExports, computeAssignableQuota } from '@/lib/quota';
-import { createReachCertificate } from '@/actions/reach';
+import { getTonnageBandMaxQuota, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuotaForReachPeriod, computeAssignableQuota } from '@/lib/quota';
+import { createReachCertificate, deleteAllReachCertificatesForClientChemical } from '@/actions/reach';
 import { clientWizardSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
@@ -434,6 +434,32 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
 
   const adminSupabase = createAdminClient();
   try {
+    const targetChemicalId = data.target_chemical_id?.trim() || null;
+    let chemicalId: string | undefined;
+
+    if (targetChemicalId) {
+      const { data: targetChem, error: targetErr } = await adminSupabase
+        .from('chemicals')
+        .select('id')
+        .eq('id', targetChemicalId)
+        .maybeSingle();
+
+      if (targetErr) throw targetErr;
+      if (!targetChem) {
+        return { success: false, error: 'Assigned chemical not found on this client.' };
+      }
+
+      chemicalId = targetChem.id;
+      await adminSupabase
+        .from('chemicals')
+        .update({
+          chemical_name: data.chemical_name.trim(),
+          cas_number: casNumber,
+          ec_number: ecNumber,
+          tonnage_band: data.tonnage_band || null,
+        })
+        .eq('id', chemicalId);
+    } else {
     // 1. Reuse existing chemical by CAS, or create new
     const { data: existingChem } = await adminSupabase
       .from('chemicals')
@@ -441,7 +467,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       .eq('cas_number', casNumber)
       .maybeSingle();
 
-    let chemicalId = existingChem?.id;
+    chemicalId = existingChem?.id;
 
     if (!chemicalId) {
       const { data: newChem, error: chemErr } = await adminSupabase
@@ -468,14 +494,14 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         })
         .eq('id', chemicalId);
     }
-
-    // Calculate quota based on tonnage band minus certificates already issued this year
-    const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
-    const exportedMt = chemicalId ? await getClientYearExportedMt(adminSupabase, clientId, chemicalId) : 0;
-    const { assignable, error: quotaError } = computeAssignableQuota(calcQuota, exportedMt);
-    if (quotaError) {
-      return { success: false, error: quotaError };
     }
+
+    if (!chemicalId) {
+      return { success: false, error: 'Failed to resolve chemical.' };
+    }
+
+    const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
+    let assignable = calcQuota;
 
     const { data: existingLink } = await adminSupabase
       .from('client_chemicals')
@@ -484,8 +510,88 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       .eq('chemical_id', chemicalId)
       .maybeSingle();
 
+    if (!(existingLink && existingLink.status !== 'trashed')) {
+      const exportedMt = await getClientYearExportedMt(adminSupabase, clientId, chemicalId);
+      const quotaResult = computeAssignableQuota(calcQuota, exportedMt);
+      if (quotaResult.error) {
+        return { success: false, error: quotaResult.error };
+      }
+      assignable = quotaResult.assignable;
+    }
+
     if (existingLink && existingLink.status !== 'trashed') {
-      return { success: false, error: 'This substance is already assigned to this client.' };
+      const bandMax = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
+      const allocatedQty = data.available_quantity ? Number(data.available_quantity) : bandMax;
+      const rcResult = await createReachCertificate({
+        clientId,
+        chemicalId,
+        userId: session.userId,
+        registrationNumber,
+        issuedDate: data.issued_date.trim(),
+        validatedDate: data.validated_date.trim(),
+        allocatedQuantity: allocatedQty,
+      });
+
+      if (!rcResult.success) {
+        return { success: false, error: rcResult.error };
+      }
+
+      const { data: approvedApps } = await adminSupabase
+        .from('tcc_applications')
+        .select('id, chemical_id, quantity_mt, status, export_date, reach_certificate_id')
+        .eq('client_id', clientId)
+        .eq('chemical_id', chemicalId)
+        .eq('status', 'approved');
+
+      const exportedInWindow = sumApprovedExportsInReachWindow(
+        approvedApps || [],
+        chemicalId,
+        {
+          id: rcResult.certificateId!,
+          issued_at: data.issued_date.trim(),
+          expires_at: data.validated_date.trim(),
+        }
+      );
+      const remainingQuota = getRemainingQuotaForReachPeriod(
+        exportedInWindow,
+        data.tonnage_band,
+        allocatedQty
+      );
+
+      await adminSupabase
+        .from('client_chemicals')
+        .update({
+          available_quantity: remainingQuota,
+          validity_date: data.validated_date || data.validity_date || null,
+          registration_number: registrationNumber,
+          issued_date: data.issued_date.trim(),
+          certificate_number: rcResult.certNumber,
+        })
+        .eq('id', existingLink.id);
+
+      await adminSupabase.from('chemicals').update({
+        chemical_name: data.chemical_name.trim(),
+        ec_number: ecNumber,
+        tonnage_band: data.tonnage_band || null,
+      }).eq('id', chemicalId);
+
+      await adminSupabase.from('activity_logs').insert({
+        client_id: clientId,
+        user_id: session.userId,
+        action: 'REACH_CERTIFICATE_ISSUED',
+        entity_type: 'certificates',
+        entity_id: rcResult.certificateId,
+        description: `New year RC certificate for ${data.chemical_name.trim()}`,
+      });
+
+      revalidatePath(`/admin/clients/${clientId}`);
+      revalidatePath(`/admin/clients/${clientId}/chemicals`);
+      revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+      return {
+        success: true,
+        message: `RC Certificate issued for ${data.chemical_name.trim()} (${data.issued_date.trim().slice(0, 4)}). Previous certificates remain on record.`,
+        certificateId: rcResult.certificateId,
+      };
     }
 
     if (existingLink?.status === 'trashed') {
@@ -526,6 +632,8 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       description: `Added and assigned new substance: ${data.chemical_name}`,
     });
 
+    const bandMaxNew = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
+    const allocatedQtyNew = data.available_quantity ? Number(data.available_quantity) : bandMaxNew;
     const rcResult = await createReachCertificate({
       clientId,
       chemicalId,
@@ -533,6 +641,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       registrationNumber,
       issuedDate: data.issued_date.trim(),
       validatedDate: data.validated_date.trim(),
+      allocatedQuantity: allocatedQtyNew,
     });
 
     if (!rcResult.success) {
@@ -640,6 +749,12 @@ export async function permanentDeleteClientChemicalAction(clientId: string, chem
 
   const adminSupabase = createAdminClient();
   try {
+    const deletedCertCount = await deleteAllReachCertificatesForClientChemical(
+      adminSupabase,
+      clientId,
+      chemicalId
+    );
+
     const { error } = await adminSupabase
       .from('client_chemicals')
       .delete()
@@ -655,11 +770,16 @@ export async function permanentDeleteClientChemicalAction(clientId: string, chem
       action: 'CHEMICAL_PERMANENTLY_DELETED',
       entity_type: 'client_chemicals',
       entity_id: chemicalId,
-      description: 'Permanently removed trashed substance assignment',
+      description:
+        deletedCertCount > 0
+          ? `Permanently removed trashed substance assignment and ${deletedCertCount} RC certificate(s) from database`
+          : 'Permanently removed trashed substance assignment',
     });
 
     revalidatePath(`/admin/clients/${clientId}`);
-    return { success: true, message: 'Substance permanently deleted.' };
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+    revalidatePath('/admin/rc-certificates');
+    return { success: true, message: 'Substance and related RC certificates permanently deleted.' };
   } catch (err) {
     return { success: false, error: formatErrorMessage(err) };
   }

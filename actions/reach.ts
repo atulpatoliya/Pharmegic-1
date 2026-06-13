@@ -10,10 +10,15 @@ import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
+import { getTonnageBandMaxQuota } from '@/lib/quota';
 import { sendBulkReachCertificatesEmail, sendCertificateEmail as sendCertEmail } from '@/services/email';
 import {
   REACH_CERTIFICATE_TYPE,
-  doReachValidityPeriodsOverlap,
+  findReachCertificatePeriodConflict,
+  findReachCertificateYearConflict,
+  findExactReachCertForPeriod,
+  getReachCertificateYear,
+  isReachCertificateType,
   getLastDateOfYear,
   getTodayDateString,
 } from '@/lib/reach-certificate';
@@ -33,10 +38,12 @@ export type CreateReachCertificateInput = {
   registrationNumber: string;
   issuedDate: string;
   validatedDate: string;
+  allocatedQuantity?: number | null;
 };
 
 export async function createReachCertificate(input: CreateReachCertificateInput) {
-  const { clientId, chemicalId, userId, registrationNumber, issuedDate, validatedDate } = input;
+  const { clientId, chemicalId, userId, registrationNumber, issuedDate, validatedDate, allocatedQuantity } =
+    input;
   const adminSupabase = createAdminClient();
 
   if (!registrationNumber.trim()) {
@@ -78,27 +85,77 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   }
   if (!chemical) return { success: false as const, error: 'Chemical not found.' };
 
-  const { data: activeReachCerts } = await adminSupabase
+  const { data: existingReachCertsRaw } = await adminSupabase
     .from('certificates')
-    .select('id, issued_at, expires_at, status')
+    .select('id, issued_at, expires_at, status, certificate_number, type, chemical_id, registration_number, chemicals(cas_number)')
     .eq('client_id', clientId)
-    .eq('chemical_id', chemicalId)
-    .eq('type', REACH_CERTIFICATE_TYPE)
-    .eq('status', 'active');
+    .neq('status', 'revoked');
 
-  for (const existing of activeReachCerts || []) {
-    if (
-      doReachValidityPeriodsOverlap(
-        issuedDate,
-        validatedDate,
-        existing.issued_at,
-        existing.expires_at
-      )
-    ) {
+  const existingReachCerts = (existingReachCertsRaw || []).filter(isReachCertificateType);
+  const periodConflict = findReachCertificatePeriodConflict(
+    existingReachCerts,
+    chemicalId,
+    chemical.chemical_name,
+    issuedDate,
+    validatedDate,
+    undefined,
+    chemical.cas_number,
+    registrationNumber
+  );
+  if (periodConflict) {
+    const existingExact = findExactReachCertForPeriod(
+      existingReachCerts,
+      chemicalId,
+      issuedDate,
+      validatedDate,
+      chemical.cas_number,
+      registrationNumber,
+      chemical.chemical_name
+    );
+    if (existingExact && periodConflict.includes('already uses issue date')) {
+      if (existingExact.chemical_id !== chemicalId) {
+        await adminSupabase
+          .from('certificates')
+          .update({ chemical_id: chemicalId })
+          .eq('id', existingExact.id);
+      }
+
+      await adminSupabase
+        .from('client_chemicals')
+        .update({
+          registration_number: registrationNumber.trim(),
+          issued_date: issuedDate,
+          validity_date: validatedDate,
+          certificate_number: existingExact.certificate_number,
+        })
+        .eq('client_id', clientId)
+        .eq('chemical_id', chemicalId);
+
+      revalidatePath(`/admin/clients/${clientId}`);
+      revalidatePath(`/admin/clients/${clientId}/chemicals`);
+
       return {
-        success: false as const,
-        error: `An active RC Certificate already covers this validity period for ${chemical.chemical_name}. Issue the new certificate with non-overlapping dates.`,
+        success: true as const,
+        message: `RC Certificate ${existingExact.certificate_number} is already issued for ${chemical.chemical_name}. Record linked.`,
+        certificateId: existingExact.id,
+        certNumber: existingExact.certificate_number,
       };
+    }
+    return { success: false as const, error: periodConflict };
+  }
+
+  const certYear = getReachCertificateYear(issuedDate);
+  if (certYear != null) {
+    const yearConflict = findReachCertificateYearConflict(
+      existingReachCerts,
+      chemicalId,
+      certYear,
+      chemical.chemical_name,
+      chemical.cas_number,
+      registrationNumber
+    );
+    if (yearConflict) {
+      return { success: false as const, error: yearConflict };
     }
   }
 
@@ -127,25 +184,61 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
     data: { publicUrl },
   } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
 
-  const { data: cert, error: certError } = await adminSupabase
-    .from('certificates')
-    .insert({
-      client_id: clientId,
-      chemical_id: chemicalId,
-      certificate_number: certNumber,
-      registration_number: registrationNumber.trim(),
-      type: REACH_CERTIFICATE_TYPE,
-      file_url: publicUrl,
-      issued_at: issueDate.toISOString(),
-      expires_at: expiryDate.toISOString(),
-      status: 'active',
-      mail_sent: false,
-      mail_resend_count: 0,
-    })
-    .select()
-    .single();
+  const coreInsert = {
+    client_id: clientId,
+    chemical_id: chemicalId,
+    certificate_number: certNumber,
+    registration_number: registrationNumber.trim(),
+    type: REACH_CERTIFICATE_TYPE,
+    file_url: publicUrl,
+    issued_at: issueDate.toISOString(),
+    expires_at: expiryDate.toISOString(),
+    status: 'active',
+    mail_sent: false,
+    mail_resend_count: 0,
+  };
 
-  if (certError) throw certError;
+  const insertCandidates = [
+    {
+      ...coreInsert,
+      ...(allocatedQuantity != null && Number(allocatedQuantity) > 0
+        ? { allocated_quantity: Number(allocatedQuantity) }
+        : {}),
+      created_by: userId,
+    },
+    coreInsert,
+  ];
+
+  let cert: { id: string } | null = null;
+  let lastInsertError: { message?: string } | null = null;
+
+  for (const row of insertCandidates) {
+    const { data, error: certError } = await adminSupabase
+      .from('certificates')
+      .insert(row)
+      .select()
+      .single();
+
+    if (!certError && data) {
+      cert = data;
+      break;
+    }
+    lastInsertError = certError;
+    const message = certError?.message?.toLowerCase() ?? '';
+    const missingOptionalColumn =
+      message.includes('column') &&
+      (message.includes('allocated_quantity') ||
+        message.includes('created_by') ||
+        message.includes('updated_by') ||
+        message.includes('updated_at'));
+    if (!missingOptionalColumn) {
+      throw certError;
+    }
+  }
+
+  if (!cert) {
+    throw new Error(lastInsertError?.message || 'Failed to create RC certificate record.');
+  }
 
   await adminSupabase
     .from('client_chemicals')
@@ -260,6 +353,17 @@ export async function issueReachCertificateFromPreviewAction(
   if (!session) return { success: false, error: 'Unauthorized.' };
 
   try {
+    const adminSupabase = createAdminClient();
+    const { data: chemical } = await adminSupabase
+      .from('chemicals')
+      .select('tonnage_band')
+      .eq('id', chemicalId)
+      .maybeSingle();
+
+    const bandMax = chemical?.tonnage_band
+      ? getTonnageBandMaxQuota(chemical.tonnage_band)
+      : null;
+
     const result = await createReachCertificate({
       clientId,
       chemicalId,
@@ -267,6 +371,7 @@ export async function issueReachCertificateFromPreviewAction(
       registrationNumber: data.registrationNumber,
       issuedDate: data.issuedDate,
       validatedDate: data.validatedDate,
+      allocatedQuantity: bandMax,
     });
 
     if (!result.success) return result;
@@ -338,6 +443,7 @@ export async function renewReachCertificateAction(
       registrationNumber,
       issuedDate: data.issuedDate,
       validatedDate: data.validatedDate,
+      allocatedQuantity: data.available_quantity,
     });
 
     if (!result.success) return result;
@@ -394,7 +500,12 @@ export async function renewReachCertificateAction(
 // ============================================================================
 export async function updateReachCertificateAction(
   certId: string,
-  data: { registrationNumber: string; issuedDate: string; validatedDate: string }
+  data: {
+    registrationNumber: string;
+    issuedDate: string;
+    validatedDate: string;
+    allocatedQuantity?: number | null;
+  }
 ) {
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
@@ -411,13 +522,53 @@ export async function updateReachCertificateAction(
   const adminSupabase = createAdminClient();
   const { data: cert } = await adminSupabase
     .from('certificates')
-    .select('id, client_id, chemical_id, certificate_number, type')
+    .select('id, client_id, chemical_id, certificate_number, type, chemicals(chemical_name, cas_number)')
     .eq('id', certId)
-    .eq('type', REACH_CERTIFICATE_TYPE)
     .single();
 
-  if (!cert?.client_id || !cert.chemical_id) {
+  if (!cert?.client_id || !cert.chemical_id || !isReachCertificateType(cert)) {
     return { success: false, error: 'Certificate not found.' };
+  }
+
+  const chemicalName =
+    (cert.chemicals as { chemical_name?: string } | null)?.chemical_name || 'this substance';
+  const casNumber = (cert.chemicals as { cas_number?: string | null } | null)?.cas_number;
+
+  const { data: siblingCertsRaw } = await adminSupabase
+    .from('certificates')
+    .select('id, issued_at, expires_at, status, certificate_number, type, chemical_id, registration_number, chemicals(cas_number)')
+    .eq('client_id', cert.client_id)
+    .neq('status', 'revoked');
+
+  const siblingCerts = (siblingCertsRaw || []).filter(isReachCertificateType);
+  const periodConflict = findReachCertificatePeriodConflict(
+    siblingCerts,
+    cert.chemical_id,
+    chemicalName,
+    data.issuedDate,
+    data.validatedDate,
+    certId,
+    casNumber,
+    registrationNumber
+  );
+  if (periodConflict) {
+    return { success: false, error: periodConflict };
+  }
+
+  const certYear = getReachCertificateYear(data.issuedDate);
+  if (certYear != null) {
+    const yearConflict = findReachCertificateYearConflict(
+      siblingCerts,
+      cert.chemical_id,
+      certYear,
+      chemicalName,
+      casNumber,
+      registrationNumber,
+      certId
+    );
+    if (yearConflict) {
+      return { success: false, error: yearConflict };
+    }
   }
 
   try {
@@ -430,6 +581,12 @@ export async function updateReachCertificateAction(
         registration_number: registrationNumber,
         issued_at: issueDate.toISOString(),
         expires_at: expiryDate.toISOString(),
+        allocated_quantity:
+          data.allocatedQuantity != null && Number(data.allocatedQuantity) > 0
+            ? Number(data.allocatedQuantity)
+            : null,
+        updated_by: session.userId,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', certId);
 
@@ -906,6 +1063,71 @@ export async function sendBulkReachCertificatesEmailAction(
   }
 }
 
+async function syncClientChemicalReachFields(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  chemicalId: string
+) {
+  const { data: remainingRaw } = await adminSupabase
+    .from('certificates')
+    .select('id, certificate_number, registration_number, issued_at, expires_at, type, status')
+    .eq('client_id', clientId)
+    .eq('chemical_id', chemicalId)
+    .neq('status', 'revoked')
+    .order('issued_at', { ascending: false });
+
+  const latest = (remainingRaw || []).filter(isReachCertificateType)[0] ?? null;
+  const toDateOnly = (value: string | null | undefined) =>
+    value ? value.split('T')[0] : null;
+
+  const { error } = await adminSupabase
+    .from('client_chemicals')
+    .update({
+      certificate_number: latest?.certificate_number?.trim() || null,
+      registration_number: latest?.registration_number?.trim() || null,
+      issued_date: toDateOnly(latest?.issued_at),
+      validity_date: toDateOnly(latest?.expires_at),
+    })
+    .eq('client_id', clientId)
+    .eq('chemical_id', chemicalId);
+
+  if (error) throw error;
+}
+
+export async function deleteAllReachCertificatesForClientChemical(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  chemicalId: string
+) {
+  const { data: certs, error: fetchError } = await adminSupabase
+    .from('certificates')
+    .select('id, certificate_number, type')
+    .eq('client_id', clientId)
+    .eq('chemical_id', chemicalId);
+
+  if (fetchError) throw fetchError;
+
+  const rcCerts = (certs || []).filter(isReachCertificateType);
+  if (rcCerts.length === 0) return 0;
+
+  const storageFiles = rcCerts.flatMap((cert) => [
+    `${cert.certificate_number}.pdf`,
+    `${cert.certificate_number}.docx`,
+  ]);
+  await adminSupabase.storage.from(CERTIFICATES_BUCKET).remove(storageFiles);
+
+  const { error: deleteError } = await adminSupabase
+    .from('certificates')
+    .delete()
+    .in(
+      'id',
+      rcCerts.map((cert) => cert.id)
+    );
+
+  if (deleteError) throw deleteError;
+  return rcCerts.length;
+}
+
 export async function deleteReachCertificateAction(certificateId: string, clientId: string) {
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
@@ -915,25 +1137,33 @@ export async function deleteReachCertificateAction(certificateId: string, client
   try {
     const { data: cert, error } = await adminSupabase
       .from('certificates')
-      .select('id, certificate_number, chemical_id, client_id, type, chemicals(chemical_name)')
+      .select('id, certificate_number, chemical_id, client_id, type, status, chemicals(chemical_name)')
       .eq('id', certificateId)
       .eq('client_id', clientId)
-      .eq('type', REACH_CERTIFICATE_TYPE)
       .single();
 
-    if (error || !cert) {
+    if (error || !cert || !isReachCertificateType(cert)) {
       return { success: false, error: 'RC certificate not found.' };
     }
 
     const storageFiles = [`${cert.certificate_number}.pdf`, `${cert.certificate_number}.docx`];
     await adminSupabase.storage.from(CERTIFICATES_BUCKET).remove(storageFiles);
 
-    const { error: deleteError } = await adminSupabase
+    const { data: deleted, error: deleteError } = await adminSupabase
       .from('certificates')
       .delete()
-      .eq('id', certificateId);
+      .eq('id', certificateId)
+      .select('id')
+      .maybeSingle();
 
     if (deleteError) throw deleteError;
+    if (!deleted) {
+      return { success: false, error: 'Failed to delete RC certificate from database.' };
+    }
+
+    if (cert.chemical_id) {
+      await syncClientChemicalReachFields(adminSupabase, clientId, cert.chemical_id);
+    }
 
     const chemicalName =
       (cert.chemicals as { chemical_name?: string } | null)?.chemical_name || 'Unknown';
@@ -944,17 +1174,18 @@ export async function deleteReachCertificateAction(certificateId: string, client
       action: 'REACH_CERTIFICATE_DELETED',
       entity_type: 'certificates',
       entity_id: certificateId,
-      description: `RC Certificate ${cert.certificate_number} deleted for ${chemicalName}`,
+      description: `RC Certificate ${cert.certificate_number} permanently deleted for ${chemicalName}`,
     });
 
     revalidatePath(`/admin/clients/${clientId}`);
     revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
     revalidatePath(`/admin/clients/${clientId}/chemicals`);
+    revalidatePath('/admin/rc-certificates');
     revalidatePath('/client');
 
     return {
       success: true,
-      message: `RC Certificate ${cert.certificate_number} deleted.`,
+      message: `RC Certificate ${cert.certificate_number} permanently deleted.`,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

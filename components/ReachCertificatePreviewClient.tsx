@@ -127,7 +127,7 @@ export default function ReachCertificatePreviewClient({
     : `RC-preview-${chemicalId.slice(0, 8)}.pdf`;
   const downloadLabel = 'Download PDF';
 
-  const backHref = `/admin/clients/${clientId}/rc-certificates`;
+  const backHref = `/admin/clients/${clientId}`;
 
   const handleUpdate = () => {
     if (!cert) return;
