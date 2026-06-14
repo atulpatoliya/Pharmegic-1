@@ -503,6 +503,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
     let assignable = calcQuota;
 
+    let isNewOrRestored = false;
     const { data: existingLink } = await adminSupabase
       .from('client_chemicals')
       .select('id, status')
@@ -510,7 +511,9 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       .eq('chemical_id', chemicalId)
       .maybeSingle();
 
-    if (!(existingLink && existingLink.status !== 'trashed')) {
+    isNewOrRestored = !(existingLink && existingLink.status !== 'trashed');
+
+    if (!existingLink || existingLink.status === 'trashed') {
       const exportedMt = await getClientYearExportedMt(adminSupabase, clientId, chemicalId);
       const quotaResult = computeAssignableQuota(calcQuota, exportedMt);
       if (quotaResult.error) {
@@ -664,6 +667,19 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     };
   } catch (err) {
     console.error('[ASSIGN CHEMICAL ERROR]:', err);
+    const isNewOrRestored = !(existingLink && existingLink.status !== 'trashed');
+    if (isNewOrRestored) {
+      try {
+        const adminSupabase = createAdminClient();
+        await adminSupabase
+          .from('client_chemicals')
+          .update({ status: 'trashed' })
+          .eq('client_id', clientId)
+          .eq('chemical_id', chemicalId);
+      } catch (cleanupErr) {
+        console.error('[CLEANUP ERROR]:', cleanupErr);
+      }
+    }
     return { success: false, error: formatErrorMessage(err) };
   }
 }

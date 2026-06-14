@@ -263,6 +263,41 @@ export default function RcCertificatesTable({
       group.certs.push(cert);
     }
 
+    // Add any client chemicals that don't have any certificates in the filteredCertificates list
+    if (clientChemicals) {
+      const clientCompanyNames = new Map<string, string>();
+      for (const cert of filteredCertificates) {
+        if (cert.clients?.company_name) {
+          clientCompanyNames.set(cert.client_id, cert.clients.company_name);
+        }
+      }
+
+      for (const cc of clientChemicals) {
+        const chemId = cc.chemical_id;
+        const clientId = cc.client_id;
+        const groupKey = `${clientId}_${chemId}`;
+
+        if (!groupMap.has(groupKey)) {
+          const chem = cc.chemicals;
+          const companyName = clientCompanyNames.get(clientId) || '—';
+          const group = {
+            key: groupKey,
+            clientId,
+            companyName: companyName,
+            clientEmail: '',
+            chemicalId: chemId,
+            chemicalName: chem?.chemical_name || 'Unknown Substance',
+            casNumber: chem?.cas_number || 'N/A',
+            ecNumber: chem?.ec_number || 'N/A',
+            tonnageBand: cc.tonnage_band || chem?.tonnage_band || 'None',
+            certs: [],
+          };
+          groupMap.set(groupKey, group);
+          groups.push(group);
+        }
+      }
+    }
+
     // Sort groups by chemical name
     groups.sort((a, b) => a.chemicalName.localeCompare(b.chemicalName));
 
@@ -272,7 +307,7 @@ export default function RcCertificatesTable({
     }
 
     return groups;
-  }, [filteredCertificates]);
+  }, [filteredCertificates, clientChemicals]);
 
   const exportColumns = useMemo(() => {
     const cols: CsvColumn<RcCertificateTableRecord>[] = [
@@ -423,6 +458,125 @@ export default function RcCertificatesTable({
                 </tr>
               ) : (
                 groupedData.flatMap((group) => {
+                  if (group.certs.length === 0) {
+                    const chemId = group.chemicalId;
+                    const cc = clientChemicals && chemId
+                      ? clientChemicals.find((c: any) => c.chemical_id === chemId)
+                      : undefined;
+
+                    return (
+                      <tr
+                        key={`${group.key}_pending`}
+                        className="hover:bg-slate-50/30 transition-colors border-t border-slate-200 bg-white"
+                      >
+                        {/* Chemical Info column */}
+                        <td className="px-4 py-4 align-top border-r border-slate-100 bg-white">
+                          <div className="flex flex-col gap-1 pr-2">
+                            <span className="font-bold text-slate-800 text-sm leading-snug">
+                              {group.chemicalName}
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-mono tracking-wide">
+                              CAS: {group.casNumber} | EC: {group.ecNumber}
+                            </span>
+                            {!hideCompanyColumn && (
+                              <div className="mt-2 flex items-center gap-1.5">
+                                <Building className="h-3 w-3 text-slate-400 shrink-0" />
+                                {currentUserRole !== 'CLIENT' ? (
+                                  <Link
+                                    href={`/admin/clients/${group.clientId}`}
+                                    className="font-bold text-teal-700 text-[11px] hover:text-teal-800 hover:underline"
+                                  >
+                                    {group.companyName}
+                                  </Link>
+                                ) : (
+                                  <span className="font-bold text-slate-700 text-[11px]">
+                                    {group.companyName}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Year column */}
+                        <td className="px-4 py-3.5 align-middle">
+                          <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold border bg-amber-50 border-amber-200 text-amber-700">
+                            Pending
+                          </span>
+                        </td>
+
+                        {/* Validity Period column */}
+                        <td className="px-4 py-3.5 align-middle text-slate-400 italic text-xs">
+                          No certificate issued
+                        </td>
+
+                        {/* Status column */}
+                        <td className="px-4 py-3.5 align-middle">
+                          <Badge variant="neutral" className="text-[10px] uppercase font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            Missing RC
+                          </Badge>
+                        </td>
+
+                        {/* Tonnage Band column */}
+                        <td className="px-4 py-3.5 align-middle">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200">
+                            {group.tonnageBand}
+                          </span>
+                        </td>
+
+                        {/* Quota Utilization column */}
+                        <td className="px-4 py-3.5 align-middle text-slate-400 italic text-xs">
+                          —
+                        </td>
+
+                        {/* Mail column */}
+                        {!hideMailColumn && (
+                          <td className="px-4 py-3.5 align-middle text-center text-slate-400">
+                            —
+                          </td>
+                        )}
+
+                        {/* Actions column */}
+                        <td className="px-4 py-3.5 align-middle text-center">
+                          <div className="flex justify-center gap-1">
+                            {currentUserRole !== 'CLIENT' && (
+                              <>
+                                {cc && onEdit && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-slate-600 hover:bg-slate-100"
+                                    title="Issue Certificate"
+                                    onClick={() => onEdit(cc, '')}
+                                  >
+                                    <PenLine className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {onDelete && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                    title="Delete substance assignment"
+                                    onClick={() =>
+                                      onDelete({
+                                        chemical_id: group.chemicalId,
+                                        id: '',
+                                        chemical_name: group.chemicalName,
+                                      })
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return group.certs.map((cert, certIndex) => {
                     const isValid = isActiveReachCertificate(cert as any);
                     const status = getReachCertificateStatus(cert as any);

@@ -135,7 +135,7 @@ export default function ClientDashboardDetails({
   const showRcCertificatesSection = viewMode === 'rc-certificates';
   const showAdminExtras = viewMode === 'overview' && currentUserRole !== 'CLIENT';
 
-  const clientChemicals = allClientChemicals.filter((c) => c.status !== 'trashed' && c.certificate_number);
+  const clientChemicals = allClientChemicals.filter((c) => c.status !== 'trashed');
   const trashedChemicals = allClientChemicals.filter((c) => c.status === 'trashed');
 
   const rcCertificates = useMemo(
@@ -1612,14 +1612,22 @@ export default function ClientDashboardDetails({
         exportFilename={`${client.company_name.replace(/\s+/g, '_')}_rc_certificates`}
         onEdit={openEditRcCertModal}
         onRenew={openRenewRcModal}
-        onDelete={(cert) =>
-          setRcDeleteTarget({
-            kind: 'issued',
-            id: cert.id,
-            certificate_number: cert.certificate_number,
-            chemical_name: (cert.chemicals || cert.chemical)?.chemical_name || 'Unknown',
-          })
-        }
+        onDelete={(cert) => {
+          if (!cert.id) {
+            setRcDeleteTarget({
+              kind: 'pending',
+              chemicalId: cert.chemical_id,
+              chemical_name: cert.chemical_name || 'Unknown',
+            });
+          } else {
+            setRcDeleteTarget({
+              kind: 'issued',
+              id: cert.id,
+              certificate_number: cert.certificate_number,
+              chemical_name: (cert.chemicals || cert.chemical)?.chemical_name || 'Unknown',
+            });
+          }
+        }}
         clientId={client.id}
       />
 
