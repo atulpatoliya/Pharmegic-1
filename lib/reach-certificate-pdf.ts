@@ -20,6 +20,7 @@ type ReachCertPdfInput = {
   validatedDate: string;
   client: ReachPdfSource;
   chemical: ReachPdfChemical;
+  tonnageBand?: string | null;
 };
 
 const PDF_CONTENT_TYPE = 'application/pdf';
@@ -71,7 +72,7 @@ function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
     ecNumber: input.chemical.ec_number || '—',
     casNumber: input.chemical.cas_number,
     registrationNumber: input.registrationNumber.trim(),
-    tonnageBand: input.chemical.tonnage_band || '—',
+    tonnageBand: input.tonnageBand || input.chemical.tonnage_band || '—',
     uuidNumber: input.client.uuid_number || '—',
     issuedDate: formatReachCertDate(input.issuedDate),
     validatedDate: formatReachCertDate(input.validatedDate),

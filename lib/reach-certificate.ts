@@ -38,6 +38,7 @@ export type ReachCertificateRecord = {
   file_url?: string | null;
   type?: string | null;
   allocated_quantity?: number | null;
+  tonnage_band?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
   updated_at?: string | null;

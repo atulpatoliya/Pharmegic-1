@@ -39,10 +39,11 @@ export type CreateReachCertificateInput = {
   issuedDate: string;
   validatedDate: string;
   allocatedQuantity?: number | null;
+  tonnageBand?: string | null;
 };
 
 export async function createReachCertificate(input: CreateReachCertificateInput) {
-  const { clientId, chemicalId, userId, registrationNumber, issuedDate, validatedDate, allocatedQuantity } =
+  const { clientId, chemicalId, userId, registrationNumber, issuedDate, validatedDate, allocatedQuantity, tonnageBand } =
     input;
   const adminSupabase = createAdminClient();
 
@@ -87,7 +88,7 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
 
   const { data: existingReachCertsRaw } = await adminSupabase
     .from('certificates')
-    .select('id, issued_at, expires_at, status, certificate_number, type, chemical_id, registration_number, chemicals(cas_number)')
+    .select('id, issued_at, expires_at, status, certificate_number, type, chemical_id, registration_number, tonnage_band, allocated_quantity, chemicals(cas_number)')
     .eq('client_id', clientId)
     .neq('status', 'revoked');
 
@@ -121,15 +122,15 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
       }
 
       await adminSupabase
-        .from('client_chemicals')
-        .update({
-          registration_number: registrationNumber.trim(),
-          issued_date: issuedDate,
-          validity_date: validatedDate,
-          certificate_number: existingExact.certificate_number,
-        })
-        .eq('client_id', clientId)
-        .eq('chemical_id', chemicalId);
+          .from('client_chemicals')
+          .update({
+            registration_number: registrationNumber.trim(),
+            issued_date: issuedDate,
+            validity_date: validatedDate,
+            certificate_number: existingExact.certificate_number,
+          })
+          .eq('client_id', clientId)
+          .eq('chemical_id', chemicalId);
 
       revalidatePath(`/admin/clients/${clientId}`);
       revalidatePath(`/admin/clients/${clientId}/chemicals`);
@@ -168,6 +169,7 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
     registrationNumber: registrationNumber.trim(),
     issuedDate,
     validatedDate,
+    tonnageBand: tonnageBand || chemical.tonnage_band,
   });
 
   await ensureCertificatesBucket(adminSupabase);
@@ -204,6 +206,7 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
       ...(allocatedQuantity != null && Number(allocatedQuantity) > 0
         ? { allocated_quantity: Number(allocatedQuantity) }
         : {}),
+      ...(tonnageBand ? { tonnage_band: tonnageBand } : {}),
       created_by: userId,
     },
     coreInsert,
@@ -228,6 +231,7 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
     const missingOptionalColumn =
       message.includes('column') &&
       (message.includes('allocated_quantity') ||
+        message.includes('tonnage_band') ||
         message.includes('created_by') ||
         message.includes('updated_by') ||
         message.includes('updated_at'));
@@ -294,7 +298,7 @@ export async function regenerateReachCertificateFile(certId: string) {
   const { data: cert } = await adminSupabase
     .from('certificates')
     .select(
-      'id, certificate_number, registration_number, issued_at, expires_at, client_id, chemical_id, type'
+      'id, certificate_number, registration_number, tonnage_band, issued_at, expires_at, client_id, chemical_id, type'
     )
     .eq('id', certId)
     .eq('type', REACH_CERTIFICATE_TYPE)
@@ -323,6 +327,7 @@ export async function regenerateReachCertificateFile(certId: string) {
     registrationNumber: cert.registration_number,
     issuedDate: cert.issued_at.split('T')[0],
     validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),
+    tonnageBand: cert.tonnage_band,
   });
 
   await ensureCertificatesBucket(adminSupabase);
@@ -347,7 +352,7 @@ export async function regenerateReachCertificateFile(certId: string) {
 export async function issueReachCertificateFromPreviewAction(
   clientId: string,
   chemicalId: string,
-  data: { registrationNumber: string; issuedDate: string; validatedDate: string }
+  data: { registrationNumber: string; issuedDate: string; validatedDate: string; tonnageBand?: string | null }
 ) {
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
@@ -360,8 +365,10 @@ export async function issueReachCertificateFromPreviewAction(
       .eq('id', chemicalId)
       .maybeSingle();
 
-    const bandMax = chemical?.tonnage_band
-      ? getTonnageBandMaxQuota(chemical.tonnage_band)
+    const resolvedTonnageBand = data.tonnageBand !== undefined ? data.tonnageBand : (chemical?.tonnage_band || null);
+
+    const bandMax = resolvedTonnageBand
+      ? getTonnageBandMaxQuota(resolvedTonnageBand)
       : null;
 
     const result = await createReachCertificate({
@@ -372,6 +379,7 @@ export async function issueReachCertificateFromPreviewAction(
       issuedDate: data.issuedDate,
       validatedDate: data.validatedDate,
       allocatedQuantity: bandMax,
+      tonnageBand: resolvedTonnageBand,
     });
 
     if (!result.success) return result;
@@ -397,6 +405,7 @@ export async function renewReachCertificateAction(
     validatedDate: string;
     available_quantity: number;
     registrationNumber?: string;
+    tonnageBand?: string | null;
   }
 ) {
   const session = await requireAdmin();
@@ -414,18 +423,22 @@ export async function renewReachCertificateAction(
 
   const adminSupabase = createAdminClient();
   let registrationNumber = data.registrationNumber?.trim() || '';
+  let prevTonnageBand: string | null = null;
 
-  if (!registrationNumber) {
+  if (!registrationNumber || !data.tonnageBand) {
     const { data: prevCert } = await adminSupabase
       .from('certificates')
-      .select('registration_number')
+      .select('registration_number, tonnage_band')
       .eq('client_id', clientId)
       .eq('chemical_id', chemicalId)
       .eq('type', REACH_CERTIFICATE_TYPE)
       .order('issued_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    registrationNumber = prevCert?.registration_number?.trim() || '';
+    if (!registrationNumber) {
+      registrationNumber = prevCert?.registration_number?.trim() || '';
+    }
+    prevTonnageBand = prevCert?.tonnage_band || null;
   }
 
   if (!registrationNumber) {
@@ -444,6 +457,7 @@ export async function renewReachCertificateAction(
       issuedDate: data.issuedDate,
       validatedDate: data.validatedDate,
       allocatedQuantity: data.available_quantity,
+      tonnageBand: data.tonnageBand || prevTonnageBand,
     });
 
     if (!result.success) return result;
@@ -505,6 +519,7 @@ export async function updateReachCertificateAction(
     issuedDate: string;
     validatedDate: string;
     allocatedQuantity?: number | null;
+    tonnageBand?: string | null;
   }
 ) {
   const session = await requireAdmin();
@@ -522,7 +537,7 @@ export async function updateReachCertificateAction(
   const adminSupabase = createAdminClient();
   const { data: cert } = await adminSupabase
     .from('certificates')
-    .select('id, client_id, chemical_id, certificate_number, type, chemicals(chemical_name, cas_number)')
+    .select('id, client_id, chemical_id, certificate_number, tonnage_band, type, chemicals(chemical_name, cas_number)')
     .eq('id', certId)
     .single();
 
@@ -536,7 +551,7 @@ export async function updateReachCertificateAction(
 
   const { data: siblingCertsRaw } = await adminSupabase
     .from('certificates')
-    .select('id, issued_at, expires_at, status, certificate_number, type, chemical_id, registration_number, chemicals(cas_number)')
+    .select('id, issued_at, expires_at, status, certificate_number, type, chemical_id, registration_number, tonnage_band, allocated_quantity, chemicals(cas_number)')
     .eq('client_id', cert.client_id)
     .neq('status', 'revoked');
 
@@ -585,6 +600,7 @@ export async function updateReachCertificateAction(
           data.allocatedQuantity != null && Number(data.allocatedQuantity) > 0
             ? Number(data.allocatedQuantity)
             : null,
+        tonnage_band: data.tonnageBand || null,
         updated_by: session.userId,
         updated_at: new Date().toISOString(),
       })
@@ -661,7 +677,7 @@ export async function issueReachCertificateAction(clientId: string, chemicalId: 
 
   const { data: prevCert } = await adminSupabase
     .from('certificates')
-    .select('registration_number')
+    .select('registration_number, tonnage_band')
     .eq('client_id', clientId)
     .eq('chemical_id', chemicalId)
     .eq('type', REACH_CERTIFICATE_TYPE)
@@ -684,6 +700,7 @@ export async function issueReachCertificateAction(clientId: string, chemicalId: 
       registrationNumber: prevCert.registration_number,
       issuedDate: today,
       validatedDate: endOfYear,
+      tonnageBand: prevCert.tonnage_band,
     });
 
     if (!result.success) return result;
@@ -1080,18 +1097,28 @@ async function syncClientChemicalReachFields(
   const toDateOnly = (value: string | null | undefined) =>
     value ? value.split('T')[0] : null;
 
-  const { error } = await adminSupabase
-    .from('client_chemicals')
-    .update({
-      certificate_number: latest?.certificate_number?.trim() || null,
-      registration_number: latest?.registration_number?.trim() || null,
-      issued_date: toDateOnly(latest?.issued_at),
-      validity_date: toDateOnly(latest?.expires_at),
-    })
-    .eq('client_id', clientId)
-    .eq('chemical_id', chemicalId);
+  if (!latest) {
+    const { error } = await adminSupabase
+      .from('client_chemicals')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId);
 
-  if (error) throw error;
+    if (error) throw error;
+  } else {
+    const { error } = await adminSupabase
+      .from('client_chemicals')
+      .update({
+        certificate_number: latest.certificate_number?.trim() || null,
+        registration_number: latest.registration_number?.trim() || null,
+        issued_date: toDateOnly(latest.issued_at),
+        validity_date: toDateOnly(latest.expires_at),
+      })
+      .eq('client_id', clientId)
+      .eq('chemical_id', chemicalId);
+
+    if (error) throw error;
+  }
 }
 
 export async function deleteAllReachCertificatesForClientChemical(

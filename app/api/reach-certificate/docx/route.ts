@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
         id,
         certificate_number,
         registration_number,
+        tonnage_band,
         issued_at,
         expires_at,
         client_id,
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
         ecNumber: chemicalRecord.ec_number || '—',
         casNumber: chemicalRecord.cas_number,
         registrationNumber: cert.registration_number?.trim() || '—',
-        tonnageBand: chemicalRecord.tonnage_band || '—',
+        tonnageBand: cert.tonnage_band || chemicalRecord.tonnage_band || '—',
         uuidNumber: clientRecord.uuid_number || '—',
         issuedDate: formatReachCertDate(issuedDate),
         validatedDate: formatReachCertDate(validatedDate),
@@ -142,7 +143,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle(),
       adminSupabase
         .from('certificates')
-        .select('registration_number, issued_at, expires_at')
+        .select('registration_number, issued_at, expires_at, tonnage_band')
         .eq('client_id', clientId)
         .eq('chemical_id', chemicalId)
         .eq('type', REACH_CERTIFICATE_TYPE)
@@ -170,6 +171,11 @@ export async function GET(request: NextRequest) {
       ? existingCert.expires_at.split('T')[0]
       : clientChem.validity_date?.split('T')[0] || getLastDateOfYear());
 
+  const tonnageBand =
+    searchParams.get('tonnageBand')?.trim() ||
+    existingCert?.tonnage_band ||
+    chemical.tonnage_band;
+
   try {
     const address = buildReachAddressLines(client);
     const docxBuffer = generateReachCertificateDocx({
@@ -181,7 +187,7 @@ export async function GET(request: NextRequest) {
       ecNumber: chemical.ec_number || '—',
       casNumber: chemical.cas_number,
       registrationNumber,
-      tonnageBand: chemical.tonnage_band || '—',
+      tonnageBand: tonnageBand || '—',
       uuidNumber: client.uuid_number || '—',
       issuedDate: formatReachCertDate(issuedDate),
       validatedDate: formatReachCertDate(validatedDate),

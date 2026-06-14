@@ -196,6 +196,8 @@ CREATE TABLE IF NOT EXISTS public.certificates (
     type TEXT DEFAULT 'TCC',
     registration_number TEXT,
     file_url TEXT,
+    allocated_quantity NUMERIC(12, 2),
+    tonnage_band TEXT,
     issued_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE,
     status public.certificate_status DEFAULT 'active',
@@ -312,6 +314,7 @@ ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERE
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS mail_sent_history JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS allocated_quantity NUMERIC(12, 2);
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS tonnage_band TEXT;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());

@@ -15,6 +15,7 @@ export function buildReachCertificatePdfPreviewUrl(params: {
   registrationNumber?: string;
   issuedDate?: string;
   validatedDate?: string;
+  tonnageBand?: string;
 }): string {
   const search = new URLSearchParams({
     clientId: params.clientId,
@@ -23,6 +24,7 @@ export function buildReachCertificatePdfPreviewUrl(params: {
   if (params.registrationNumber) search.set('registrationNumber', params.registrationNumber);
   if (params.issuedDate) search.set('issuedDate', params.issuedDate);
   if (params.validatedDate) search.set('validatedDate', params.validatedDate);
+  if (params.tonnageBand) search.set('tonnageBand', params.tonnageBand);
   return `/api/reach-certificate/pdf?${search.toString()}`;
 }
 

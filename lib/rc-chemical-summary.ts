@@ -122,7 +122,7 @@ export function buildRcHistoryRows(
 ) {
   return summary.certs.map((cert) => {
     const year = getReachCertificateYear(cert.issued_at);
-    const allocated = getReachCertAllocatedQuota(cert, summary.tonnageBand);
+    const allocated = getReachCertAllocatedQuota(cert, cert.tonnage_band || summary.tonnageBand);
     const used = sumApprovedExportsInReachWindow(tccHistory, summary.chemicalId, cert);
     const balance = Math.max(0, allocated - used);
     const certStatus = getReachCertificateStatus(cert);

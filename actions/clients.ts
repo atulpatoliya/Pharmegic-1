@@ -530,6 +530,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         issuedDate: data.issued_date.trim(),
         validatedDate: data.validated_date.trim(),
         allocatedQuantity: allocatedQty,
+        tonnageBand: data.tonnage_band,
       });
 
       if (!rcResult.success) {
@@ -642,6 +643,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       issuedDate: data.issued_date.trim(),
       validatedDate: data.validated_date.trim(),
       allocatedQuantity: allocatedQtyNew,
+      tonnageBand: data.tonnage_band,
     });
 
     if (!rcResult.success) {
@@ -820,14 +822,18 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
       }
     }
 
+    const chemUpdate: any = {
+      chemical_name: data.chemical_name.trim(),
+      cas_number: data.cas_number || null,
+      ec_number: data.ec_number.trim(),
+    };
+    if (data.update_global_tonnage_band) {
+      chemUpdate.tonnage_band = data.tonnage_band || null;
+    }
+
     const { error: chemError } = await adminSupabase
       .from('chemicals')
-      .update({
-        chemical_name: data.chemical_name.trim(),
-        cas_number: data.cas_number || null,
-        ec_number: data.ec_number.trim(),
-        tonnage_band: data.tonnage_band || null,
-      })
+      .update(chemUpdate)
       .eq('id', chemicalId);
 
     if (chemError) throw chemError;

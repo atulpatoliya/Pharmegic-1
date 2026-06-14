@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { FormLabel } from '@/components/ui/FormLabel';
+import { Select } from '@/components/ui/Select';
 import { toast } from '@/store/toast';
 import {
   ArrowLeft,
@@ -64,6 +65,7 @@ type ReachCertificatePreviewClientProps = {
     registrationNumber: string;
     issuedDate: string;
     validatedDate: string;
+    tonnageBand?: string;
   };
   mailRecipients: {
     to: string;
@@ -98,6 +100,7 @@ export default function ReachCertificatePreviewClient({
   const [registrationNumber, setRegistrationNumber] = useState(defaults.registrationNumber);
   const [issuedDate, setIssuedDate] = useState(defaults.issuedDate);
   const [validatedDate, setValidatedDate] = useState(defaults.validatedDate);
+  const [tonnageBand, setTonnageBand] = useState(defaults.tonnageBand || chemical.tonnage_band || '');
 
   const docxPreviewUrl = useMemo(() => {
     const params = new URLSearchParams({
@@ -106,9 +109,10 @@ export default function ReachCertificatePreviewClient({
       registrationNumber: registrationNumber.trim() || '—',
       issuedDate,
       validatedDate,
+      tonnageBand,
     });
     return `/api/reach-certificate/docx?${params.toString()}`;
-  }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate]);
+  }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
 
   const downloadPdfUrl = cert
     ? buildReachCertificatePdfDownloadUrl(cert.id)
@@ -118,6 +122,7 @@ export default function ReachCertificatePreviewClient({
         registrationNumber: registrationNumber.trim() || '—',
         issuedDate,
         validatedDate,
+        tonnageBand,
       });
   const downloadDocxUrl = cert
     ? buildReachCertificateDocxPreviewUrl(cert.id)
@@ -145,6 +150,7 @@ export default function ReachCertificatePreviewClient({
         registrationNumber: registrationNumber.trim(),
         issuedDate,
         validatedDate,
+        tonnageBand,
       });
       if (res.success) {
         toast.success(res.message || 'RC Certificate updated.');
@@ -171,6 +177,7 @@ export default function ReachCertificatePreviewClient({
         registrationNumber: registrationNumber.trim(),
         issuedDate,
         validatedDate,
+        tonnageBand,
       });
       if (res.success) {
         toast.success(res.message || 'RC Certificate issued successfully.');
@@ -307,13 +314,27 @@ export default function ReachCertificatePreviewClient({
               {isPending ? 'Confirm details before issuing' : 'Update certificate details'}
             </h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <FormLabel required>Registration Number</FormLabel>
               <Input
                 value={registrationNumber}
                 onChange={(e) => setRegistrationNumber(e.target.value)}
                 placeholder="01-2119493908-18-0028"
+              />
+            </div>
+            <div>
+              <FormLabel>Tonnage Band</FormLabel>
+              <Select
+                value={tonnageBand}
+                onChange={(e) => setTonnageBand(e.target.value)}
+                options={[
+                  { value: '', label: 'None' },
+                  { value: '1-10 tonnes', label: '1-10 tonnes' },
+                  { value: '10-100 tonnes', label: '10-100 tonnes' },
+                  { value: '100-1000 tonnes', label: '100-1000 tonnes' },
+                  { value: '1000+ tonnes', label: '1000+ tonnes' },
+                ]}
               />
             </div>
             <div>

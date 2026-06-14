@@ -58,7 +58,7 @@ export default async function ReachCertificatePreviewPage({
         ? adminSupabase
             .from('certificates')
             .select(
-              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, chemical_id, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
+              'id, certificate_number, registration_number, tonnage_band, issued_at, expires_at, status, file_url, type, chemical_id, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
             )
             .eq('id', requestedCertId)
             .eq('client_id', clientId)
@@ -66,7 +66,7 @@ export default async function ReachCertificatePreviewPage({
         : adminSupabase
             .from('certificates')
             .select(
-              'id, certificate_number, registration_number, issued_at, expires_at, status, file_url, type, chemical_id, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
+              'id, certificate_number, registration_number, tonnage_band, issued_at, expires_at, status, file_url, type, chemical_id, mail_sent, mail_sent_at, mail_resend_count, last_resend_at, mail_sent_history'
             )
             .eq('client_id', clientId)
             .eq('chemical_id', chemicalId)
@@ -122,6 +122,7 @@ export default async function ReachCertificatePreviewPage({
       resolvedCert?.expires_at?.split('T')[0] ||
       clientChem.validity_date?.split('T')[0] ||
       defaultYearPeriod.validatedDate,
+    tonnageBand: resolvedCert?.tonnage_band || chemical.tonnage_band || '',
   };
 
   return (

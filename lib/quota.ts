@@ -90,12 +90,15 @@ export function sumApprovedExportsInReachWindow(
 }
 
 export function getReachCertAllocatedQuota(
-  cert: { allocated_quantity?: number | null },
+  cert: { allocated_quantity?: number | null; tonnage_band?: string | null },
   tonnageBand?: string | null
 ): number {
   const explicit = cert.allocated_quantity;
   if (explicit != null && Number(explicit) > 0) {
     return Number(explicit);
+  }
+  if (cert.tonnage_band?.trim()) {
+    return getTonnageBandMaxQuota(cert.tonnage_band) ?? 0;
   }
   return getTonnageBandMaxQuota(tonnageBand) ?? 0;
 }
@@ -150,10 +153,12 @@ export function computeTccQuotaForExportDate(params: {
     reachCert,
     params.excludeApplicationId
   );
-  const bandMax = getReachCertAllocatedQuota(reachCert, params.tonnageBand);
+
+  const resolvedTonnageBand = reachCert.tonnage_band || params.tonnageBand;
+  const bandMax = getReachCertAllocatedQuota(reachCert, resolvedTonnageBand);
   const remainingQuota = getRemainingQuotaForReachPeriod(
     exportedMt,
-    params.tonnageBand,
+    resolvedTonnageBand,
     reachCert.allocated_quantity
   );
 

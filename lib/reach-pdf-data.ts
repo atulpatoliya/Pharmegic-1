@@ -23,6 +23,7 @@ function buildReachDocxData(
     registrationNumber: string;
     issuedDate: string;
     validatedDate: string;
+    tonnageBand?: string | null;
   }
 ): ReachCertificateDocxData {
   const address = buildReachAddressLines(client);
@@ -35,7 +36,7 @@ function buildReachDocxData(
     ecNumber: chemical.ec_number || '—',
     casNumber: chemical.cas_number,
     registrationNumber: options.registrationNumber.trim(),
-    tonnageBand: chemical.tonnage_band || '—',
+    tonnageBand: options.tonnageBand || chemical.tonnage_band || '—',
     uuidNumber: client.uuid_number || '—',
     issuedDate: formatReachCertDate(options.issuedDate),
     validatedDate: formatReachCertDate(options.validatedDate),
@@ -66,6 +67,7 @@ export async function generateReachPdfForClientChemical(
     registrationNumber: string;
     issuedDate: string;
     validatedDate: string;
+    tonnageBand?: string | null;
   }
 ): Promise<Buffer> {
   const docxBuffer = generateReachCertificateDocx(buildReachDocxData(client, chemical, options));
@@ -81,6 +83,7 @@ export async function buildReachCertificateStoredFile(
     registrationNumber: string;
     issuedDate: string;
     validatedDate: string;
+    tonnageBand?: string | null;
   }
 ): Promise<ReachCertificateStoredFile> {
   const docxBuffer = generateReachCertificateDocx(buildReachDocxData(client, chemical, options));

@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         id,
         certificate_number,
         registration_number,
+        tonnage_band,
         issued_at,
         expires_at,
         client_id,
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
         validatedDate,
         client: clientRecord,
         chemical: chemicalRecord,
+        tonnageBand: cert.tonnage_band,
       });
 
       return pdfResponse(pdfBuffer, `${cert.certificate_number}.pdf`);
@@ -134,7 +136,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle(),
       adminSupabase
         .from('certificates')
-        .select('certificate_number, registration_number, issued_at, expires_at')
+        .select('certificate_number, registration_number, issued_at, expires_at, tonnage_band')
         .eq('client_id', clientId)
         .eq('chemical_id', chemicalId)
         .eq('type', REACH_CERTIFICATE_TYPE)
@@ -162,6 +164,11 @@ export async function GET(request: NextRequest) {
       ? existingCert.expires_at.split('T')[0]
       : clientChem.validity_date?.split('T')[0] || getLastDateOfYear());
 
+  const tonnageBand =
+    searchParams.get('tonnageBand')?.trim() ||
+    existingCert?.tonnage_band ||
+    chemical.tonnage_band;
+
   const certNumber = existingCert?.certificate_number || `RC-preview-${chemicalId.slice(0, 8)}`;
 
   try {
@@ -172,6 +179,7 @@ export async function GET(request: NextRequest) {
       validatedDate,
       client,
       chemical,
+      tonnageBand,
     });
 
     return pdfResponse(pdfBuffer, `${certNumber}.pdf`);
