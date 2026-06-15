@@ -133,6 +133,10 @@ export const smtpSettingsSchema = z.object({
   smtp_cc_default: z.string().optional().or(z.literal('')),
 });
 
+export const tccNotificationEmailsSchema = z.object({
+  tcc_application_notification_emails: z.string().optional().or(z.literal('')),
+});
+
 // ============================================================================
 // CHANGE CLIENT CREDENTIALS (admin only)
 // ============================================================================

@@ -70,6 +70,103 @@ export async function sendEmail({ to, subject, html, cc, smtpConfig }: SendMailO
 }
 
 // ============================================================================
+// TCC APPLICATION NOTIFICATION (admin alert on new client submission)
+// ============================================================================
+interface SendTccApplicationNotificationOptions {
+  to: string[];
+  clientCompanyName: string;
+  chemicalName: string;
+  quantityMt: number;
+  exportDate: string;
+  applicationId: string;
+  smtpConfig?: SmtpConfig;
+}
+
+function formatNotificationDate(dateRaw: string): string {
+  const parsed = new Date(`${dateRaw.split('T')[0]}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateRaw;
+  return parsed.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function getTccApplicationNotificationHtml(
+  clientCompanyName: string,
+  chemicalName: string,
+  quantityMt: number,
+  exportDate: string
+): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
+    .container { max-width: 580px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+    .header { background: #064e3b; padding: 32px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.05em; }
+    .header p { margin: 8px 0 0; font-size: 13px; opacity: 0.8; }
+    .body { padding: 32px; }
+    .detail { background: #f8fafc; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; }
+    .detail p { margin: 6px 0; }
+    .footer { padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>PHARMEGIC HEALTHCARE</h1>
+      <p>New TCC Application Submitted</p>
+    </div>
+    <div class="body">
+      <p>A client has submitted a new <strong>Tonnage Compliance Certificate (TCC)</strong> application for your review.</p>
+      <div class="detail">
+        <p><strong>Client:</strong> ${clientCompanyName}</p>
+        <p><strong>Chemical:</strong> ${chemicalName}</p>
+        <p><strong>Quantity requested:</strong> ${quantityMt} MT</p>
+        <p><strong>Expected export date:</strong> ${formatNotificationDate(exportDate)}</p>
+      </div>
+      <p style="font-size:13px;color:#64748b;">Sign in to the admin portal and open <strong>Approvals</strong> to review this application.</p>
+    </div>
+    <div class="footer">
+      Pharmegic Healthcare Compliance Division | This is an automated compliance notification.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendTccApplicationNotificationEmail({
+  to,
+  clientCompanyName,
+  chemicalName,
+  quantityMt,
+  exportDate,
+  applicationId,
+  smtpConfig,
+}: SendTccApplicationNotificationOptions) {
+  const subject = `New TCC application — ${clientCompanyName} (${quantityMt} MT)`;
+  const html = getTccApplicationNotificationHtml(
+    clientCompanyName,
+    chemicalName,
+    quantityMt,
+    exportDate
+  );
+
+  await sendEmail({
+    to: to.join(', '),
+    subject,
+    html,
+    smtpConfig,
+  });
+
+  console.log(`[SMTP] TCC application notification sent for application ${applicationId}`);
+}
+
+// ============================================================================
 // CERTIFICATE EMAIL (with PDF attachment)
 // ============================================================================
 interface SendCertificateEmailOptions {

@@ -7,6 +7,7 @@ import {
   updateAdminAuthAction,
   updateTccSmtpSettingsAction,
   updateRcSmtpSettingsAction,
+  updateTccNotificationEmailsAction,
 } from '@/actions/settings';
 import {
   mapRcSmtpFormFromSettings,
@@ -32,6 +33,7 @@ import {
   Image as ImageIcon,
   FileSignature,
   ShieldCheck,
+  Bell,
 } from 'lucide-react';
 
 interface SettingsData {
@@ -54,6 +56,7 @@ interface SettingsData {
   rc_smtp_pass?: string | null;
   rc_smtp_from?: string | null;
   rc_smtp_cc_default?: string | null;
+  tcc_application_notification_emails?: string | null;
 }
 
 interface TemplateData {
@@ -76,9 +79,10 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
   const [isAuthPending, startAuthTransition] = useTransition();
   const [isTccSmtpPending, startTccSmtpTransition] = useTransition();
   const [isRcSmtpPending, startRcSmtpTransition] = useTransition();
+  const [isNotificationPending, startNotificationTransition] = useTransition();
 
   const [activeTab, setActiveTab] = useState<
-    'profile' | 'branding' | 'security' | 'smtp-tcc' | 'smtp-rc'
+    'profile' | 'branding' | 'security' | 'smtp-tcc' | 'smtp-rc' | 'notification-email'
   >('profile');
 
   // 1. Profile Settings State
@@ -106,6 +110,9 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
   );
   const [rcSmtp, setRcSmtp] = useState<CertificateSmtpFormData>(
     mapRcSmtpFormFromSettings(initialSettings)
+  );
+  const [notificationEmails, setNotificationEmails] = useState(
+    initialSettings?.tcc_application_notification_emails || ''
   );
 
   // Image Upload Handler (Base64 conversion)
@@ -251,6 +258,20 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     });
   };
 
+  const handleSaveNotificationEmails = () => {
+    startNotificationTransition(async () => {
+      const res = await updateTccNotificationEmailsAction({
+        tcc_application_notification_emails: notificationEmails,
+      });
+      if (res.success) {
+        toast.success(res.message || 'Notification emails saved.');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to save notification emails.');
+      }
+    });
+  };
+
   const renderSmtpFields = (
     smtp: CertificateSmtpFormData,
     setSmtp: React.Dispatch<React.SetStateAction<CertificateSmtpFormData>>
@@ -368,6 +389,17 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
           >
             <ShieldCheck className="h-4.5 w-4.5" />
             RC Email SMTP
+          </button>
+          <button
+            onClick={() => setActiveTab('notification-email')}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+              activeTab === 'notification-email'
+                ? 'bg-primary text-white'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Bell className="h-4.5 w-4.5" />
+            Notification Email
           </button>
         </div>
 
@@ -755,6 +787,42 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
                     disabled={isRcSmtpPending}
                   >
                     Save RC SMTP Settings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 6: TCC APPLICATION NOTIFICATION */}
+          {activeTab === 'notification-email' && (
+            <Card className="border-slate-100 shadow-xs">
+              <CardHeader>
+                <div className="flex items-center gap-2 text-primary">
+                  <Bell className="h-5 w-5" />
+                  <CardTitle>TCC Application Notification Email</CardTitle>
+                </div>
+                <CardDescription>
+                  Email address(es) that receive an alert when a client submits a new TCC application.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs font-semibold text-blue-800">
+                  Notifications are sent using your TCC Email SMTP settings. Add one or more addresses
+                  separated by commas. Leave empty to disable email alerts (in-app notifications still work).
+                </div>
+                <Input
+                  label="Notification Email(s)"
+                  placeholder="compliance@company.com, admin@company.com"
+                  value={notificationEmails}
+                  onChange={(e) => setNotificationEmails(e.target.value)}
+                />
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <Button
+                    onClick={handleSaveNotificationEmails}
+                    isLoading={isNotificationPending}
+                    disabled={isNotificationPending}
+                  >
+                    Save Notification Emails
                   </Button>
                 </div>
               </CardContent>

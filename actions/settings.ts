@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
 import { revalidatePath } from 'next/cache';
+import { validateTccNotificationEmails } from '@/lib/tcc-application-notification';
 
 async function requireAdmin() {
   const session = await getSession();
@@ -136,6 +137,43 @@ export async function updateRcSmtpSettingsAction(smtpData: SmtpFormPayload) {
     if (error) throw error;
     revalidatePath('/admin/settings');
     return { success: true, message: 'RC certificate SMTP settings saved.' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================================
+// UPDATE TCC APPLICATION NOTIFICATION EMAILS
+// ============================================================================
+export async function updateTccNotificationEmailsAction(data: {
+  tcc_application_notification_emails?: string;
+}) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const validationError = validateTccNotificationEmails(data.tcc_application_notification_emails);
+  if (validationError) {
+    return { success: false, error: validationError };
+  }
+
+  const adminSupabase = createAdminClient();
+  try {
+    const { error } = await adminSupabase
+      .from('admin_settings')
+      .upsert(
+        {
+          id: 1,
+          tcc_application_notification_emails:
+            data.tcc_application_notification_emails?.trim() || '',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+
+    if (error) throw error;
+    revalidatePath('/admin/settings');
+    return { success: true, message: 'TCC application notification emails saved.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

@@ -16,6 +16,7 @@ import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments'
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
 import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
+import { notifyTccApplicationByEmail } from '@/lib/tcc-application-notification';
 import {
   computeTccQuotaForExportDate,
   getReachCertAllocatedQuota,
@@ -52,6 +53,7 @@ function tccSaveErrorMessage(err: unknown): string {
     message.includes('invoice_number') ||
     message.includes('reach_certificate_id') ||
     message.includes('certificate_issue_date') ||
+    message.includes('tcc_application_notification_emails') ||
     message.includes('PGRST204')
   ) {
     return 'Database is missing EU Importer columns. Run the latest database.sql migration in Supabase, then try again.';
@@ -182,16 +184,18 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     const authChem = validation.authChem;
     const reachCert = validation.reachCert;
 
-    const [{ data: chemical }, euImporter] = await Promise.all([
+    const [{ data: chemical }, { data: client }, euImporter] = await Promise.all([
       adminSupabase
         .from('chemicals')
         .select('chemical_name')
         .eq('id', result.data.chemical_id)
         .single(),
+      adminSupabase.from('clients').select('company_name').eq('id', clientId).single(),
       resolveEuImporterFields(result.data),
     ]);
 
     if (!chemical) return { success: false, error: 'Chemical not found.' };
+    if (!client) return { success: false, error: 'Client not found.' };
 
     const boFile = formData.get('bo_attachment');
     if (!(boFile instanceof File) || boFile.size === 0) {
@@ -238,13 +242,21 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       metadata: { quantity: result.data.quantity_mt, chemical: chemical.chemical_name },
     });
 
-    // 5. Notify admins of new pending application
-    const companyLabel = euImporter.eu_importer_company_name || 'A client';
+    // 5. Notify admins (in-app + email)
+    const companyLabel = client.company_name || 'A client';
     await notifyAllAdmins(
       adminSupabase,
       'New TCC application',
       `${companyLabel} submitted ${result.data.quantity_mt} MT for ${chemical.chemical_name}. Review in Approvals.`
     );
+
+    await notifyTccApplicationByEmail(adminSupabase, {
+      clientCompanyName: companyLabel,
+      chemicalName: chemical.chemical_name,
+      quantityMt: result.data.quantity_mt,
+      exportDate: result.data.export_date,
+      applicationId: app.id,
+    });
 
     revalidatePath('/client');
     revalidatePath('/client/apply');

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     rc_smtp_pass TEXT DEFAULT '',
     rc_smtp_from TEXT DEFAULT '',
     rc_smtp_cc_default TEXT DEFAULT '',
+    tcc_application_notification_emails TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT single_row CHECK (id = 1)
@@ -310,6 +311,7 @@ ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_user TEXT DEF
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_pass TEXT DEFAULT '';
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_from TEXT DEFAULT '';
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_cc_default TEXT DEFAULT '';
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS tcc_application_notification_emails TEXT DEFAULT '';
 
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;
