@@ -2,13 +2,16 @@
  * Rich HTML email templates for Pharmegic Healthcare Portal
  */
 
-const baseLayout = (title: string, bodyContent: string) => `
-<!DOCTYPE html>
+import { buildEmailShell, escapeEmailHtml, resolveEmailLogoUrl } from '@/lib/email-branding';
+
+const baseLayout = (title: string, bodyContent: string, logoUrl?: string | null) => {
+  const logoSrc = resolveEmailLogoUrl(logoUrl);
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${escapeEmailHtml(title)}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -35,15 +38,8 @@ const baseLayout = (title: string, bodyContent: string) => `
     }
     .header {
       background-color: #064e3b;
-      padding: 30px;
+      padding: 28px 30px;
       text-align: center;
-    }
-    .header h1 {
-      color: #ffffff;
-      margin: 0;
-      font-size: 24px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
     }
     .content {
       padding: 35px 30px;
@@ -62,9 +58,6 @@ const baseLayout = (title: string, bodyContent: string) => `
       font-weight: 600;
       display: inline-block;
       box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
-    }
-    .btn:hover {
-      background-color: #059669;
     }
     .footer {
       background-color: #f1f5f9;
@@ -100,7 +93,7 @@ const baseLayout = (title: string, bodyContent: string) => `
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <h1>PHARMEGIC HEALTHCARE</h1>
+        <img src="${logoSrc}" alt="Pharmegic Healthcare" style="max-height:48px;max-width:220px;object-fit:contain;display:inline-block;" />
       </div>
       <div class="content">
         ${bodyContent}
@@ -112,8 +105,8 @@ const baseLayout = (title: string, bodyContent: string) => `
     </div>
   </div>
 </body>
-</html>
-`;
+</html>`;
+};
 
 export const getInvitationEmail = (companyName: string, inviteUrl: string, setupToken: string) => {
   return baseLayout(

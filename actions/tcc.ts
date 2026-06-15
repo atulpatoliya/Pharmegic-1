@@ -147,7 +147,7 @@ async function validateClientTccSubmission(
     };
   }
 
-  return { ok: true as const, authChem, reachCert: quotaResult.reachCert };
+  return { ok: true as const, authChem, reachCert: quotaResult.reachCert, remainingQuota: quotaResult.remainingQuota };
 }
 
 // ============================================================================
@@ -183,11 +183,12 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     }
     const authChem = validation.authChem;
     const reachCert = validation.reachCert;
+    const availableBeforeRequest = validation.remainingQuota;
 
     const [{ data: chemical }, { data: client }, euImporter] = await Promise.all([
       adminSupabase
         .from('chemicals')
-        .select('chemical_name')
+        .select('chemical_name, cas_number, ec_number')
         .eq('id', result.data.chemical_id)
         .single(),
       adminSupabase.from('clients').select('company_name').eq('id', clientId).single(),
@@ -253,9 +254,24 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     await notifyTccApplicationByEmail(adminSupabase, {
       clientCompanyName: companyLabel,
       chemicalName: chemical.chemical_name,
+      casNumber: chemical.cas_number,
+      ecNumber: chemical.ec_number,
       quantityMt: result.data.quantity_mt,
       exportDate: result.data.export_date,
       applicationId: app.id,
+      euImporterCompanyName: euImporter.eu_importer_company_name,
+      euImporterAddress: euImporter.eu_importer_address,
+      purchaseOrderNumber: euImporter.purchase_order_number,
+      currentAvailableMt: availableBeforeRequest,
+      projectedBalanceMt: Math.max(0, availableBeforeRequest - result.data.quantity_mt),
+      rcCertificateNumber: reachCert.certificate_number ?? null,
+      rcPeriodStart: reachCert.issued_at ?? null,
+      rcPeriodEnd: reachCert.expires_at ?? null,
+      poAttachment: {
+        buffer: Buffer.from(await boFile.arrayBuffer()),
+        fileName: boName,
+        contentType: boFile.type || 'application/octet-stream',
+      },
     });
 
     revalidatePath('/client');

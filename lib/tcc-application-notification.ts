@@ -6,9 +6,24 @@ import { sendTccApplicationNotificationEmail } from '@/services/email';
 export type TccApplicationNotificationDetails = {
   clientCompanyName: string;
   chemicalName: string;
+  casNumber?: string | null;
+  ecNumber?: string | null;
   quantityMt: number;
   exportDate: string;
   applicationId: string;
+  euImporterCompanyName?: string | null;
+  euImporterAddress?: string | null;
+  purchaseOrderNumber?: string | null;
+  currentAvailableMt: number;
+  projectedBalanceMt: number;
+  rcCertificateNumber?: string | null;
+  rcPeriodStart?: string | null;
+  rcPeriodEnd?: string | null;
+  poAttachment?: {
+    buffer: Buffer;
+    fileName: string;
+    contentType: string;
+  } | null;
 };
 
 function isValidEmail(email: string): boolean {
@@ -29,13 +44,16 @@ export async function notifyTccApplicationByEmail(
   adminSupabase: SupabaseClient,
   details: TccApplicationNotificationDetails
 ): Promise<void> {
-  const { data: settings } = await adminSupabase
-    .from('admin_settings')
-    .select(
-      'tcc_application_notification_emails, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from'
-    )
-    .eq('id', 1)
-    .maybeSingle();
+  const [{ data: settings }, { data: template }] = await Promise.all([
+    adminSupabase
+      .from('admin_settings')
+      .select(
+        'tcc_application_notification_emails, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from'
+      )
+      .eq('id', 1)
+      .maybeSingle(),
+    adminSupabase.from('templates').select('logo').limit(1).maybeSingle(),
+  ]);
 
   const recipients = parseEmailList(settings?.tcc_application_notification_emails);
   if (recipients.length === 0) return;
@@ -43,6 +61,7 @@ export async function notifyTccApplicationByEmail(
   await sendTccApplicationNotificationEmail({
     to: recipients,
     smtpConfig: buildTccSmtpConfig(settings),
+    logoUrl: template?.logo ?? null,
     ...details,
   });
 }

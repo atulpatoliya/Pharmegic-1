@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { buildEmailShell, escapeEmailHtml, formatEmailDate } from '@/lib/email-branding';
 
 export interface SmtpConfig {
   smtp_host?: string;
@@ -41,9 +42,14 @@ interface SendMailOptions {
   html: string;
   cc?: string[];
   smtpConfig?: SmtpConfig;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
 }
 
-export async function sendEmail({ to, subject, html, cc, smtpConfig }: SendMailOptions) {
+export async function sendEmail({ to, subject, html, cc, smtpConfig, attachments }: SendMailOptions) {
   const { transporter, from } = buildTransporter(smtpConfig);
 
   if (transporter) {
@@ -54,6 +60,7 @@ export async function sendEmail({ to, subject, html, cc, smtpConfig }: SendMailO
         cc: cc?.join(', '),
         subject,
         html,
+        attachments,
       });
       console.log(`[SMTP] Email sent to ${to}: ${info.messageId}`);
       return { success: true, messageId: info.messageId };
@@ -76,91 +83,135 @@ interface SendTccApplicationNotificationOptions {
   to: string[];
   clientCompanyName: string;
   chemicalName: string;
+  casNumber?: string | null;
+  ecNumber?: string | null;
   quantityMt: number;
   exportDate: string;
   applicationId: string;
+  euImporterCompanyName?: string | null;
+  euImporterAddress?: string | null;
+  purchaseOrderNumber?: string | null;
+  currentAvailableMt: number;
+  projectedBalanceMt: number;
+  rcCertificateNumber?: string | null;
+  rcPeriodStart?: string | null;
+  rcPeriodEnd?: string | null;
+  poAttachment?: {
+    buffer: Buffer;
+    fileName: string;
+    contentType: string;
+  } | null;
+  logoUrl?: string | null;
   smtpConfig?: SmtpConfig;
 }
 
-function formatNotificationDate(dateRaw: string): string {
-  const parsed = new Date(`${dateRaw.split('T')[0]}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return dateRaw;
-  return parsed.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
 function getTccApplicationNotificationHtml(
-  clientCompanyName: string,
-  chemicalName: string,
-  quantityMt: number,
-  exportDate: string
+  details: Omit<SendTccApplicationNotificationOptions, 'to' | 'smtpConfig'>
 ): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
-    .container { max-width: 580px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
-    .header { background: #064e3b; padding: 32px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.05em; }
-    .header p { margin: 8px 0 0; font-size: 13px; opacity: 0.8; }
-    .body { padding: 32px; }
-    .detail { background: #f8fafc; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; }
-    .detail p { margin: 6px 0; }
-    .footer { padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>PHARMEGIC HEALTHCARE</h1>
-      <p>New TCC Application Submitted</p>
-    </div>
-    <div class="body">
-      <p>A client has submitted a new <strong>Tonnage Compliance Certificate (TCC)</strong> application for your review.</p>
+  const rcPeriodLabel =
+    details.rcCertificateNumber && details.rcPeriodStart
+      ? `Using ${escapeEmailHtml(details.rcCertificateNumber)} (${formatEmailDate(details.rcPeriodStart)} – ${formatEmailDate(details.rcPeriodEnd)}). ${details.currentAvailableMt} MT available for this period.`
+      : `${details.currentAvailableMt} MT available for this period.`;
+
+  const bodyHtml = `
+      <p>A client has submitted a new <strong>Tonnage Compliance Certificate (TCC)</strong> request for your review.</p>
+
+      <div class="section-title">Application Summary</div>
       <div class="detail">
-        <p><strong>Client:</strong> ${clientCompanyName}</p>
-        <p><strong>Chemical:</strong> ${chemicalName}</p>
-        <p><strong>Quantity requested:</strong> ${quantityMt} MT</p>
-        <p><strong>Expected export date:</strong> ${formatNotificationDate(exportDate)}</p>
+        <p><strong>Client:</strong> ${escapeEmailHtml(details.clientCompanyName)}</p>
+        <p><strong>Chemical:</strong> ${escapeEmailHtml(details.chemicalName)}</p>
+        <p><strong>Quantity requested:</strong> ${details.quantityMt} MT</p>
+        <p><strong>Expected export date:</strong> ${formatEmailDate(details.exportDate)}</p>
       </div>
-      <p style="font-size:13px;color:#64748b;">Sign in to the admin portal and open <strong>Approvals</strong> to review this application.</p>
-    </div>
-    <div class="footer">
-      Pharmegic Healthcare Compliance Division | This is an automated compliance notification.
-    </div>
-  </div>
-</body>
-</html>`;
+
+      <div class="section-title">EU Importer Information</div>
+      <div class="detail">
+        <p><strong>Company:</strong> ${escapeEmailHtml(details.euImporterCompanyName || '—')}</p>
+        <p><strong>Address:</strong> ${escapeEmailHtml(details.euImporterAddress || '—')}</p>
+        <p><strong>Purchase order number:</strong> ${escapeEmailHtml(details.purchaseOrderNumber || '—')}</p>
+      </div>
+
+      <div class="section-title">Tonnage Quota Calculator</div>
+      <div class="detail">
+        <p><strong>Selected chemical:</strong> ${escapeEmailHtml(details.chemicalName)}</p>
+        <p><strong>CAS number:</strong> ${escapeEmailHtml(details.casNumber || '—')}</p>
+        <p><strong>EC number:</strong> ${escapeEmailHtml(details.ecNumber || '—')}</p>
+        <p><strong>Current available:</strong> ${details.currentAvailableMt} MT</p>
+        <p><strong>Requested:</strong> - ${details.quantityMt} MT</p>
+        <p><strong>Projected balance:</strong> ${details.projectedBalanceMt} MT</p>
+        <div class="quota-verified">
+          <strong>RC Period &amp; Quota Verified</strong><br />
+          ${rcPeriodLabel}
+        </div>
+      </div>
+
+      <p style="font-size:13px;color:#64748b;">Sign in to the admin portal and open <strong>Approvals</strong> to review this application.${details.poAttachment ? ' The PO attachment is included with this email.' : ''}</p>`;
+
+  return buildEmailShell({
+    subtitle: 'New TCC Requested',
+    logoUrl: details.logoUrl,
+    bodyHtml,
+  });
 }
 
 export async function sendTccApplicationNotificationEmail({
   to,
   clientCompanyName,
   chemicalName,
+  casNumber,
+  ecNumber,
   quantityMt,
   exportDate,
   applicationId,
+  euImporterCompanyName,
+  euImporterAddress,
+  purchaseOrderNumber,
+  currentAvailableMt,
+  projectedBalanceMt,
+  rcCertificateNumber,
+  rcPeriodStart,
+  rcPeriodEnd,
+  poAttachment,
+  logoUrl,
   smtpConfig,
 }: SendTccApplicationNotificationOptions) {
-  const subject = `New TCC application — ${clientCompanyName} (${quantityMt} MT)`;
-  const html = getTccApplicationNotificationHtml(
+  const subject = `New TCC requested — ${clientCompanyName} (${quantityMt} MT)`;
+  const html = getTccApplicationNotificationHtml({
     clientCompanyName,
     chemicalName,
+    casNumber,
+    ecNumber,
     quantityMt,
-    exportDate
-  );
+    exportDate,
+    applicationId,
+    euImporterCompanyName,
+    euImporterAddress,
+    purchaseOrderNumber,
+    currentAvailableMt,
+    projectedBalanceMt,
+    rcCertificateNumber,
+    rcPeriodStart,
+    rcPeriodEnd,
+    poAttachment,
+    logoUrl,
+  });
+
+  const attachments = poAttachment
+    ? [
+        {
+          filename: poAttachment.fileName,
+          content: poAttachment.buffer,
+          contentType: poAttachment.contentType,
+        },
+      ]
+    : undefined;
 
   await sendEmail({
     to: to.join(', '),
     subject,
     html,
     smtpConfig,
+    attachments,
   });
 
   console.log(`[SMTP] TCC application notification sent for application ${applicationId}`);
@@ -182,6 +233,7 @@ interface SendCertificateEmailOptions {
   attachmentContentType?: string;
   smtpConfig?: SmtpConfig;
   certificateType?: 'TCC' | 'REACH';
+  logoUrl?: string | null;
 }
 
 export async function sendCertificateEmail({
@@ -197,13 +249,14 @@ export async function sendCertificateEmail({
   attachmentContentType = 'application/pdf',
   smtpConfig,
   certificateType = 'TCC',
+  logoUrl,
 }: SendCertificateEmailOptions) {
   const { transporter, from } = buildTransporter(smtpConfig);
 
   const html =
     certificateType === 'REACH'
-      ? getReachCertificateEmailHtml(companyName, chemicalName, certificateNumber)
-      : getCertificateEmailHtml(companyName, chemicalName, certificateNumber);
+      ? getReachCertificateEmailHtml(companyName, chemicalName, certificateNumber, logoUrl)
+      : getCertificateEmailHtml(companyName, chemicalName, certificateNumber, logoUrl);
 
   if (transporter) {
     try {
@@ -243,55 +296,31 @@ function logFallbackEmail(to: string, subject: string) {
   console.log('========================================================================');
 }
 
-function getCertificateEmailHtml(companyName: string, chemicalName: string, certNumber: string): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
-    .container { max-width: 580px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
-    .header { background: #064e3b; padding: 32px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.05em; }
-    .header p { margin: 8px 0 0; font-size: 13px; opacity: 0.8; }
-    .body { padding: 32px; }
-    .cert-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
-    .cert-number { font-size: 24px; font-weight: 900; color: #064e3b; letter-spacing: 0.1em; font-family: monospace; }
-    .details { background: #f8fafc; border-radius: 8px; padding: 16px; margin: 16px 0; font-size: 14px; }
-    .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
-    .detail-row:last-child { border-bottom: none; }
-    .label { color: #64748b; font-weight: 600; }
-    .value { color: #0f172a; font-weight: 700; }
-    .footer { padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>PHARMEGIC HEALTHCARE</h1>
-      <p>Tonnage Compliance Certificate Registry</p>
-    </div>
-    <div class="body">
-      <p>Dear <strong>${companyName}</strong>,</p>
+function getCertificateEmailHtml(
+  companyName: string,
+  chemicalName: string,
+  certNumber: string,
+  logoUrl?: string | null
+): string {
+  const bodyHtml = `
+      <p>Dear <strong>${escapeEmailHtml(companyName)}</strong>,</p>
       <p>Your Tonnage Compliance Certificate (TCC) application has been <strong>approved</strong>. Please find the official certificate attached to this email.</p>
       <div class="cert-box">
         <div style="font-size:11px;color:#064e3b;font-weight:700;margin-bottom:6px;letter-spacing:0.1em;">CERTIFICATE NUMBER</div>
-        <div class="cert-number">${certNumber}</div>
+        <div class="cert-number">${escapeEmailHtml(certNumber)}</div>
       </div>
       <div class="details">
-        <div class="detail-row"><span class="label">Issued To</span><span class="value">${companyName}</span></div>
-        <div class="detail-row"><span class="label">Chemical Substance</span><span class="value">${chemicalName}</span></div>
+        <div class="detail-row"><span class="label">Issued To</span><span class="value">${escapeEmailHtml(companyName)}</span></div>
+        <div class="detail-row"><span class="label">Chemical Substance</span><span class="value">${escapeEmailHtml(chemicalName)}</span></div>
         <div class="detail-row"><span class="label">Status</span><span class="value" style="color:#16a34a;">✓ Active &amp; Valid</span></div>
       </div>
-      <p style="font-size:13px;color:#64748b;">The PDF certificate is attached to this email. Please store it safely for compliance records. For verification, visit our public verification portal.</p>
-    </div>
-    <div class="footer">
-      Pharmegic Healthcare Compliance Division | This is an automated compliance notification.
-    </div>
-  </div>
-</body>
-</html>`;
+      <p style="font-size:13px;color:#64748b;">The PDF certificate is attached to this email. Please store it safely for compliance records. For verification, visit our public verification portal.</p>`;
+
+  return buildEmailShell({
+    subtitle: 'Tonnage Compliance Certificate Registry',
+    logoUrl,
+    bodyHtml,
+  });
 }
 
 export interface BulkReachCertificateEmailItem {
@@ -309,6 +338,7 @@ export async function sendBulkReachCertificatesEmail({
   companyName,
   items,
   smtpConfig,
+  logoUrl,
 }: {
   to: string;
   cc?: string[];
@@ -316,6 +346,7 @@ export async function sendBulkReachCertificatesEmail({
   companyName: string;
   items: BulkReachCertificateEmailItem[];
   smtpConfig?: SmtpConfig;
+  logoUrl?: string | null;
 }) {
   const { transporter, from } = buildTransporter(smtpConfig);
   const html = getBulkReachCertificateEmailHtml(
@@ -323,7 +354,8 @@ export async function sendBulkReachCertificatesEmail({
     items.map((item) => ({
       certificateNumber: item.certificateNumber,
       chemicalName: item.chemicalName,
-    }))
+    })),
+    logoUrl
   );
 
   const attachments = items.map((item) => ({
@@ -358,41 +390,21 @@ export async function sendBulkReachCertificatesEmail({
 
 function getBulkReachCertificateEmailHtml(
   companyName: string,
-  certificates: { certificateNumber: string; chemicalName: string }[]
+  certificates: { certificateNumber: string; chemicalName: string }[],
+  logoUrl?: string | null
 ): string {
   const rows = certificates
     .map(
       (cert) => `
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-family:monospace;font-weight:700;color:#064e3b;">${cert.certificateNumber}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;">${cert.chemicalName}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-family:monospace;font-weight:700;color:#064e3b;">${escapeEmailHtml(cert.certificateNumber)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;">${escapeEmailHtml(cert.chemicalName)}</td>
         </tr>`
     )
     .join('');
 
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
-    .container { max-width: 580px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
-    .header { background: #064e3b; padding: 32px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.05em; }
-    .header p { margin: 8px 0 0; font-size: 13px; opacity: 0.8; }
-    .body { padding: 32px; }
-    .footer { padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>PHARMEGIC HEALTHCARE</h1>
-      <p>REACH Compliance Certificate Registry</p>
-    </div>
-    <div class="body">
-      <p>Dear <strong>${companyName}</strong>,</p>
+  const bodyHtml = `
+      <p>Dear <strong>${escapeEmailHtml(companyName)}</strong>,</p>
       <p>Your <strong>REACH Compliance Certificates (RC)</strong> have been issued. Please find <strong>${certificates.length}</strong> official certificate${certificates.length > 1 ? 's' : ''} attached to this email.</p>
       <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:8px;overflow:hidden;margin:20px 0;font-size:14px;">
         <thead>
@@ -403,67 +415,38 @@ function getBulkReachCertificateEmailHtml(
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      <p style="font-size:13px;color:#64748b;">Each RC certificate is attached as a separate PDF file. These certificates are required before applying for a Tonnage Compliance Certificate (TCC).</p>
-    </div>
-    <div class="footer">
-      Pharmegic Healthcare Compliance Division | This is an automated compliance notification.
-    </div>
-  </div>
-</body>
-</html>`;
+      <p style="font-size:13px;color:#64748b;">Each RC certificate is attached as a separate PDF file. These certificates are required before applying for a Tonnage Compliance Certificate (TCC).</p>`;
+
+  return buildEmailShell({
+    subtitle: 'REACH Compliance Certificate Registry',
+    logoUrl,
+    bodyHtml,
+  });
 }
 
 function getReachCertificateEmailHtml(
   companyName: string,
   chemicalName: string,
-  certNumber: string
+  certNumber: string,
+  logoUrl?: string | null
 ): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
-    .container { max-width: 580px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
-    .header { background: #064e3b; padding: 32px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.05em; }
-    .header p { margin: 8px 0 0; font-size: 13px; opacity: 0.8; }
-    .body { padding: 32px; }
-    .cert-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
-    .cert-number { font-size: 24px; font-weight: 900; color: #064e3b; letter-spacing: 0.1em; font-family: monospace; }
-    .details { background: #f8fafc; border-radius: 8px; padding: 16px; margin: 16px 0; font-size: 14px; }
-    .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
-    .detail-row:last-child { border-bottom: none; }
-    .label { color: #64748b; font-weight: 600; }
-    .value { color: #0f172a; font-weight: 700; }
-    .footer { padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>PHARMEGIC HEALTHCARE</h1>
-      <p>REACH Compliance Certificate Registry</p>
-    </div>
-    <div class="body">
-      <p>Dear <strong>${companyName}</strong>,</p>
+  const bodyHtml = `
+      <p>Dear <strong>${escapeEmailHtml(companyName)}</strong>,</p>
       <p>Your <strong>REACH Compliance Certificate (RC)</strong> has been issued. Please find the official certificate attached to this email.</p>
       <div class="cert-box">
         <div style="font-size:11px;color:#064e3b;font-weight:700;margin-bottom:6px;letter-spacing:0.1em;">CERTIFICATE NUMBER</div>
-        <div class="cert-number">${certNumber}</div>
+        <div class="cert-number">${escapeEmailHtml(certNumber)}</div>
       </div>
       <div class="details">
-        <div class="detail-row"><span class="label">Issued To</span><span class="value">${companyName}</span></div>
-        <div class="detail-row"><span class="label">Chemical Substance</span><span class="value">${chemicalName}</span></div>
+        <div class="detail-row"><span class="label">Issued To</span><span class="value">${escapeEmailHtml(companyName)}</span></div>
+        <div class="detail-row"><span class="label">Chemical Substance</span><span class="value">${escapeEmailHtml(chemicalName)}</span></div>
         <div class="detail-row"><span class="label">Status</span><span class="value" style="color:#16a34a;">✓ Active &amp; Valid</span></div>
       </div>
-      <p style="font-size:13px;color:#64748b;">The PDF certificate is attached. This RC certificate is required before applying for a Tonnage Coverage Certificate (TCC).</p>
-    </div>
-    <div class="footer">
-      Pharmegic Healthcare Compliance Division | This is an automated compliance notification.
-    </div>
-  </div>
-</body>
-</html>`;
+      <p style="font-size:13px;color:#64748b;">The PDF certificate is attached. This RC certificate is required before applying for a Tonnage Coverage Certificate (TCC).</p>`;
+
+  return buildEmailShell({
+    subtitle: 'REACH Compliance Certificate Registry',
+    logoUrl,
+    bodyHtml,
+  });
 }
