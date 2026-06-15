@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import { REGULATORY_REGISTRATIONS } from '@/lib/regulatory-registrations';
+
+const regulatoryRegistrationSchema = z.enum([
+  REGULATORY_REGISTRATIONS.EU_REACH,
+  REGULATORY_REGISTRATIONS.UK_REACH,
+  REGULATORY_REGISTRATIONS.TURKEY_KKDIK,
+]);
 
 // ============================================================================
 // AUTHENTICATION
@@ -49,6 +56,9 @@ export const clientProfileSchema = z.object({
   country: z.string().min(1, { message: 'Country is required' }),
   postal_code: z.string().min(1, { message: 'Postal code is required' }),
   status: z.enum(['active', 'inactive', 'pending']).default('pending'),
+  regulatory_registrations: z
+    .array(regulatoryRegistrationSchema)
+    .min(1, { message: 'Select at least one regulatory registration.' }),
 });
 
 export const clientWizardSchema = z.object({
@@ -90,6 +100,7 @@ export const internalNoteSchema = z.object({
 export const tccApplicationSchema = z.object({
   chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
   quantity_mt: z.coerce.number().positive({ message: 'Quantity must be greater than 0' }),
+  regulatory_framework: regulatoryRegistrationSchema,
   registration_number: z
     .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
   export_date: z.string().min(1, { message: 'Expected export date is required' }),

@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 export const revalidate = 0;
 
 import { mapAllReachByChemical, REACH_CERTIFICATE_TYPE, getReachCertificateStatus } from '@/lib/reach-certificate';
+import { normalizeRegulatoryRegistrations } from '@/lib/regulatory-registrations';
 import { canClientEditTccApplication } from '@/lib/tcc-application';
 
 export default async function ApplyPage({
@@ -28,7 +29,7 @@ export default async function ApplyPage({
   const { edit: editId } = await searchParams;
   const adminSupabase = createAdminClient();
 
-  const [{ data: mappings }, { data: approvedTccs }, { data: reachCerts }] =
+  const [{ data: mappings }, { data: approvedTccs }, { data: reachCerts }, { data: client }] =
     await Promise.all([
       adminSupabase
         .from('client_chemicals')
@@ -50,6 +51,11 @@ export default async function ApplyPage({
         .eq('client_id', clientId)
         .eq('type', REACH_CERTIFICATE_TYPE)
         .order('issued_at', { ascending: false }),
+      adminSupabase
+        .from('clients')
+        .select('regulatory_registrations')
+        .eq('id', clientId)
+        .single(),
     ]);
 
   let editApplication = null;
@@ -57,7 +63,7 @@ export default async function ApplyPage({
     const { data: existingApp } = await adminSupabase
       .from('tcc_applications')
       .select(
-        'id, chemical_id, quantity_mt, export_date, eu_importer_company_name, eu_importer_address, purchase_order_number, invoice_number, bo_attachment_url, bo_attachment_name, status'
+        'id, chemical_id, quantity_mt, export_date, eu_importer_company_name, eu_importer_address, purchase_order_number, invoice_number, bo_attachment_url, bo_attachment_name, regulatory_framework, status'
       )
       .eq('id', editId)
       .eq('client_id', clientId)
@@ -103,6 +109,7 @@ export default async function ApplyPage({
     <TccApplicationForm
       authorizedSubstances={authorizedSubstances as any}
       approvedExports={approvedTccs || []}
+      regulatoryRegistrations={normalizeRegulatoryRegistrations(client?.regulatory_registrations)}
       editApplication={editApplication}
     />
   );

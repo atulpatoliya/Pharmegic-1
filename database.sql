@@ -92,7 +92,8 @@ CREATE TABLE IF NOT EXISTS public.clients (
     primary_contact_last_name TEXT,
     cc_emails TEXT,
     cc_phones TEXT,
-    status public.client_status DEFAULT 'pending'
+    status public.client_status DEFAULT 'pending',
+    regulatory_registrations TEXT[] DEFAULT '{}'
 );
 
 -- ============================================================================
@@ -312,6 +313,8 @@ ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_pass TEXT DEF
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_from TEXT DEFAULT '';
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_cc_default TEXT DEFAULT '';
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS tcc_application_notification_emails TEXT DEFAULT '';
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS regulatory_registrations TEXT[] DEFAULT '{}';
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS regulatory_framework TEXT;
 
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;

@@ -25,6 +25,10 @@ import {
 } from 'lucide-react';
 import { ModalErrorBox } from './ui/ModalErrorBox';
 import { FormLabel } from './ui/FormLabel';
+import {
+  REGULATORY_REGISTRATION_OPTIONS,
+  type RegulatoryRegistration,
+} from '@/lib/regulatory-registrations';
 
 interface ReachCertificateInfo {
   id: string;
@@ -78,11 +82,13 @@ export interface TccApplicationEditData {
   invoice_number: string | null;
   bo_attachment_url?: string | null;
   bo_attachment_name?: string | null;
+  regulatory_framework?: string | null;
 }
 
 interface TccApplicationFormProps {
   authorizedSubstances: Substance[];
   approvedExports?: TccExportRecord[];
+  regulatoryRegistrations: RegulatoryRegistration[];
   editApplication?: TccApplicationEditData | null;
 }
 
@@ -94,6 +100,7 @@ function formatDateInput(value: string | null | undefined) {
 export default function TccApplicationForm({
   authorizedSubstances,
   approvedExports = [],
+  regulatoryRegistrations,
   editApplication = null,
 }: TccApplicationFormProps) {
   const router = useRouter();
@@ -116,6 +123,16 @@ export default function TccApplicationForm({
     editApplication?.purchase_order_number ?? ''
   );
   const [boFile, setBoFile] = useState<File | null>(null);
+  const allowedFrameworks = REGULATORY_REGISTRATION_OPTIONS.filter((option) =>
+    regulatoryRegistrations.includes(option.value)
+  );
+  const [regulatoryFramework, setRegulatoryFramework] = useState<RegulatoryRegistration | ''>(
+    (editApplication?.regulatory_framework as RegulatoryRegistration | undefined) ||
+      allowedFrameworks[0]?.value ||
+      ''
+  );
+
+  const isEuReach = regulatoryFramework === 'eu_reach';
 
   useEffect(() => {
     if (!editApplication) return;
@@ -155,8 +172,14 @@ export default function TccApplicationForm({
   const noQuotaLeft =
     selectedSubstance != null && exportDate !== '' && quotaContext != null && initialQuota <= 0;
   const noReachForExportDate =
-    selectedSubstance != null && exportDate !== '' && quotaContext != null && !matchedReachCert;
-  const eligibleSubstances = authorizedSubstances.filter((s) => s.has_reach_history);
+    isEuReach &&
+    selectedSubstance != null &&
+    exportDate !== '' &&
+    quotaContext != null &&
+    !matchedReachCert;
+  const eligibleSubstances = isEuReach
+    ? authorizedSubstances.filter((s) => s.has_reach_history)
+    : authorizedSubstances;
   const hasExistingBo = Boolean(editApplication?.bo_attachment_url);
 
   const handleChemicalChange = (value: string) => {
@@ -203,6 +226,11 @@ export default function TccApplicationForm({
       return;
     }
 
+    if (!regulatoryFramework) {
+      setError('Please select a regulatory framework for this application.');
+      return;
+    }
+
     if (!quantity || Number(quantity) <= 0) {
       setError('Please specify a positive quantity in metric tons (MT).');
       return;
@@ -213,22 +241,24 @@ export default function TccApplicationForm({
       return;
     }
 
-    if (noReachForExportDate) {
-      setError(
-        quotaContext?.error ||
-          'No Active RC Certificate Available.'
-      );
-      return;
-    }
+    if (isEuReach) {
+      if (noReachForExportDate) {
+        setError(
+          quotaContext?.error ||
+            'No Active RC Certificate Available.'
+        );
+        return;
+      }
 
-    if (noQuotaLeft) {
-      setError('No remaining quota for this RC validity period. Contact your administrator.');
-      return;
-    }
+      if (noQuotaLeft) {
+        setError('No remaining quota for this RC validity period. Contact your administrator.');
+        return;
+      }
 
-    if (selectedSubstance && Number(quantity) > initialQuota) {
-      setError(`Quantity exceeds available quota. Maximum allowed: ${initialQuota} MT.`);
-      return;
+      if (selectedSubstance && Number(quantity) > initialQuota) {
+        setError(`Quantity exceeds available quota. Maximum allowed: ${initialQuota} MT.`);
+        return;
+      }
     }
 
     if (!euImporterCompanyName.trim()) {
@@ -271,6 +301,7 @@ export default function TccApplicationForm({
       payload.append('eu_importer_company_name', euImporterCompanyName.trim());
       payload.append('eu_importer_address', euImporterAddress.trim());
       payload.append('purchase_order_number', purchaseOrderNumber.trim());
+      payload.append('regulatory_framework', regulatoryFramework);
       if (boFile) {
         payload.append('bo_attachment', boFile);
       }
@@ -299,7 +330,54 @@ export default function TccApplicationForm({
         </p>
       </div>
 
-      {eligibleSubstances.length === 0 && !isEditing && (
+      <Card className="border-slate-100">
+        <CardHeader>
+          <CardTitle className="text-base">Regulatory Framework</CardTitle>
+          <CardDescription>
+            Select which REACH registration this application is for. EU REACH uses full quota
+            calculation and certificate workflow. UK REACH and Turkey KKDIK are notification-only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {allowedFrameworks.length === 0 ? (
+            <p className="text-sm text-amber-700 font-medium">
+              No regulatory registrations are enabled on your client profile. Contact your administrator.
+            </p>
+          ) : (
+            allowedFrameworks.map((option) => (
+              <label
+                key={option.value}
+                className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer ${
+                  regulatoryFramework === option.value
+                    ? 'border-primary bg-emerald-50/40'
+                    : 'border-slate-200'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="regulatory_framework"
+                  checked={regulatoryFramework === option.value}
+                  onChange={() => {
+                    setRegulatoryFramework(option.value);
+                    setError(null);
+                  }}
+                  className="mt-1 h-4 w-4 border-slate-300 text-primary focus:ring-primary"
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{option.label}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {option.value === 'eu_reach'
+                      ? 'Full EU TCC application with RC quota calculation and certificate approval.'
+                      : 'Notification-only request. Admin receives email; no EU certificate issuance.'}
+                  </p>
+                </div>
+              </label>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {eligibleSubstances.length === 0 && !isEditing && isEuReach && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900 font-medium flex gap-3 items-start">
           <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
@@ -425,7 +503,7 @@ export default function TccApplicationForm({
                     }
                     value={quantity}
                     onChange={(e) => handleQuantityChange(e.target.value)}
-                    disabled={(noQuotaLeft || noReachForExportDate || !exportDate) && !isEditing}
+                    disabled={isEuReach && (noQuotaLeft || noReachForExportDate || !exportDate) && !isEditing}
                     required
                   />
                   {selectedSubstance && exportDate && matchedReachCert && (
@@ -492,9 +570,11 @@ export default function TccApplicationForm({
                     isLoading={isPending}
                     disabled={
                       isPending ||
-                      quotaExceeded ||
-                      (noQuotaLeft && !isEditing) ||
-                      noReachForExportDate ||
+                      !regulatoryFramework ||
+                      (isEuReach &&
+                        (quotaExceeded ||
+                          (noQuotaLeft && !isEditing) ||
+                          noReachForExportDate)) ||
                       !exportDate ||
                       !quantity ||
                       Number(quantity) <= 0
@@ -510,6 +590,8 @@ export default function TccApplicationForm({
         </div>
 
         <div className="md:col-span-2 space-y-6">
+          {isEuReach ? (
+            <>
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
             <Info className="h-4 w-4 text-slate-400" /> Tonnage Quota Calculator
           </h3>
@@ -633,6 +715,15 @@ export default function TccApplicationForm({
               )}
             </CardContent>
           </Card>
+            </>
+          ) : (
+            <Card className="border-slate-100 bg-blue-50/30">
+              <CardContent className="p-5 text-sm text-blue-900 font-medium">
+                This framework is notification-only. Your request will be emailed to the admin team without
+                EU REACH quota calculation or certificate issuance.
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

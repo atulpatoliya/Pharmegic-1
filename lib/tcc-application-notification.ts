@@ -11,11 +11,12 @@ export type TccApplicationNotificationDetails = {
   quantityMt: number;
   exportDate: string;
   applicationId: string;
+  regulatoryFramework: string;
   euImporterCompanyName?: string | null;
   euImporterAddress?: string | null;
   purchaseOrderNumber?: string | null;
-  currentAvailableMt: number;
-  projectedBalanceMt: number;
+  currentAvailableMt?: number | null;
+  projectedBalanceMt?: number | null;
   rcCertificateNumber?: string | null;
   rcPeriodStart?: string | null;
   rcPeriodEnd?: string | null;

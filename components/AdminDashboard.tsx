@@ -1,19 +1,15 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
-import { Users, Clock, ChevronRight, TrendingUp } from 'lucide-react';
+import { Users, Clock, ChevronRight, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  PieChart,
+  Pie,
   Cell,
+  Legend,
 } from 'recharts';
 
 interface AdminDashboardProps {
@@ -21,10 +17,26 @@ interface AdminDashboardProps {
     totalClients: number;
     pendingTcc: number;
   };
-  chartData: { name: string; quantity: number }[];
+  reachStats: {
+    key: string;
+    label: string;
+    color: string;
+    bgColor: string;
+    textColor: string;
+    count: number;
+    percent: number;
+  }[];
 }
 
-export default function AdminDashboard({ stats, chartData }: AdminDashboardProps) {
+export default function AdminDashboard({ stats, reachStats }: AdminDashboardProps) {
+  const reachChartData = reachStats
+    .filter((reach) => reach.count > 0)
+    .map((reach) => ({
+      name: reach.label,
+      value: reach.count,
+      color: reach.color,
+    }));
+
   const cards = [
     {
       title: 'Total Clients',
@@ -48,7 +60,6 @@ export default function AdminDashboard({ stats, chartData }: AdminDashboardProps
 
   return (
     <div className="space-y-8 animate-slide-in">
-      {/* Page Title */}
       <div>
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Compliance Analytics</h1>
         <p className="text-sm text-slate-500 font-medium">
@@ -56,7 +67,6 @@ export default function AdminDashboard({ stats, chartData }: AdminDashboardProps
         </p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2">
         {cards.map((c) => {
           const Icon = c.icon;
@@ -70,9 +80,7 @@ export default function AdminDashboard({ stats, chartData }: AdminDashboardProps
                       <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
                         {c.title}
                       </span>
-                      <span className="text-2xl font-black text-slate-800 block">
-                        {c.value}
-                      </span>
+                      <span className="text-2xl font-black text-slate-800 block">{c.value}</span>
                     </div>
                     <div className={`p-2.5 rounded-lg ${c.bgColor} ${c.color} shrink-0`}>
                       <Icon className="h-5 w-5" />
@@ -89,111 +97,83 @@ export default function AdminDashboard({ stats, chartData }: AdminDashboardProps
         })}
       </div>
 
-      {/* Charts section */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
-        {/* Main Export volume chart */}
-        <Card className="lg:col-span-2 border-slate-100 shadow-xs">
-          <CardHeader>
-            <div className="flex items-center gap-2 text-primary">
-              <TrendingUp className="h-5 w-5" />
-              <CardTitle>Export Volume Activity</CardTitle>
-            </div>
-            <CardDescription>
-              Approved T tonnage compliance applications (MT) by calendar month.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorQuantity" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#064e3b" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#064e3b" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="name"
-                  stroke="#94a3b8"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="#94a3b8"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                  }}
-                  labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="quantity"
-                  name="Tonnage (MT)"
-                  stroke="#064e3b"
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#colorQuantity)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Certificate analytics */}
-        <Card className="border-slate-100 shadow-xs">
-          <CardHeader>
-            <CardTitle>Substance Distribution</CardTitle>
-            <CardDescription>
-              Quantity allocated (MT) across key registered chemicals.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="h-80">
-            {chartData.some((c) => c.quantity > 0) ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="name"
-                    stroke="#94a3b8"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                    }}
-                  />
-                  <Bar dataKey="quantity" fill="#10b981" radius={[4, 4, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={index % 2 === 0 ? '#064e3b' : '#10b981'}
+      <Card className="border-slate-100 shadow-xs">
+        <CardHeader>
+          <CardTitle>Regulatory Registrations</CardTitle>
+          <CardDescription>Active clients by REACH framework.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 grid-cols-1 lg:grid-cols-4">
+            <div className="lg:col-span-3 grid gap-4 grid-cols-1 md:grid-cols-3">
+              {reachStats.map((reach) => (
+                <div
+                  key={reach.key}
+                  className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 space-y-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-lg ${reach.bgColor}`}>
+                      <Building2 className={`h-4 w-4 ${reach.textColor}`} />
+                    </div>
+                    <span className={`text-xs font-bold uppercase tracking-wider ${reach.textColor}`}>
+                      {reach.label}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-black text-slate-800">{reach.count}</div>
+                    <div className="text-xs font-semibold text-slate-400">active clients</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${reach.percent}%`, backgroundColor: reach.color }}
                       />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium">
-                No active export metrics to show.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                    </div>
+                    <p className="text-[11px] font-semibold text-slate-500">
+                      {reach.percent}% of total portfolio
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="h-64 lg:h-auto min-h-[240px]">
+              {reachChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={reachChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={2}
+                    >
+                      {reachChartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                      }}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium">
+                  No REACH registration data yet.
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

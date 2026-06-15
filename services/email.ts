@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { buildEmailShell, escapeEmailHtml, formatEmailDate } from '@/lib/email-branding';
+import { getRegulatoryRegistrationLabel, isEuReachFramework } from '@/lib/regulatory-registrations';
 
 export interface SmtpConfig {
   smtp_host?: string;
@@ -88,11 +89,12 @@ interface SendTccApplicationNotificationOptions {
   quantityMt: number;
   exportDate: string;
   applicationId: string;
+  regulatoryFramework: string;
   euImporterCompanyName?: string | null;
   euImporterAddress?: string | null;
   purchaseOrderNumber?: string | null;
-  currentAvailableMt: number;
-  projectedBalanceMt: number;
+  currentAvailableMt?: number | null;
+  projectedBalanceMt?: number | null;
   rcCertificateNumber?: string | null;
   rcPeriodStart?: string | null;
   rcPeriodEnd?: string | null;
@@ -108,16 +110,38 @@ interface SendTccApplicationNotificationOptions {
 function getTccApplicationNotificationHtml(
   details: Omit<SendTccApplicationNotificationOptions, 'to' | 'smtpConfig'>
 ): string {
+  const frameworkLabel = getRegulatoryRegistrationLabel(details.regulatoryFramework);
+  const isEuReach = isEuReachFramework(details.regulatoryFramework);
   const rcPeriodLabel =
     details.rcCertificateNumber && details.rcPeriodStart
-      ? `Using ${escapeEmailHtml(details.rcCertificateNumber)} (${formatEmailDate(details.rcPeriodStart)} – ${formatEmailDate(details.rcPeriodEnd)}). ${details.currentAvailableMt} MT available for this period.`
-      : `${details.currentAvailableMt} MT available for this period.`;
+      ? `Using ${escapeEmailHtml(details.rcCertificateNumber)} (${formatEmailDate(details.rcPeriodStart)} – ${formatEmailDate(details.rcPeriodEnd)}). ${details.currentAvailableMt ?? 0} MT available for this period.`
+      : `${details.currentAvailableMt ?? 0} MT available for this period.`;
+
+  const quotaSection = isEuReach
+    ? `<div class="section-title">Tonnage Quota Calculator</div>
+      <div class="detail">
+        <p><strong>Selected chemical:</strong> ${escapeEmailHtml(details.chemicalName)}</p>
+        <p><strong>CAS number:</strong> ${escapeEmailHtml(details.casNumber || '—')}</p>
+        <p><strong>EC number:</strong> ${escapeEmailHtml(details.ecNumber || '—')}</p>
+        <p><strong>Current available:</strong> ${details.currentAvailableMt ?? 0} MT</p>
+        <p><strong>Requested:</strong> - ${details.quantityMt} MT</p>
+        <p><strong>Projected balance:</strong> ${details.projectedBalanceMt ?? 0} MT</p>
+        <div class="quota-verified">
+          <strong>RC Period &amp; Quota Verified</strong><br />
+          ${rcPeriodLabel}
+        </div>
+      </div>`
+    : `<div class="section-title">Notification Only</div>
+      <div class="detail">
+        <p>This ${escapeEmailHtml(frameworkLabel)} submission is <strong>notification-only</strong>. No EU REACH quota calculation or TCC certificate issuance applies.</p>
+      </div>`;
 
   const bodyHtml = `
-      <p>A client has submitted a new <strong>Tonnage Compliance Certificate (TCC)</strong> request for your review.</p>
+      <p>A client has submitted a new <strong>${escapeEmailHtml(frameworkLabel)}</strong> request for your review.</p>
 
       <div class="section-title">Application Summary</div>
       <div class="detail">
+        <p><strong>Regulatory framework:</strong> ${escapeEmailHtml(frameworkLabel)}</p>
         <p><strong>Client:</strong> ${escapeEmailHtml(details.clientCompanyName)}</p>
         <p><strong>Chemical:</strong> ${escapeEmailHtml(details.chemicalName)}</p>
         <p><strong>Quantity requested:</strong> ${details.quantityMt} MT</p>
@@ -131,24 +155,12 @@ function getTccApplicationNotificationHtml(
         <p><strong>Purchase order number:</strong> ${escapeEmailHtml(details.purchaseOrderNumber || '—')}</p>
       </div>
 
-      <div class="section-title">Tonnage Quota Calculator</div>
-      <div class="detail">
-        <p><strong>Selected chemical:</strong> ${escapeEmailHtml(details.chemicalName)}</p>
-        <p><strong>CAS number:</strong> ${escapeEmailHtml(details.casNumber || '—')}</p>
-        <p><strong>EC number:</strong> ${escapeEmailHtml(details.ecNumber || '—')}</p>
-        <p><strong>Current available:</strong> ${details.currentAvailableMt} MT</p>
-        <p><strong>Requested:</strong> - ${details.quantityMt} MT</p>
-        <p><strong>Projected balance:</strong> ${details.projectedBalanceMt} MT</p>
-        <div class="quota-verified">
-          <strong>RC Period &amp; Quota Verified</strong><br />
-          ${rcPeriodLabel}
-        </div>
-      </div>
+      ${quotaSection}
 
-      <p style="font-size:13px;color:#64748b;">Sign in to the admin portal and open <strong>Approvals</strong> to review this application.${details.poAttachment ? ' The PO attachment is included with this email.' : ''}</p>`;
+      <p style="font-size:13px;color:#64748b;">${isEuReach ? 'Sign in to the admin portal and open <strong>Approvals</strong> to review this application.' : 'This request was recorded for admin notification only.'}${details.poAttachment ? ' The PO attachment is included with this email.' : ''}</p>`;
 
   return buildEmailShell({
-    subtitle: 'New TCC Requested',
+    subtitle: isEuReach ? 'New TCC Requested' : `New ${frameworkLabel} Request`,
     logoUrl: details.logoUrl,
     bodyHtml,
   });
@@ -163,6 +175,7 @@ export async function sendTccApplicationNotificationEmail({
   quantityMt,
   exportDate,
   applicationId,
+  regulatoryFramework,
   euImporterCompanyName,
   euImporterAddress,
   purchaseOrderNumber,
@@ -175,7 +188,9 @@ export async function sendTccApplicationNotificationEmail({
   logoUrl,
   smtpConfig,
 }: SendTccApplicationNotificationOptions) {
-  const subject = `New TCC requested — ${clientCompanyName} (${quantityMt} MT)`;
+  const subject = isEuReachFramework(regulatoryFramework)
+    ? `New TCC requested — ${clientCompanyName} (${quantityMt} MT)`
+    : `New ${getRegulatoryRegistrationLabel(regulatoryFramework)} request — ${clientCompanyName}`;
   const html = getTccApplicationNotificationHtml({
     clientCompanyName,
     chemicalName,
@@ -184,6 +199,7 @@ export async function sendTccApplicationNotificationEmail({
     quantityMt,
     exportDate,
     applicationId,
+    regulatoryFramework,
     euImporterCompanyName,
     euImporterAddress,
     purchaseOrderNumber,

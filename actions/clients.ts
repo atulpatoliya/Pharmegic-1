@@ -83,6 +83,7 @@ export async function createClientAction(prevState: unknown, data: unknown) {
         country: profile.country.trim(),
         postal_code: profile.postal_code.trim(),
         status: profile.status,
+        regulatory_registrations: profile.regulatory_registrations,
       })
       .select()
       .single();

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ClientWizard, { type ClientWizardContact, type ClientWizardProfile } from '@/components/ClientWizard';
+import { normalizeRegulatoryRegistrations } from '@/lib/regulatory-registrations';
 import { useLayoutStore } from '@/store/layout';
 
 interface ClientRecord {
@@ -22,6 +23,7 @@ interface ClientRecord {
   country: string | null;
   postal_code: string | null;
   status: 'active' | 'inactive' | 'pending';
+  regulatory_registrations?: string[] | null;
 }
 
 interface ContactRecord {
@@ -78,6 +80,7 @@ export default function EditClientClient({ client, contacts }: EditClientClientP
       clientId={client.id}
       initialProfile={initialProfile}
       initialContacts={initialContacts}
+      initialRegistrations={normalizeRegulatoryRegistrations(client.regulatory_registrations)}
       onSuccess={() => {
         router.push(`/admin/clients/${client.id}`);
         router.refresh();

@@ -1,6 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { computeTccQuotaForExportDate } from '@/lib/quota';
 import { REACH_CERTIFICATE_TYPE, getReachCertificateYear } from '@/lib/reach-certificate';
+import {
+  REGULATORY_REGISTRATIONS,
+  normalizeRegulatoryRegistrations,
+} from '@/lib/regulatory-registrations';
 
 // ============================================================================
 // ADMIN DASHBOARD SERVICES
@@ -10,50 +14,57 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
   const [
     clientsRes,
     pendingTccRes,
-    approvedAppsRes
+    activeClientsRes,
   ] = await Promise.all([
     supabase.from('clients').select('*', { count: 'exact', head: true }),
     supabase.from('tcc_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('tcc_applications').select('quantity_mt, created_at')
-      .eq('status', 'approved')
-      .order('created_at', { ascending: true })
+    supabase
+      .from('clients')
+      .select('regulatory_registrations, status')
+      .eq('status', 'active'),
   ]);
 
   const totalClients = clientsRes.count;
   const pendingTcc = pendingTccRes.count;
-  const approvedApps = approvedAppsRes.data;
+  const activeClients = activeClientsRes.data || [];
+  const activeClientCount = activeClients.length || totalClients || 0;
 
-  // Group by month
-  const monthlyActivityMap: Record<string, number> = {};
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
-  // Pre-fill last 6 months
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const label = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().substring(2)}`;
-    monthlyActivityMap[label] = 0;
-  }
-
-  (approvedApps || []).forEach((app) => {
-    const d = new Date(app.created_at);
-    const label = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().substring(2)}`;
-    if (monthlyActivityMap[label] !== undefined) {
-      monthlyActivityMap[label] += Number(app.quantity_mt);
-    }
+  const reachStats = [
+    {
+      key: REGULATORY_REGISTRATIONS.EU_REACH,
+      label: 'EU REACH',
+      color: '#2563eb',
+      bgColor: 'bg-sky-50',
+      textColor: 'text-sky-600',
+    },
+    {
+      key: REGULATORY_REGISTRATIONS.UK_REACH,
+      label: 'UK REACH',
+      color: '#059669',
+      bgColor: 'bg-emerald-50',
+      textColor: 'text-emerald-600',
+    },
+    {
+      key: REGULATORY_REGISTRATIONS.TURKEY_KKDIK,
+      label: 'Turkey REACH (KKDIK)',
+      color: '#b45309',
+      bgColor: 'bg-amber-50',
+      textColor: 'text-amber-700',
+    },
+  ].map((item) => {
+    const count = activeClients.filter((client) =>
+      normalizeRegulatoryRegistrations(client.regulatory_registrations).includes(item.key)
+    ).length;
+    const percent = activeClientCount > 0 ? Math.round((count / activeClientCount) * 100) : 0;
+    return { ...item, count, percent };
   });
-
-  const chartData = Object.entries(monthlyActivityMap).map(([name, quantity]) => ({
-    name,
-    quantity: parseFloat(quantity.toFixed(2)),
-  }));
 
   return {
     stats: {
       totalClients: totalClients || 0,
       pendingTcc: pendingTcc || 0,
     },
-    chartData,
+    reachStats,
   };
 }
 

@@ -8,8 +8,13 @@ import { Input } from './ui/Input';
 import { ModalErrorBox } from './ui/ModalErrorBox';
 import { FormLabel } from './ui/FormLabel';
 import { toast } from '@/store/toast';
-import { Eye, EyeOff, Plus, Trash2, Save } from 'lucide-react';
+import RegulatoryRegistrationsField from '@/components/RegulatoryRegistrationsField';
+import {
+  normalizeRegulatoryRegistrations,
+  type RegulatoryRegistration,
+} from '@/lib/regulatory-registrations';
 import { useState, useTransition } from 'react';
+import { Eye, EyeOff, Plus, Save, Trash2 } from 'lucide-react';
 
 export type ClientWizardContact = {
   first_name: string;
@@ -36,6 +41,7 @@ export type ClientWizardProfile = {
   country: string;
   postal_code: string;
   status: 'active' | 'inactive' | 'pending';
+  regulatory_registrations: string[];
 };
 
 interface ClientWizardProps {
@@ -45,6 +51,7 @@ interface ClientWizardProps {
   clientId?: string;
   initialProfile?: Partial<ClientWizardProfile>;
   initialContacts?: ClientWizardContact[];
+  initialRegistrations?: RegulatoryRegistration[];
 }
 
 const defaultProfile: ClientWizardProfile = {
@@ -64,6 +71,7 @@ const defaultProfile: ClientWizardProfile = {
   country: 'Turkey',
   postal_code: '',
   status: 'active',
+  regulatory_registrations: [],
 };
 
 export default function ClientWizard({
@@ -73,6 +81,7 @@ export default function ClientWizard({
   clientId,
   initialProfile,
   initialContacts = [],
+  initialRegistrations = [],
 }: ClientWizardProps) {
   const isEdit = mode === 'edit';
   const [isPending, startTransition] = useTransition();
@@ -86,6 +95,10 @@ export default function ClientWizard({
   });
 
   const [contacts, setContacts] = useState<ClientWizardContact[]>(initialContacts);
+  const [regulatoryRegistrations, setRegulatoryRegistrations] = useState<RegulatoryRegistration[]>(
+    normalizeRegulatoryRegistrations(initialRegistrations)
+  );
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; phone?: string }>({});
 
@@ -135,6 +148,9 @@ export default function ClientWizard({
     if (!profile.state.trim()) return 'State is required';
     if (!profile.postal_code.trim()) return 'Postal code is required';
     if (!profile.country.trim()) return 'Country is required';
+    if (regulatoryRegistrations.length === 0) {
+      return 'Select at least one regulatory registration.';
+    }
     return null;
   };
 
@@ -166,13 +182,20 @@ export default function ClientWizard({
 
   const handleSubmit = async () => {
     setError(null);
+    setRegistrationError(null);
     const validationError = validateForm();
     if (validationError) {
+      if (validationError.includes('regulatory registration')) {
+        setRegistrationError(validationError);
+      }
       setError(validationError);
       return;
     }
 
-    const payload = { profile, contacts };
+    const payload = {
+      profile: { ...profile, regulatory_registrations: regulatoryRegistrations },
+      contacts,
+    };
 
     startTransition(async () => {
       const res = isEdit
@@ -419,6 +442,15 @@ export default function ClientWizard({
           )}
         </div>
       </section>
+
+      <RegulatoryRegistrationsField
+        value={regulatoryRegistrations}
+        onChange={(next) => {
+          setRegulatoryRegistrations(next);
+          setRegistrationError(null);
+        }}
+        error={registrationError}
+      />
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-6">
