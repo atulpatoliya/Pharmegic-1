@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { buildEmailShell, escapeEmailHtml, formatEmailDate } from '@/lib/email-branding';
+import { buildEmailShell, escapeEmailHtml, formatEmailDate, withEmailLogoAttachments } from '@/lib/email-branding';
 import { getRegulatoryRegistrationLabel, isEuReachFramework } from '@/lib/regulatory-registrations';
 
 export interface SmtpConfig {
@@ -47,6 +47,7 @@ interface SendMailOptions {
     filename: string;
     content: Buffer;
     contentType?: string;
+    cid?: string;
   }>;
 }
 
@@ -161,7 +162,6 @@ function getTccApplicationNotificationHtml(
 
   return buildEmailShell({
     subtitle: isEuReach ? 'New TCC Requested' : `New ${frameworkLabel} Request`,
-    logoUrl: details.logoUrl,
     bodyHtml,
   });
 }
@@ -212,15 +212,18 @@ export async function sendTccApplicationNotificationEmail({
     logoUrl,
   });
 
-  const attachments = poAttachment
-    ? [
-        {
-          filename: poAttachment.fileName,
-          content: poAttachment.buffer,
-          contentType: poAttachment.contentType,
-        },
-      ]
-    : undefined;
+  const attachments = await withEmailLogoAttachments(
+    logoUrl,
+    poAttachment
+      ? [
+          {
+            filename: poAttachment.fileName,
+            content: poAttachment.buffer,
+            contentType: poAttachment.contentType,
+          },
+        ]
+      : []
+  );
 
   await sendEmail({
     to: to.join(', '),
@@ -271,8 +274,16 @@ export async function sendCertificateEmail({
 
   const html =
     certificateType === 'REACH'
-      ? getReachCertificateEmailHtml(companyName, chemicalName, certificateNumber, logoUrl)
-      : getCertificateEmailHtml(companyName, chemicalName, certificateNumber, logoUrl);
+      ? getReachCertificateEmailHtml(companyName, chemicalName, certificateNumber)
+      : getCertificateEmailHtml(companyName, chemicalName, certificateNumber);
+
+  const attachments = await withEmailLogoAttachments(logoUrl, [
+    {
+      filename: pdfFileName,
+      content: pdfBuffer,
+      contentType: attachmentContentType,
+    },
+  ]);
 
   if (transporter) {
     try {
@@ -283,13 +294,7 @@ export async function sendCertificateEmail({
         bcc: bcc?.filter(Boolean).join(', ') || undefined,
         subject,
         html,
-        attachments: [
-          {
-            filename: pdfFileName,
-            content: pdfBuffer,
-            contentType: attachmentContentType,
-          },
-        ],
+        attachments,
       });
       console.log(`[SMTP] Certificate email sent: ${info.messageId}`);
       return { success: true };
@@ -315,8 +320,7 @@ function logFallbackEmail(to: string, subject: string) {
 function getCertificateEmailHtml(
   companyName: string,
   chemicalName: string,
-  certNumber: string,
-  logoUrl?: string | null
+  certNumber: string
 ): string {
   const bodyHtml = `
       <p>Dear <strong>${escapeEmailHtml(companyName)}</strong>,</p>
@@ -334,7 +338,6 @@ function getCertificateEmailHtml(
 
   return buildEmailShell({
     subtitle: 'Tonnage Compliance Certificate Registry',
-    logoUrl,
     bodyHtml,
   });
 }
@@ -370,15 +373,17 @@ export async function sendBulkReachCertificatesEmail({
     items.map((item) => ({
       certificateNumber: item.certificateNumber,
       chemicalName: item.chemicalName,
-    })),
-    logoUrl
+    }))
   );
 
-  const attachments = items.map((item) => ({
-    filename: item.pdfFileName,
-    content: item.pdfBuffer,
-    contentType: item.attachmentContentType || 'application/pdf',
-  }));
+  const attachments = await withEmailLogoAttachments(
+    logoUrl,
+    items.map((item) => ({
+      filename: item.pdfFileName,
+      content: item.pdfBuffer,
+      contentType: item.attachmentContentType || 'application/pdf',
+    }))
+  );
 
   if (transporter) {
     try {
@@ -406,8 +411,7 @@ export async function sendBulkReachCertificatesEmail({
 
 function getBulkReachCertificateEmailHtml(
   companyName: string,
-  certificates: { certificateNumber: string; chemicalName: string }[],
-  logoUrl?: string | null
+  certificates: { certificateNumber: string; chemicalName: string }[]
 ): string {
   const rows = certificates
     .map(
@@ -435,7 +439,6 @@ function getBulkReachCertificateEmailHtml(
 
   return buildEmailShell({
     subtitle: 'REACH Compliance Certificate Registry',
-    logoUrl,
     bodyHtml,
   });
 }
@@ -443,8 +446,7 @@ function getBulkReachCertificateEmailHtml(
 function getReachCertificateEmailHtml(
   companyName: string,
   chemicalName: string,
-  certNumber: string,
-  logoUrl?: string | null
+  certNumber: string
 ): string {
   const bodyHtml = `
       <p>Dear <strong>${escapeEmailHtml(companyName)}</strong>,</p>
@@ -462,7 +464,6 @@ function getReachCertificateEmailHtml(
 
   return buildEmailShell({
     subtitle: 'REACH Compliance Certificate Registry',
-    logoUrl,
     bodyHtml,
   });
 }

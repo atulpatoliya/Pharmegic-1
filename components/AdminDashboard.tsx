@@ -12,31 +12,91 @@ import {
   Legend,
 } from 'recharts';
 
+const COUNTRY_SEGMENT_COLORS = [
+  '#064e3b',
+  '#2563eb',
+  '#059669',
+  '#b45309',
+  '#7c3aed',
+  '#db2777',
+  '#0891b2',
+];
+
+interface ReachStat {
+  key: string;
+  label: string;
+  color: string;
+  bgColor: string;
+  textColor: string;
+  count: number;
+  percent: number;
+  countryChartData: { name: string; value: number }[];
+}
+
 interface AdminDashboardProps {
   stats: {
     totalClients: number;
     pendingTcc: number;
   };
-  reachStats: {
-    key: string;
-    label: string;
-    color: string;
-    bgColor: string;
-    textColor: string;
-    count: number;
-    percent: number;
-  }[];
+  reachStats: ReachStat[];
+}
+
+function ReachCountryDonut({
+  data,
+  accentColor,
+}: {
+  data: { name: string; value: number }[];
+  accentColor: string;
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="h-36 flex items-center justify-center text-[11px] text-slate-400 font-medium">
+        No client country data yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-3">
+      <ResponsiveContainer width="100%" height={176}>
+        <PieChart margin={{ top: 20, right: 8, left: 8, bottom: 4 }}>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="48%"
+            innerRadius={36}
+            outerRadius={52}
+            paddingAngle={2}
+          >
+          {data.map((entry, index) => (
+            <Cell
+              key={entry.name}
+              fill={index === 0 ? accentColor : COUNTRY_SEGMENT_COLORS[index % COUNTRY_SEGMENT_COLORS.length]}
+            />
+          ))}
+        </Pie>
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '6px',
+            fontSize: '12px',
+          }}
+        />
+        <Legend
+          iconSize={8}
+          verticalAlign="bottom"
+          wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+    </div>
+  );
 }
 
 export default function AdminDashboard({ stats, reachStats }: AdminDashboardProps) {
-  const reachChartData = reachStats
-    .filter((reach) => reach.count > 0)
-    .map((reach) => ({
-      name: reach.label,
-      value: reach.count,
-      color: reach.color,
-    }));
-
   const cards = [
     {
       title: 'Total Clients',
@@ -100,77 +160,45 @@ export default function AdminDashboard({ stats, reachStats }: AdminDashboardProp
       <Card className="border-slate-100 shadow-xs">
         <CardHeader>
           <CardTitle>Regulatory Registrations</CardTitle>
-          <CardDescription>Active clients by REACH framework.</CardDescription>
+          <CardDescription>Active clients by REACH framework with country distribution.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 grid-cols-1 lg:grid-cols-4">
-            <div className="lg:col-span-3 grid gap-4 grid-cols-1 md:grid-cols-3">
-              {reachStats.map((reach) => (
-                <div
-                  key={reach.key}
-                  className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 space-y-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`p-2 rounded-lg ${reach.bgColor}`}>
-                      <Building2 className={`h-4 w-4 ${reach.textColor}`} />
-                    </div>
-                    <span className={`text-xs font-bold uppercase tracking-wider ${reach.textColor}`}>
-                      {reach.label}
-                    </span>
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+            {reachStats.map((reach) => (
+              <div
+                key={reach.key}
+                className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 space-y-4"
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-lg ${reach.bgColor}`}>
+                    <Building2 className={`h-4 w-4 ${reach.textColor}`} />
                   </div>
-                  <div>
-                    <div className="text-3xl font-black text-slate-800">{reach.count}</div>
-                    <div className="text-xs font-semibold text-slate-400">active clients</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${reach.percent}%`, backgroundColor: reach.color }}
-                      />
-                    </div>
-                    <p className="text-[11px] font-semibold text-slate-500">
-                      {reach.percent}% of total portfolio
-                    </p>
-                  </div>
+                  <span className={`text-xs font-bold uppercase tracking-wider ${reach.textColor}`}>
+                    {reach.label}
+                  </span>
                 </div>
-              ))}
-            </div>
-
-            <div className="h-64 lg:h-auto min-h-[240px]">
-              {reachChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={reachChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      paddingAngle={2}
-                    >
-                      {reachChartData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#ffffff',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                      }}
+                <div>
+                  <div className="text-3xl font-black text-slate-800">{reach.count}</div>
+                  <div className="text-xs font-semibold text-slate-400">active clients</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${reach.percent}%`, backgroundColor: reach.color }}
                     />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium">
-                  No REACH registration data yet.
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    {reach.percent}% of total portfolio
+                  </p>
                 </div>
-              )}
-            </div>
+
+                <div className="pt-0 mt-0 border-t border-slate-100">
+                  
+                  <ReachCountryDonut data={reach.countryChartData} accentColor={reach.color} />
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

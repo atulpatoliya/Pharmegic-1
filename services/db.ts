@@ -20,7 +20,7 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
     supabase.from('tcc_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase
       .from('clients')
-      .select('regulatory_registrations, status')
+      .select('country, regulatory_registrations, status')
       .eq('status', 'active'),
   ]);
 
@@ -52,11 +52,22 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
       textColor: 'text-amber-700',
     },
   ].map((item) => {
-    const count = activeClients.filter((client) =>
+    const clientsInReach = activeClients.filter((client) =>
       normalizeRegulatoryRegistrations(client.regulatory_registrations).includes(item.key)
-    ).length;
+    );
+    const count = clientsInReach.length;
     const percent = activeClientCount > 0 ? Math.round((count / activeClientCount) * 100) : 0;
-    return { ...item, count, percent };
+
+    const countryMap = new Map<string, number>();
+    clientsInReach.forEach((client) => {
+      const country = client.country?.trim() || 'Unknown';
+      countryMap.set(country, (countryMap.get(country) || 0) + 1);
+    });
+    const countryChartData = Array.from(countryMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    return { ...item, count, percent, countryChartData };
   });
 
   return {

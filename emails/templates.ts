@@ -2,10 +2,9 @@
  * Rich HTML email templates for Pharmegic Healthcare Portal
  */
 
-import { buildEmailShell, escapeEmailHtml, resolveEmailLogoUrl } from '@/lib/email-branding';
+import { buildEmailShell, escapeEmailHtml, EMAIL_LOGO_SRC } from '@/lib/email-branding';
 
-const baseLayout = (title: string, bodyContent: string, logoUrl?: string | null) => {
-  const logoSrc = resolveEmailLogoUrl(logoUrl);
+const baseLayout = (title: string, bodyContent: string) => {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -93,7 +92,7 @@ const baseLayout = (title: string, bodyContent: string, logoUrl?: string | null)
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <img src="${logoSrc}" alt="Pharmegic Healthcare" style="max-height:48px;max-width:220px;object-fit:contain;display:inline-block;" />
+        <img src="${EMAIL_LOGO_SRC}" alt="Pharmegic Healthcare" style="max-height:48px;max-width:220px;object-fit:contain;display:inline-block;background:#ffffff;border-radius:8px;padding:8px 14px;" />
       </div>
       <div class="content">
         ${bodyContent}

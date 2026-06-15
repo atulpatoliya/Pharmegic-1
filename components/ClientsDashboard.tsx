@@ -13,9 +13,7 @@ import { Badge } from './ui/Badge';
 import { Dialog } from './ui/Dialog';
 import { toast } from '@/store/toast';
 import ClientWizard from './ClientWizard';
-import { TableDataExport } from '@/components/TableDataExport';
-import { formatDisplayDate } from '@/lib/date-filter';
-import type { CsvColumn } from '@/lib/export-csv';
+import { ClientDirectoryExport } from '@/components/ClientDirectoryExport';
 
 import {
   Search,
@@ -65,20 +63,6 @@ interface ClientsDashboardProps {
   chemicals: ChemicalOption[];
   adminRole: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT' | null;
 }
-
-const CLIENT_EXPORT_COLUMNS: CsvColumn<Client>[] = [
-  { header: 'Company', value: (client) => client.company_name },
-  { header: 'UUID', value: (client) => client.uuid_number },
-  { header: 'Email', value: (client) => client.email },
-  { header: 'Owner', value: (client) => client.owner_name },
-  { header: 'Phone', value: (client) => client.phone },
-  { header: 'City', value: (client) => client.city },
-  { header: 'State', value: (client) => client.state },
-  { header: 'Country', value: (client) => client.country },
-  { header: 'Postal Code', value: (client) => client.postal_code },
-  { header: 'Status', value: (client) => client.status },
-  { header: 'Registered', value: (client) => formatDisplayDate(client.created_at) },
-];
 
 export default function ClientsDashboard({ initialClients, chemicals, adminRole }: ClientsDashboardProps) {
   const router = useRouter();
@@ -283,12 +267,9 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:self-start">
-          <TableDataExport
-            filename="clients"
-            columns={CLIENT_EXPORT_COLUMNS}
-            filteredRows={filteredClients}
-            selectedIds={selectedClientIds}
-            getRowId={(client) => client.id}
+          <ClientDirectoryExport
+            filteredClientIds={filteredClientIds}
+            selectedClientIds={selectedClientIds}
           />
           <Button onClick={() => router.push('/admin/clients/new')}>
             <UserPlus className="h-4 w-4 mr-2" />

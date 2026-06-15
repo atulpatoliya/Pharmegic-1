@@ -1,3 +1,113 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+export const EMAIL_LOGO_CID = 'pharmegic-email-logo';
+export const EMAIL_LOGO_SRC = `cid:${EMAIL_LOGO_CID}`;
+
+export type EmailInlineAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+  cid?: string;
+};
+
+function readDefaultLogoBuffer(): { buffer: Buffer; contentType: string } {
+  const logoPath = join(process.cwd(), 'public', 'pharmegic-logo.png');
+  return {
+    buffer: readFileSync(logoPath),
+    contentType: 'image/png',
+  };
+}
+
+function parseDataUriLogo(dataUri: string): { buffer: Buffer; contentType: string } | null {
+  const match = dataUri.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,(.+)$/);
+  if (!match) return null;
+
+  const contentType = match[1] || 'image/png';
+  const isBase64 = Boolean(match[2]);
+  const data = match[3];
+
+  return {
+    buffer: isBase64 ? Buffer.from(data, 'base64') : Buffer.from(decodeURIComponent(data), 'utf8'),
+    contentType,
+  };
+}
+
+async function resolveLogoBuffer(logoUrl?: string | null): Promise<{ buffer: Buffer; contentType: string }> {
+  const trimmed = logoUrl?.trim();
+
+  if (trimmed?.startsWith('data:')) {
+    const parsed = parseDataUriLogo(trimmed);
+    if (parsed) return parsed;
+  }
+
+  if (trimmed?.startsWith('http://') || trimmed?.startsWith('https://')) {
+    try {
+      const response = await fetch(trimmed);
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer();
+        return {
+          buffer: Buffer.from(arrayBuffer),
+          contentType: response.headers.get('content-type') || 'image/png',
+        };
+      }
+    } catch {
+      // Fall back to bundled logo.
+    }
+  }
+
+  if (trimmed?.startsWith('/')) {
+    try {
+      const localPath = join(process.cwd(), 'public', trimmed.replace(/^\//, ''));
+      const buffer = readFileSync(localPath);
+      const extension = trimmed.split('.').pop()?.toLowerCase();
+      const contentType =
+        extension === 'jpg' || extension === 'jpeg'
+          ? 'image/jpeg'
+          : extension === 'webp'
+            ? 'image/webp'
+            : extension === 'gif'
+              ? 'image/gif'
+              : 'image/png';
+      return { buffer, contentType };
+    } catch {
+      // Fall back to bundled logo.
+    }
+  }
+
+  return readDefaultLogoBuffer();
+}
+
+export async function createEmailLogoAttachment(
+  logoUrl?: string | null
+): Promise<EmailInlineAttachment> {
+  const { buffer, contentType } = await resolveLogoBuffer(logoUrl);
+  const extension =
+    contentType.includes('jpeg') || contentType.includes('jpg')
+      ? 'jpg'
+      : contentType.includes('webp')
+        ? 'webp'
+        : contentType.includes('gif')
+          ? 'gif'
+          : 'png';
+
+  return {
+    filename: `pharmegic-logo.${extension}`,
+    content: buffer,
+    contentType,
+    cid: EMAIL_LOGO_CID,
+  };
+}
+
+export async function withEmailLogoAttachments(
+  logoUrl: string | null | undefined,
+  attachments: EmailInlineAttachment[] = []
+): Promise<EmailInlineAttachment[]> {
+  const logoAttachment = await createEmailLogoAttachment(logoUrl);
+  return [logoAttachment, ...attachments];
+}
+
+/** @deprecated External image URLs are unreliable in email clients. Use EMAIL_LOGO_SRC with CID attachments. */
 export function resolveEmailLogoUrl(templateLogo?: string | null): string {
   const trimmed = templateLogo?.trim();
   if (trimmed && (trimmed.startsWith('data:') || trimmed.startsWith('http'))) {
@@ -19,9 +129,7 @@ export function escapeEmailHtml(value: string): string {
 export function buildEmailShell(options: {
   subtitle?: string;
   bodyHtml: string;
-  logoUrl?: string | null;
 }): string {
-  const logoSrc = resolveEmailLogoUrl(options.logoUrl);
   const subtitle = options.subtitle
     ? `<p style="margin:12px 0 0;font-size:13px;color:#d1fae5;font-weight:600;">${escapeEmailHtml(options.subtitle)}</p>`
     : '';
@@ -52,7 +160,7 @@ export function buildEmailShell(options: {
 <body>
   <div class="container">
     <div class="header">
-      <img src="${logoSrc}" alt="Pharmegic Healthcare" style="max-height:48px;max-width:220px;object-fit:contain;display:inline-block;" />
+      <img src="${EMAIL_LOGO_SRC}" alt="Pharmegic Healthcare" style="max-height:48px;max-width:220px;object-fit:contain;display:inline-block;background:#ffffff;border-radius:8px;padding:8px 14px;" />
       ${subtitle}
     </div>
     <div class="body">
