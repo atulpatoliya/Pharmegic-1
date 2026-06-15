@@ -334,10 +334,10 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
 
       <div className="flex flex-col md:flex-row gap-8 items-start">
         {/* Navigation Tabs (Left Sidebar) */}
-        <div className="flex md:flex-col gap-2 w-full md:w-56 shrink-0 bg-white border border-slate-100 p-2.5 rounded-xl shadow-xs">
+        <div className="flex gap-2 w-full md:w-56 shrink-0 bg-white border border-slate-100 p-2.5 rounded-xl shadow-xs overflow-x-auto md:overflow-visible md:flex-col [scrollbar-width:thin]">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+            className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
               activeTab === 'profile'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -348,7 +348,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
           </button>
           <button
             onClick={() => setActiveTab('branding')}
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+            className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
               activeTab === 'branding'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -359,7 +359,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
           </button>
           <button
             onClick={() => setActiveTab('security')}
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+            className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
               activeTab === 'security'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -370,7 +370,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
           </button>
           <button
             onClick={() => setActiveTab('smtp-tcc')}
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+            className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
               activeTab === 'smtp-tcc'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -381,7 +381,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
           </button>
           <button
             onClick={() => setActiveTab('smtp-rc')}
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+            className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
               activeTab === 'smtp-rc'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -392,7 +392,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
           </button>
           <button
             onClick={() => setActiveTab('notification-email')}
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all ${
+            className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
               activeTab === 'notification-email'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'

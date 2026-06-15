@@ -14,6 +14,7 @@ import { Dialog } from './ui/Dialog';
 import { toast } from '@/store/toast';
 import ClientWizard from './ClientWizard';
 import { ClientDirectoryExport } from '@/components/ClientDirectoryExport';
+import { ResponsiveTableScroll } from './ui/ResponsiveTableScroll';
 
 import {
   Search,
@@ -309,8 +310,8 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
 
       {/* Main clients list table */}
       <Card className="border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <ResponsiveTableScroll>
+          <table className="w-full text-left border-collapse min-w-[900px] text-xs sm:text-sm">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100">
                 <th className="p-4 w-12 text-center">
@@ -436,7 +437,7 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
               )}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableScroll>
       </Card>
 
       {/* 3. Delete Confirmation Modal */}

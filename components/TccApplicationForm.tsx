@@ -608,7 +608,7 @@ export default function TccApplicationForm({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 border-y border-slate-100 py-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-y border-slate-100 py-3">
                     <div>
                       <span className="text-[10px] text-slate-400 font-bold uppercase block">CAS Number</span>
                       <span className="font-mono text-slate-700 font-bold text-xs">{selectedSubstance.cas_number}</span>

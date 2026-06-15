@@ -345,7 +345,7 @@ export function TccApplicationViewDialog({
               <Building className="h-4 w-4 text-primary" />
               Client submission
             </h3>
-            <div className="grid grid-cols-2 gap-4 bg-slate-50/80 rounded-xl border border-slate-100 p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/80 rounded-xl border border-slate-100 p-4">
               <DetailItem label="Company">{displayApp.clients.company_name}</DetailItem>
               <DetailItem label="Contact email">{displayApp.clients.email}</DetailItem>
               <DetailItem label="Chemical substance">{displayApp.chemicals.chemical_name}</DetailItem>

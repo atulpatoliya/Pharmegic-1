@@ -18,6 +18,7 @@ import { Badge } from './ui/Badge';
 import { Dialog } from './ui/Dialog';
 import { TableColumnFilter } from './ui/TableColumnFilter';
 import { TableDataExport } from '@/components/TableDataExport';
+import { ResponsiveTableScroll } from './ui/ResponsiveTableScroll';
 import { formatDisplayDate } from '@/lib/date-filter';
 import type { CsvColumn } from '@/lib/export-csv';
 import { toast } from '@/store/toast';
@@ -418,8 +419,8 @@ export default function ChemicalsDashboard({
             </Button>
           </div>
         )}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1100px]">
+        <ResponsiveTableScroll>
+          <table className="w-full text-left border-collapse min-w-[1100px] text-xs sm:text-sm">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100 align-top">
                 <th className="p-3 w-12 text-center">
@@ -639,13 +640,13 @@ export default function ChemicalsDashboard({
               )}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableScroll>
       </Card>
 
       {/* Trash box */}
       {trashedChemicals.length > 0 && (
         <Card className="border-dashed border-slate-300 bg-slate-50/80 overflow-hidden">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Archive className="h-4 w-4 text-slate-500" />
               <h2 className="font-bold text-slate-600 text-sm">Deleted Inventory (Trash)</h2>
@@ -654,8 +655,8 @@ export default function ChemicalsDashboard({
               Restore to bring back · Delete permanently to remove forever
             </span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+          <ResponsiveTableScroll>
+            <table className="w-full text-left border-collapse text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200">
                   <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Substance</th>
@@ -703,7 +704,7 @@ export default function ChemicalsDashboard({
                 ))}
               </tbody>
             </table>
-          </div>
+          </ResponsiveTableScroll>
         </Card>
       )}
 
@@ -717,7 +718,7 @@ export default function ChemicalsDashboard({
             onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
             required
           />
-          <div className="grid gap-4 grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
             <Input
               label="CAS Number"
               placeholder="e.g. 68-12-2"
@@ -733,7 +734,7 @@ export default function ChemicalsDashboard({
               required
             />
           </div>
-          <div className="grid gap-4 grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
             <Select
               label="Tonnage Band"
               value={formData.tonnage_band}
@@ -752,7 +753,7 @@ export default function ChemicalsDashboard({
               required
             />
           </div>
-          <div className="grid gap-4 grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
             <Input
               type="number"
               step="0.01"
@@ -807,7 +808,7 @@ export default function ChemicalsDashboard({
             onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
             required
           />
-          <div className="grid gap-4 grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
             <Input
               label="CAS Number"
               value={formData.cas_number}
@@ -821,7 +822,7 @@ export default function ChemicalsDashboard({
               required
             />
           </div>
-          <div className="grid gap-4 grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
             <Select
               label="Tonnage Band"
               value={formData.tonnage_band}
@@ -840,7 +841,7 @@ export default function ChemicalsDashboard({
               required
             />
           </div>
-          <div className="grid gap-4 grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
             <Input
               type="number"
               step="0.01"

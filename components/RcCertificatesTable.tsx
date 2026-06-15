@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { TableColumnFilter } from '@/components/ui/TableColumnFilter';
 import { TableDateRangeFilter, type DateRangeValue } from '@/components/ui/TableDateRangeFilter';
 import { TableDataExport } from '@/components/TableDataExport';
+import { ResponsiveTableScroll } from '@/components/ui/ResponsiveTableScroll';
 import { formatDisplayDate, matchesDateRange } from '@/lib/date-filter';
 import type { CsvColumn } from '@/lib/export-csv';
 import {
@@ -385,8 +386,8 @@ export default function RcCertificatesTable({
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1024px]">
+        <ResponsiveTableScroll>
+          <table className="w-full text-left border-collapse min-w-[1024px] text-xs sm:text-sm">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100 align-top">
                 <th className="px-4 py-3 min-w-[220px]">
@@ -803,7 +804,7 @@ export default function RcCertificatesTable({
               )}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableScroll>
       </Card>
     </div>
   );

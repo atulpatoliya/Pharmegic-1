@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Dialog } from '@/components/ui/Dialog';
+import { ResponsiveTableScroll } from '@/components/ui/ResponsiveTableScroll';
 import { toast } from '@/store/toast';
 import {
   Shield, UserPlus, Mail, Lock, Power, PowerOff, Trash2, RefreshCw, Crown, AlertTriangle
@@ -147,8 +148,8 @@ export default function SuperAdminDashboard({ initialAdmins }: SuperAdminDashboa
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <ResponsiveTableScroll>
+            <table className="w-full text-left border-collapse min-w-[720px] text-xs sm:text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Email</th>
@@ -184,7 +185,7 @@ export default function SuperAdminDashboard({ initialAdmins }: SuperAdminDashboa
                         {new Date(admin.created_at).toLocaleDateString()}
                       </td>
                       <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
@@ -226,7 +227,7 @@ export default function SuperAdminDashboard({ initialAdmins }: SuperAdminDashboa
                 )}
               </tbody>
             </table>
-          </div>
+          </ResponsiveTableScroll>
         </CardContent>
       </Card>
 

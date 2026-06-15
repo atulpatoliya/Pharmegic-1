@@ -20,6 +20,7 @@ import {
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { TableDataExport } from '@/components/TableDataExport';
+import { ResponsiveTableScroll } from './ui/ResponsiveTableScroll';
 import type { TccEmailDefaults } from '@/components/TccApplicationViewDialog';
 import type { CsvColumn } from '@/lib/export-csv';
 import { toast } from '@/store/toast';
@@ -401,7 +402,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
       {/* Main Table */}
       <Card className="border-slate-100 overflow-hidden">
         {(activeFilterCount > 0 || selectedIds.length > 0) && (
-          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
+          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-semibold text-slate-600">
               Showing {filteredApplications.length} of {applications.length} applications
               {activeFilterCount > 0 && (
@@ -419,8 +420,8 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
             </Button>
           </div>
         )}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1280px]">
+        <ResponsiveTableScroll>
+          <table className="w-full text-left border-collapse min-w-[1280px] text-xs sm:text-sm">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100 align-top">
                 <th className="p-3 w-12 text-center">
@@ -617,7 +618,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
               )}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableScroll>
       </Card>
 
       <TccApplicationViewDialog

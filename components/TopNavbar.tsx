@@ -2,7 +2,7 @@
 
 import { useLayoutStore } from '@/store/layout';
 import { logout } from '@/actions/auth';
-import { Menu, User } from 'lucide-react';
+import { LogOut, Menu, User } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import type { NotificationRow } from '@/lib/notifications';
 import { useRouter } from 'next/navigation';
@@ -46,51 +46,54 @@ export default function TopNavbar({
     return 'success';
   };
 
-
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-100 bg-white px-6 shadow-xs">
-      {/* Left section: Hamburger & Breadcrumbs */}
-      <div className="flex items-center gap-4">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full min-w-0 items-center justify-between gap-2 border-b border-slate-100 bg-white px-3 sm:px-6 shadow-xs">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         <button
           onClick={toggleSidebar}
-          className="md:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
+          className="md:hidden shrink-0 p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
+          aria-label="Open navigation menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="hidden sm:block">
+        <div className="hidden min-w-0 sm:block">
           <Breadcrumbs />
         </div>
       </div>
 
-      {/* Right section: Profile & Actions */}
-      <div className="flex items-center gap-6">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <NotificationBell
           initialNotifications={notifications}
           unreadCount={notificationCount}
         />
 
-        {/* User Card */}
-        <div className="flex items-center gap-3 border-l border-slate-100 pl-6">
-          <div className="flex flex-col items-end">
-            <span className="text-xs font-semibold text-slate-800 max-w-[150px] truncate">
+        <div className="hidden sm:flex items-center gap-3 border-l border-slate-100 pl-4">
+          <div className="flex flex-col items-end min-w-0">
+            <span className="text-xs font-semibold text-slate-800 max-w-[180px] truncate">
               {userEmail}
             </span>
             <Badge variant={getRoleBadgeVariant(role)} className="text-[10px] px-2 py-0">
               {getRoleLabel(role)}
             </Badge>
           </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 shrink-0">
             <User className="h-5 w-5" />
           </div>
+        </div>
+
+        <div className="flex sm:hidden h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 shrink-0">
+          <User className="h-5 w-5" />
         </div>
 
         <button
           type="button"
           onClick={handleLogout}
           title="Sign out of portal"
-          className="inline-flex items-center gap-3 rounded-lg text-sm font-medium transition-all px-4 py-2.5 bg-accent text-accent-foreground shadow-xs hover:bg-accent-hover cursor-pointer"
+          aria-label="Log out"
+          className="inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all px-2.5 py-2 sm:px-4 sm:py-2.5 bg-accent text-accent-foreground shadow-xs hover:bg-accent-hover cursor-pointer shrink-0"
         >
-          Log Out
+          <LogOut className="h-4 w-4 sm:hidden" />
+          <span className="hidden sm:inline">Log Out</span>
         </button>
       </div>
     </header>

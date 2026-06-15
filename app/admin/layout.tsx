@@ -31,16 +31,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   ]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50" suppressHydrationWarning>
+    <div className="flex h-screen w-full overflow-hidden bg-slate-50" suppressHydrationWarning>
       <Sidebar role={session.role} />
-      <div className="flex flex-col flex-1 h-full overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
         <TopNavbar
           userEmail={session.email}
           role={session.role}
           notificationCount={notificationCount || 0}
           notifications={(notifications || []) as any}
         />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8">
           {children}
         </main>
       </div>

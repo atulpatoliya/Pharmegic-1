@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/
 import { Badge } from './ui/Badge';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
+import { ResponsiveTableScroll } from './ui/ResponsiveTableScroll';
 import {
   Award,
   Search,
@@ -138,8 +139,8 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
 
       {/* Table Card */}
       <Card className="border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <ResponsiveTableScroll>
+          <table className="w-full text-left border-collapse min-w-[960px] text-xs sm:text-sm">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100">
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
@@ -246,7 +247,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
               )}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableScroll>
       </Card>
     </div>
   );

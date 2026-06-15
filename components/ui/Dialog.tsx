@@ -16,8 +16,8 @@ interface DialogProps {
 }
 
 const sizeClasses = {
-  default: 'max-w-[800px]',
-  wide: 'max-w-8xl',
+  default: 'max-w-[min(800px,calc(100vw-1.5rem))]',
+  wide: 'max-w-[min(96rem,calc(100vw-1.5rem))]',
 };
 
 export function Dialog({
@@ -52,7 +52,7 @@ export function Dialog({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-300"
@@ -61,7 +61,7 @@ export function Dialog({
 
       {/* Dialog Content */}
       <div
-        className={`relative w-full ${sizeClasses[size]} rounded-lg border border-slate-100 bg-white p-6 shadow-xl transition-all duration-300 animate-slide-in max-h-[90vh] overflow-y-auto z-10`}
+        className={`relative w-full ${sizeClasses[size]} rounded-lg border border-slate-100 bg-white p-4 sm:p-6 shadow-xl transition-all duration-300 animate-slide-in max-h-[90vh] overflow-y-auto z-10`}
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-wrap">

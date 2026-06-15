@@ -69,6 +69,7 @@ import {
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { TableDataExport } from '@/components/TableDataExport';
+import { ResponsiveTableScroll } from '@/components/ui/ResponsiveTableScroll';
 import { formatDisplayDate } from '@/lib/date-filter';
 import type { CsvColumn } from '@/lib/export-csv';
 import { processTccAction } from '@/actions/tcc';
@@ -1522,7 +1523,7 @@ export default function ClientDashboardDetails({
           <h1 className="text-xl font-bold text-teal-900 tracking-tight">{pageTitle}</h1>
           
         </div>
-        <div className="flex items-centergap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {currentUserRole !== 'CLIENT' && (
             <Link href={`/admin/clients/${client.id}/edit`}>
               <Button variant="outline" size="sm" className="bg-white border-slate-200 shadow-xs">
@@ -1675,7 +1676,7 @@ export default function ClientDashboardDetails({
             </div>
             <span className="text-xs text-slate-400">Restore to bring back · Delete permanently to remove forever</span>
           </div>
-          <div className="overflow-x-auto">
+          <ResponsiveTableScroll>
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-100 text-slate-400 font-bold text-[10px] uppercase tracking-wider">
                 <tr>
@@ -1725,7 +1726,7 @@ export default function ClientDashboardDetails({
                 ))}
               </tbody>
             </table>
-          </div>
+          </ResponsiveTableScroll>
         </div>
       )}
 
@@ -1737,7 +1738,7 @@ export default function ClientDashboardDetails({
         onClose={() => setRcHistoryTarget(null)}
         title={rcHistoryTarget ? `${rcHistoryTarget.chemicalName} — RC History` : 'RC History'}
       >
-        <div className="overflow-x-auto">
+        <ResponsiveTableScroll>
           <table className="w-full text-sm text-left">
             <thead className="text-slate-500 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
               <tr>
@@ -1854,7 +1855,7 @@ export default function ClientDashboardDetails({
               )}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableScroll>
       </Dialog>
 
       <Dialog
@@ -1927,7 +1928,7 @@ export default function ClientDashboardDetails({
             )}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <ResponsiveTableScroll>
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider border-b border-slate-200">
               <tr>
@@ -2047,7 +2048,7 @@ export default function ClientDashboardDetails({
               )}
             </tbody>
           </table>
-        </div>
+        </ResponsiveTableScroll>
       </div>
       )}
 
@@ -2089,13 +2090,13 @@ export default function ClientDashboardDetails({
             </Card>
 
             <Card className="border-slate-100 shadow-xs lg:col-span-2">
-              <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+              <CardHeader className="pb-3 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-base text-slate-800">Secondary Contacts</CardTitle>
                 <Button size="sm" onClick={() => { setModalError('contact', null); setContactModalOpen(true); }}><Plus className="h-4 w-4 mr-1.5" /> Add Contact</Button>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[250px] overflow-y-auto">
-                  <table className="w-full text-sm">
+                <div className="max-h-[250px] overflow-x-auto overflow-y-auto">
+                  <table className="w-full text-xs sm:text-sm min-w-[520px]">
                     <tbody className="divide-y divide-slate-100">
                       {contacts.map(c => (
                         <tr key={c.id}>
@@ -2286,7 +2287,7 @@ export default function ClientDashboardDetails({
                 Issue date defaults to 01/01 and validity to 31/12 of this year.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">CAS Number</FormLabel>
                 <Input
@@ -2308,7 +2309,7 @@ export default function ClientDashboardDetails({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">Registration Number</FormLabel>
                 <Input
@@ -2341,7 +2342,7 @@ export default function ClientDashboardDetails({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">Issued Date</FormLabel>
                 <DatePicker
@@ -2428,7 +2429,7 @@ export default function ClientDashboardDetails({
                 options={rcYearOptions}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">CAS Number</FormLabel>
                 <Input placeholder="e.g. 67-56-1" value={assignChemData.cas_number} onChange={(e) => setAssignChemData({ ...assignChemData, cas_number: e.target.value })} required />
@@ -2438,7 +2439,7 @@ export default function ClientDashboardDetails({
                 <Input placeholder="e.g. 200-659-6" value={assignChemData.ec_number} onChange={(e) => setAssignChemData({ ...assignChemData, ec_number: e.target.value })} required />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">Registration Number</FormLabel>
                 <Input
@@ -2471,7 +2472,7 @@ export default function ClientDashboardDetails({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel required className="text-sm normal-case mb-1 block">Issued Date</FormLabel>
                 <DatePicker
@@ -2534,7 +2535,7 @@ export default function ClientDashboardDetails({
                 required
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel className="text-sm normal-case mb-1 block">CAS Number</FormLabel>
                 <Input
@@ -2551,7 +2552,7 @@ export default function ClientDashboardDetails({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <FormLabel className="text-sm normal-case mb-1 block">Tonnage Band</FormLabel>
                 <Select
@@ -2597,7 +2598,7 @@ export default function ClientDashboardDetails({
       <Dialog isOpen={isContactModalOpen} onClose={() => { setContactModalOpen(false); setModalError('contact', null); }} title="Add Secondary Contact">
         <div className="p-2 space-y-4">
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input placeholder="First Name" value={contactData.first_name} onChange={e => setContactData({ ...contactData, first_name: e.target.value })} />
               <Input placeholder="Last Name" value={contactData.last_name} onChange={e => setContactData({ ...contactData, last_name: e.target.value })} />
             </div>
@@ -2668,7 +2669,7 @@ export default function ClientDashboardDetails({
                   <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Substance</span>
                   <span className="font-bold text-slate-800">{selectedTccApp?.chemicals.chemical_name}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Requested</span>
                     <span className="font-bold text-slate-800">{selectedTccApp?.quantity_mt} MT</span>
