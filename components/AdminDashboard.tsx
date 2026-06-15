@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
-import { Users, Award, Clock, Activity, AlertTriangle, ChevronRight, TrendingUp } from 'lucide-react';
+import { Users, Clock, ChevronRight, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import {
   AreaChart,
@@ -19,10 +19,7 @@ import {
 interface AdminDashboardProps {
   stats: {
     totalClients: number;
-    activeCertificates: number;
     pendingTcc: number;
-    totalExported: number;
-    renewalAlerts: number;
   };
   chartData: { name: string; quantity: number }[];
 }
@@ -39,39 +36,12 @@ export default function AdminDashboard({ stats, chartData }: AdminDashboardProps
       href: '/admin/clients',
     },
     {
-      title: 'Active Certificates',
-      value: stats.activeCertificates,
-      description: 'Valid TCC permits issued',
-      icon: Award,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
-      href: '/admin/approvals',
-    },
-    {
       title: 'Pending TCC',
       value: stats.pendingTcc,
       description: 'Applications awaiting review',
       icon: Clock,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
-      href: '/admin/approvals',
-    },
-    {
-      title: 'Exported Quantity',
-      value: `${stats.totalExported} MT`,
-      description: 'Substance exports dispatched',
-      icon: Activity,
-      color: 'text-teal-600',
-      bgColor: 'bg-teal-50',
-      href: '/admin/chemicals',
-    },
-    {
-      title: 'Renewal Alerts',
-      value: stats.renewalAlerts,
-      description: 'Certificates expiring in 30 days',
-      icon: AlertTriangle,
-      color: stats.renewalAlerts > 0 ? 'text-rose-600 animate-pulse' : 'text-slate-400',
-      bgColor: stats.renewalAlerts > 0 ? 'bg-rose-50' : 'bg-slate-50',
       href: '/admin/approvals',
     },
   ];
@@ -87,7 +57,7 @@ export default function AdminDashboard({ stats, chartData }: AdminDashboardProps
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2">
         {cards.map((c) => {
           const Icon = c.icon;
           return (

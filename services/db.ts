@@ -4,39 +4,22 @@ import { SupabaseClient } from '@supabase/supabase-js';
 // ADMIN DASHBOARD SERVICES
 // ============================================================================
 export async function getAdminDashboardStats(supabase: SupabaseClient) {
-  const thirtyDaysLater = new Date();
-  thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-
-  // Run all 6 independent queries in parallel
+  // Run all 3 independent queries in parallel
   const [
     clientsRes,
-    certificatesRes,
     pendingTccRes,
-    chemicalsRes,
-    renewalAlertsRes,
     approvedAppsRes
   ] = await Promise.all([
     supabase.from('clients').select('*', { count: 'exact', head: true }),
-    supabase.from('certificates').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('tcc_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('chemicals').select('exported_quantity'),
-    supabase.from('certificates').select('*', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .lte('expires_at', thirtyDaysLater.toISOString())
-      .gte('expires_at', new Date().toISOString()),
     supabase.from('tcc_applications').select('quantity_mt, created_at')
       .eq('status', 'approved')
       .order('created_at', { ascending: true })
   ]);
 
   const totalClients = clientsRes.count;
-  const activeCertificates = certificatesRes.count;
   const pendingTcc = pendingTccRes.count;
-  const chemicals = chemicalsRes.data;
-  const renewalAlerts = renewalAlertsRes.count;
   const approvedApps = approvedAppsRes.data;
-
-  const totalExported = (chemicals || []).reduce((sum, chem) => sum + Number(chem.exported_quantity), 0);
 
   // Group by month
   const monthlyActivityMap: Record<string, number> = {};
@@ -66,10 +49,7 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
   return {
     stats: {
       totalClients: totalClients || 0,
-      activeCertificates: activeCertificates || 0,
       pendingTcc: pendingTcc || 0,
-      totalExported: parseFloat(totalExported.toFixed(2)),
-      renewalAlerts: renewalAlerts || 0,
     },
     chartData,
   };
