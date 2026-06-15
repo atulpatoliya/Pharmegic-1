@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
         ec_number,
         tonnage_band
       ),
-      tcc_applications (
+      tcc_applications!certificates_tcc_application_id_fkey (
         quantity_mt,
         export_date,
         tracking_id,

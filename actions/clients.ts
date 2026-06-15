@@ -27,7 +27,7 @@ async function getClientYearExportedMt(
 ) {
   const { data } = await adminSupabase
     .from('tcc_applications')
-    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)')
     .eq('client_id', clientId)
     .eq('chemical_id', chemicalId)
     .eq('status', 'approved');

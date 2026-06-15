@@ -47,7 +47,7 @@ export default async function AdminRcCertificatesPage() {
 
   const { data: tccHistoryRaw, error: tccError } = await adminSupabase
     .from('tcc_applications')
-    .select('*, chemicals(*), certificates(*), client_chemicals(available_quantity)')
+    .select('*, chemicals(*), certificates!certificates_tcc_application_id_fkey(*), client_chemicals(available_quantity)')
     .eq('status', 'approved')
     .order('created_at', { ascending: false });
 

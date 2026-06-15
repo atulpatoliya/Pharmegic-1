@@ -61,7 +61,7 @@ export default async function ClientDashboardPage() {
   // 6. Fetch TCC Application history
   const { data: tccHistoryRaw } = await adminSupabase
     .from('tcc_applications')
-    .select('*, chemicals(*), certificates(*)')
+    .select('*, chemicals(*), certificates!certificates_tcc_application_id_fkey(*)')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false });
 

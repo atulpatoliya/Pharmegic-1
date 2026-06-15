@@ -102,7 +102,7 @@ async function validateClientTccSubmission(
     adminSupabase
       .from('tcc_applications')
       .select(
-        'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates(issued_at)'
+        'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)'
       )
       .eq('client_id', clientId)
       .eq('chemical_id', data.chemical_id)
@@ -392,7 +392,7 @@ const TCC_CERTIFICATE_RELATION_SELECT = `
     ec_number,
     tonnage_band
   ),
-  tcc_applications (
+  tcc_applications!certificates_tcc_application_id_fkey (
     quantity_mt,
     export_date,
     tracking_id,
@@ -418,7 +418,7 @@ async function syncQuotaForClientChemical(
 ) {
   const { data: allApproved } = await adminSupabase
     .from('tcc_applications')
-    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+    .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)')
     .eq('client_id', clientId)
     .eq('chemical_id', chemicalId)
     .eq('status', 'approved');
@@ -557,7 +557,7 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
 
       const { data: approvedForChem } = await adminSupabase
         .from('tcc_applications')
-        .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+        .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)')
         .eq('client_id', existing.client_id)
         .eq('chemical_id', existing.chemical_id)
         .eq('status', 'approved')
@@ -707,7 +707,7 @@ export async function processTccAction(
         adminSupabase
           .from('tcc_applications')
           .select(
-            'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates(issued_at)'
+            'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)'
           )
           .eq('client_id', app.client_id)
           .eq('chemical_id', app.chemical_id)
@@ -796,7 +796,7 @@ export async function processTccAction(
         const tonnageBand = app.chemicals.tonnage_band as string | null;
         const { data: allApproved } = await adminSupabase
           .from('tcc_applications')
-          .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates(issued_at)')
+          .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)')
           .eq('client_id', app.client_id)
           .eq('chemical_id', app.chemical_id)
           .eq('status', 'approved');
@@ -988,7 +988,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
       .select(`
         *,
         chemicals (chemical_name, cas_number, ec_number, tonnage_band),
-        tcc_applications (
+        tcc_applications!certificates_tcc_application_id_fkey (
           id, quantity_mt, registration_number, export_date, tracking_id, remarks,
           eu_importer_company_name, eu_importer_address, purchase_order_number,
           chemicals (chemical_name, cas_number, ec_number, tonnage_band)
@@ -1087,7 +1087,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
       .select(`
         *,
         chemicals (chemical_name, cas_number, ec_number, tonnage_band),
-        tcc_applications (
+        tcc_applications!certificates_tcc_application_id_fkey (
           quantity_mt, registration_number, export_date, tracking_id, remarks,
           eu_importer_company_name, eu_importer_address, purchase_order_number,
           chemicals (chemical_name, cas_number, ec_number, tonnage_band)

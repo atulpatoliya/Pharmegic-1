@@ -38,7 +38,7 @@ export default async function ApplyPage({
       adminSupabase
         .from('tcc_applications')
         .select(
-          'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates(issued_at)'
+          'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)'
         )
         .eq('client_id', clientId)
         .eq('status', 'approved'),

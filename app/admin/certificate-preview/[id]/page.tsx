@@ -48,7 +48,7 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
         ec_number,
         tonnage_band
       ),
-      tcc_applications (
+      tcc_applications!certificates_tcc_application_id_fkey (
         id,
         quantity_mt,
         registration_number,

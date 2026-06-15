@@ -23,7 +23,7 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
       status,
       clients (company_name, country),
       chemicals (chemical_name, cas_number, ec_number, tonnage_band),
-      tcc_applications (
+      tcc_applications!certificates_tcc_application_id_fkey (
         quantity_mt,
         chemicals (chemical_name, cas_number, ec_number, tonnage_band)
       )

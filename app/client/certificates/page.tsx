@@ -19,11 +19,31 @@ export default async function CertificatesPage() {
   }
 
   const adminSupabase = createAdminClient();
-  const { data: certificates } = await adminSupabase
+  const { data: certificatesRaw } = await adminSupabase
     .from('certificates')
-    .select('*, chemicals(chemical_name, cas_number, ec_number), tcc_applications(quantity_mt, chemicals(chemical_name, cas_number))')
+    .select(
+      '*, chemicals(chemical_name, cas_number, ec_number), tcc_applications!certificates_tcc_application_id_fkey(quantity_mt, chemicals(chemical_name, cas_number))'
+    )
     .eq('client_id', clientId)
     .order('issued_at', { ascending: false });
 
-  return <CertificatesList initialCertificates={(certificates || []) as any} />;
+  const certificates = (certificatesRaw || []).map(
+    (row: {
+      chemicals?: unknown;
+      tcc_applications?: { chemicals?: unknown; quantity_mt?: number } | null;
+    }) => ({
+      ...row,
+      chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+      tcc_applications: row.tcc_applications
+        ? {
+            ...row.tcc_applications,
+            chemicals: Array.isArray(row.tcc_applications.chemicals)
+              ? row.tcc_applications.chemicals[0]
+              : row.tcc_applications.chemicals,
+          }
+        : null,
+    })
+  );
+
+  return <CertificatesList initialCertificates={certificates as any} />;
 }

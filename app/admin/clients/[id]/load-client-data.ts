@@ -38,7 +38,7 @@ export async function loadClientProfileData(clientId: string) {
     adminSupabase.from('client_contacts').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
     adminSupabase
       .from('tcc_applications')
-      .select('*, chemicals(*), certificates(*), client_chemicals(available_quantity)')
+      .select('*, chemicals(*), certificates!certificates_tcc_application_id_fkey(*), client_chemicals(available_quantity)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false }),
     adminSupabase
