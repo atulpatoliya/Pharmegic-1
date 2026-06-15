@@ -13,6 +13,7 @@ import { TableDateRangeFilter, type DateRangeValue } from './ui/TableDateRangeFi
 import { TableNumberRangeFilter, type NumberRangeValue } from './ui/TableNumberRangeFilter';
 import { matchesDateRange, formatDisplayDate } from '@/lib/date-filter';
 import { matchesNumberRange } from '@/lib/number-filter';
+import { getTccApplicationAvailableQuota } from '@/lib/tcc-application-quota';
 import {
   buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
@@ -67,6 +68,12 @@ interface Application {
   bo_attachment_name: string | null;
   created_at: string;
   updated_at: string;
+  certificate_issue_date?: string | null;
+  rc_remaining_quota?: number | null;
+  rc_period_certificate?: string | null;
+  rc_tonnage_band?: string | null;
+  rc_registration_number?: string | null;
+  rc_certificate_year?: number | null;
   client_chemicals?: { available_quantity: number } | null;
   clients: {
     company_name: string;
@@ -659,10 +666,13 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                   <div>
                     <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Available Quota</span>
                     <span className="font-bold text-slate-800">
-                      {selectedApp?.client_chemicals?.available_quantity ??
-                        selectedApp?.chemicals.available_quantity}{' '}
-                      MT
+                      {selectedApp ? getTccApplicationAvailableQuota(selectedApp) : 0} MT
                     </span>
+                    {selectedApp?.rc_period_certificate && (
+                      <span className="block text-[10px] text-slate-500 font-medium mt-0.5">
+                        RC period: {selectedApp.rc_period_certificate}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {selectedApp?.bo_attachment_url && (

@@ -25,10 +25,14 @@ export type TccAdminEditValues = {
 };
 
 function resolveCertificateIssuedAt(app: TccViewApplication): string {
-  const cert = app.certificates;
-  if (!cert) return '';
-  const row = Array.isArray(cert) ? cert[0] : cert;
-  return formatDateInput(row?.issued_at);
+  const fromCert = (() => {
+    const cert = app.certificates;
+    if (!cert) return '';
+    const row = Array.isArray(cert) ? cert[0] : cert;
+    return formatDateInput(row?.issued_at);
+  })();
+  if (fromCert) return fromCert;
+  return formatDateInput(app.certificate_issue_date);
 }
 
 function formatDateInput(value: string | null | undefined) {
@@ -98,7 +102,6 @@ export function TccApplicationAdminEditForm({
       payload.append('eu_importer_company_name', form.eu_importer_company_name.trim());
       payload.append('eu_importer_address', form.eu_importer_address.trim());
       payload.append('purchase_order_number', form.purchase_order_number.trim());
-      payload.append('invoice_number', form.invoice_number.trim());
       payload.append('quantity_mt', form.quantity_mt);
       payload.append('export_date', form.export_date);
       if (form.certificateId) {
@@ -126,12 +129,12 @@ export function TccApplicationAdminEditForm({
         eu_importer_company_name: form.eu_importer_company_name.trim(),
         eu_importer_address: form.eu_importer_address.trim(),
         purchase_order_number: form.purchase_order_number.trim(),
-        invoice_number: form.invoice_number.trim() || null,
         quantity_mt: Number(form.quantity_mt),
         export_date: form.export_date,
         registration_number: form.registration_number.trim(),
         remarks: form.remarks.trim() || null,
         updated_at: new Date().toISOString(),
+        certificate_issue_date: form.issue_date || null,
         ...(issueDateIso ? { certificateIssuedAt: issueDateIso } : {}),
       });
     });
@@ -161,7 +164,7 @@ export function TccApplicationAdminEditForm({
               required
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 sm:col-span-2">
             <FormLabel required>Purchase order number</FormLabel>
             <Input
               value={form.purchase_order_number}
@@ -169,29 +172,20 @@ export function TccApplicationAdminEditForm({
               required
             />
           </div>
-          <div className="space-y-2">
-            <FormLabel>Invoice number</FormLabel>
-            <Input
-              value={form.invoice_number}
-              onChange={(e) => updateField('invoice_number', e.target.value)}
-            />
-          </div>
           <div className="space-y-2 sm:col-span-2">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Dates</p>
           </div>
           <div className="space-y-2">
-            <FormLabel required={Boolean(form.certificateId)}>Issue date</FormLabel>
+            <FormLabel>Issue date</FormLabel>
             <DatePicker
               value={form.issue_date}
               onChange={(value) => updateField('issue_date', value)}
-              disabled={!form.certificateId}
-              required={Boolean(form.certificateId)}
             />
-            {!form.certificateId && (
-              <p className="text-[10px] text-slate-500 font-medium">
-                Available after the certificate is issued on approval.
-              </p>
-            )}
+            <p className="text-[10px] text-slate-500 font-medium">
+              {form.certificateId
+                ? 'Updates the issued date on the generated certificate.'
+                : 'Saved on the application and used as the certificate issue date when you approve.'}
+            </p>
           </div>
           <div className="space-y-2">
             <FormLabel required>Expected export date</FormLabel>

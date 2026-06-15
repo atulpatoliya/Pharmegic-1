@@ -8,6 +8,10 @@ import {
 } from '@/lib/tcc-pdf-data';
 import { CERTIFICATES_BUCKET } from '@/lib/storage';
 import { convertTccDocxToPdf, generateTccCertificateDocx } from '@/services/tcc-certificate-docx';
+import { findReachCertificateForExportDate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
+
+const REACH_QUOTA_CERT_SELECT =
+  'id, certificate_number, client_id, chemical_id, status, expires_at, issued_at, type, allocated_quantity, tonnage_band, registration_number';
 
 type TccCertPdfInput = {
   certificateNumber: string;
@@ -201,6 +205,110 @@ export function buildTccCertificatePdfInputFromCert(cert: {
     validUntilDate: cert.expires_at?.split('T')[0] || application.export_date || '',
     deliveryChallanNo:
       application.purchase_order_number?.trim() || application.tracking_id || undefined,
+  };
+}
+
+/** Builds preview input for a pending TCC application (admin review before approval). */
+export async function buildTccApplicationPreviewInput(
+  supabase: SupabaseClient,
+  applicationId: string
+): Promise<TccCertPdfInput> {
+  const { data: app, error } = await supabase
+    .from('tcc_applications')
+    .select(
+      `
+      id,
+      client_id,
+      chemical_id,
+      quantity_mt,
+      export_date,
+      tracking_id,
+      registration_number,
+      remarks,
+      certificate_issue_date,
+      reach_certificate_id,
+      eu_importer_company_name,
+      eu_importer_address,
+      purchase_order_number,
+      clients (
+        company_name,
+        uuid_number,
+        address,
+        city,
+        state,
+        postal_code,
+        country
+      ),
+      chemicals (
+        chemical_name,
+        cas_number,
+        ec_number,
+        tonnage_band
+      )
+    `
+    )
+    .eq('id', applicationId)
+    .single();
+
+  if (error || !app) {
+    throw new Error('TCC application not found.');
+  }
+
+  const client = Array.isArray(app.clients) ? app.clients[0] : app.clients;
+  const chemicalRaw = Array.isArray(app.chemicals) ? app.chemicals[0] : app.chemicals;
+
+  if (!client || !chemicalRaw) {
+    throw new Error('TCC application data is incomplete.');
+  }
+
+  const { data: reachCerts } = await supabase
+    .from('certificates')
+    .select(REACH_QUOTA_CERT_SELECT)
+    .eq('client_id', app.client_id)
+    .eq('chemical_id', app.chemical_id)
+    .eq('type', REACH_CERTIFICATE_TYPE)
+    .neq('status', 'revoked');
+
+  const reachCert =
+    (app.reach_certificate_id
+      ? (reachCerts || []).find((cert) => cert.id === app.reach_certificate_id)
+      : null) ||
+    (app.export_date
+      ? findReachCertificateForExportDate(reachCerts || [], app.chemical_id, app.export_date)
+      : null);
+
+  const chemical: TccPdfChemical = {
+    ...chemicalRaw,
+    tonnage_band: reachCert?.tonnage_band || chemicalRaw.tonnage_band,
+  };
+
+  const issueDateRaw = app.certificate_issue_date
+    ? String(app.certificate_issue_date).split('T')[0]
+    : new Date().toISOString().split('T')[0];
+  const issueDate = new Date(`${issueDateRaw}T12:00:00`);
+  const expiryDate = new Date(issueDate);
+  expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+  const application: TccPdfApplication = {
+    quantity_mt: app.quantity_mt,
+    export_date: app.export_date,
+    tracking_id: app.tracking_id,
+    registration_number: app.registration_number,
+    remarks: app.remarks,
+    eu_importer_company_name: app.eu_importer_company_name,
+    eu_importer_address: app.eu_importer_address,
+    purchase_order_number: app.purchase_order_number,
+  };
+
+  return {
+    certificateNumber: 'TCC-PREVIEW',
+    client,
+    chemical,
+    application,
+    registrationNumber:
+      reachCert?.registration_number?.trim() || app.registration_number?.trim() || null,
+    validUntilDate: expiryDate.toISOString().split('T')[0],
+    deliveryChallanNo: app.tracking_id?.trim() || app.purchase_order_number?.trim() || undefined,
   };
 }
 

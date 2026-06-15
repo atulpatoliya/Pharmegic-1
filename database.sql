@@ -302,6 +302,7 @@ ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS eu_importer_address
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS purchase_order_number TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS invoice_number TEXT;
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS reach_certificate_id UUID REFERENCES public.certificates(id) ON DELETE SET NULL;
+ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS certificate_issue_date DATE;
 
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_host TEXT DEFAULT '';
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_port INTEGER DEFAULT 587;

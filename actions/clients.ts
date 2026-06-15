@@ -6,7 +6,7 @@ import { hashPassword } from '@/lib/auth/password';
 import { formatErrorMessage } from '@/lib/format-error';
 import { getTonnageBandMaxQuota, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuotaForReachPeriod, computeAssignableQuota } from '@/lib/quota';
 import { createReachCertificate, deleteAllReachCertificatesForClientChemical } from '@/actions/reach';
-import { clientWizardSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
+import { clientWizardSchema, clientWizardEditSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================================
@@ -193,6 +193,68 @@ export async function updateClientAction(clientId: string, profile: Record<strin
   }
 }
 
+export async function updateClientWizardAction(
+  clientId: string,
+  data: unknown
+) {
+  const session = await requireAdmin();
+  if (!session) return { success: false, error: 'Unauthorized.' };
+
+  const parsed = clientWizardEditSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message };
+  }
+
+  const adminSupabase = createAdminClient();
+  const { profile, contacts } = parsed.data;
+
+  try {
+    const { password: _password, ...clientProfile } = profile;
+
+    const { error } = await adminSupabase
+      .from('clients')
+      .update({
+        ...clientProfile,
+        email: profile.email.toLowerCase(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', clientId);
+
+    if (error) throw error;
+
+    await adminSupabase.from('client_contacts').delete().eq('client_id', clientId);
+
+    if (contacts.length > 0) {
+      const contactRows = contacts.map((contact) => ({
+        client_id: clientId,
+        first_name: contact.first_name,
+        last_name: contact.last_name,
+        email: contact.email,
+        phone: contact.phone || null,
+        role: contact.role || null,
+      }));
+      const { error: contactError } = await adminSupabase.from('client_contacts').insert(contactRows);
+      if (contactError) throw contactError;
+    }
+
+    await adminSupabase.from('activity_logs').insert({
+      client_id: clientId,
+      user_id: session.userId,
+      action: 'CLIENT_UPDATED',
+      entity_type: 'clients',
+      entity_id: clientId,
+      description: 'Client profile and contacts updated by admin',
+    });
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    revalidatePath(`/admin/clients/${clientId}/edit`);
+    revalidatePath('/admin/clients');
+    return { success: true, message: 'Client profile updated successfully.' };
+  } catch (err) {
+    console.error('[CLIENT UPDATE ERROR]:', err);
+    return { success: false, error: formatErrorMessage(err) };
+  }
+}
 
 // ============================================================================
 // CHANGE CLIENT EMAIL (Admin only)
@@ -433,9 +495,12 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
   if (!data.validated_date?.trim()) return { success: false, error: 'Validated date is required.' };
 
   const adminSupabase = createAdminClient();
+  let chemicalId: string | undefined;
+  let isNewOrRestored = false;
+  let existingLink: { id: string; status: string } | null = null;
+
   try {
     const targetChemicalId = data.target_chemical_id?.trim() || null;
-    let chemicalId: string | undefined;
 
     if (targetChemicalId) {
       const { data: targetChem, error: targetErr } = await adminSupabase
@@ -503,14 +568,14 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
     let assignable = calcQuota;
 
-    let isNewOrRestored = false;
-    const { data: existingLink } = await adminSupabase
+    const { data: linkRow } = await adminSupabase
       .from('client_chemicals')
       .select('id, status')
       .eq('client_id', clientId)
       .eq('chemical_id', chemicalId)
       .maybeSingle();
 
+    existingLink = linkRow;
     isNewOrRestored = !(existingLink && existingLink.status !== 'trashed');
 
     if (!existingLink || existingLink.status === 'trashed') {
@@ -667,8 +732,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     };
   } catch (err) {
     console.error('[ASSIGN CHEMICAL ERROR]:', err);
-    const isNewOrRestored = !(existingLink && existingLink.status !== 'trashed');
-    if (isNewOrRestored) {
+    if (isNewOrRestored && chemicalId) {
       try {
         const adminSupabase = createAdminClient();
         await adminSupabase

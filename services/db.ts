@@ -1,4 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { computeTccQuotaForExportDate } from '@/lib/quota';
+import { REACH_CERTIFICATE_TYPE, getReachCertificateYear } from '@/lib/reach-certificate';
 
 // ============================================================================
 // ADMIN DASHBOARD SERVICES
@@ -346,6 +348,60 @@ export async function deleteChemical(supabase: SupabaseClient, id: string) {
 // ============================================================================
 // TCC APPLICATIONS & CERTIFICATE APPROVALS
 // ============================================================================
+const REACH_QUOTA_CERT_SELECT =
+  'id, certificate_number, client_id, chemical_id, status, expires_at, issued_at, type, allocated_quantity, tonnage_band, registration_number';
+
+const TCC_APPROVED_EXPORT_SELECT =
+  'id, client_id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)';
+
+async function enrichTccApplicationsWithRcQuota(
+  supabase: SupabaseClient,
+  applications: Record<string, unknown>[]
+) {
+  if (!applications.length) return applications;
+
+  const clientIds = [...new Set(applications.map((app) => app.client_id as string))];
+
+  const [{ data: reachCerts }, { data: approvedApps }] = await Promise.all([
+    supabase
+      .from('certificates')
+      .select(REACH_QUOTA_CERT_SELECT)
+      .in('client_id', clientIds)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .neq('status', 'revoked'),
+    supabase
+      .from('tcc_applications')
+      .select(TCC_APPROVED_EXPORT_SELECT)
+      .in('client_id', clientIds)
+      .eq('status', 'approved'),
+  ]);
+
+  return applications.map((app) => {
+    if (!app.export_date) {
+      return { ...app, rc_remaining_quota: null, rc_period_certificate: null, rc_tonnage_band: null, rc_registration_number: null, rc_certificate_year: null };
+    }
+
+    const chem = Array.isArray(app.chemicals) ? app.chemicals[0] : app.chemicals;
+    const quota = computeTccQuotaForExportDate({
+      reachCertificates: (reachCerts || []).filter((cert) => cert.client_id === app.client_id),
+      approvedApplications: approvedApps || [],
+      chemicalId: app.chemical_id as string,
+      exportDate: app.export_date as string,
+      tonnageBand: (chem as { tonnage_band?: string | null } | null)?.tonnage_band ?? null,
+      excludeApplicationId: app.status === 'approved' ? undefined : (app.id as string),
+    });
+
+    return {
+      ...app,
+      rc_remaining_quota: quota.remainingQuota,
+      rc_period_certificate: quota.reachCert?.certificate_number ?? null,
+      rc_tonnage_band: quota.reachCert?.tonnage_band ?? null,
+      rc_registration_number: quota.reachCert?.registration_number ?? null,
+      rc_certificate_year: getReachCertificateYear(quota.reachCert?.issued_at ?? null),
+    };
+  });
+}
+
 export async function getTccApplications(supabase: SupabaseClient, statusFilter = 'all') {
   let query = supabase.from('tcc_applications').select(`
     *,
@@ -361,7 +417,7 @@ export async function getTccApplications(supabase: SupabaseClient, statusFilter 
 
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
-  return data || [];
+  return enrichTccApplicationsWithRcQuota(supabase, data || []);
 }
 
 export async function processTccApplication(

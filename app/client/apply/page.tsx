@@ -44,7 +44,9 @@ export default async function ApplyPage({
         .eq('status', 'approved'),
       adminSupabase
         .from('certificates')
-        .select('id, chemical_id, certificate_number, issued_at, expires_at, status, type, file_url')
+        .select(
+          'id, chemical_id, certificate_number, issued_at, expires_at, status, type, file_url, allocated_quantity, tonnage_band'
+        )
         .eq('client_id', clientId)
         .eq('type', REACH_CERTIFICATE_TYPE)
         .order('issued_at', { ascending: false }),
@@ -80,6 +82,8 @@ export default async function ApplyPage({
         issued_at: cert.issued_at,
         expires_at: cert.expires_at,
         file_url: cert.file_url,
+        allocated_quantity: cert.allocated_quantity ?? null,
+        tonnage_band: cert.tonnage_band ?? null,
         status: getReachCertificateStatus(cert),
       }));
 

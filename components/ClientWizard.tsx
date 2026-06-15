@@ -1,6 +1,6 @@
 'use client';
 
-import { createClientAction } from '@/actions/clients';
+import { createClientAction, updateClientWizardAction } from '@/actions/clients';
 import { formatErrorMessage } from '@/lib/format-error';
 import { formatMobileNumberInput, getMobileNumberError } from '@/lib/mobile-number';
 import { Button } from './ui/Button';
@@ -8,45 +8,94 @@ import { Input } from './ui/Input';
 import { ModalErrorBox } from './ui/ModalErrorBox';
 import { FormLabel } from './ui/FormLabel';
 import { toast } from '@/store/toast';
-import { Eye, EyeOff, Plus, Trash2, Save, User } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Save } from 'lucide-react';
 import { useState, useTransition } from 'react';
+
+export type ClientWizardContact = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  role: string;
+};
+
+export type ClientWizardProfile = {
+  company_name: string;
+  uuid_number: string;
+  primary_contact_first_name: string;
+  primary_contact_last_name: string;
+  email: string;
+  password: string;
+  owner_name: string;
+  phone: string;
+  cc_emails: string;
+  cc_phones: string;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  postal_code: string;
+  status: 'active' | 'inactive' | 'pending';
+};
 
 interface ClientWizardProps {
   onSuccess: () => void;
   onCancel: () => void;
+  mode?: 'create' | 'edit';
+  clientId?: string;
+  initialProfile?: Partial<ClientWizardProfile>;
+  initialContacts?: ClientWizardContact[];
 }
 
-export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps) {
+const defaultProfile: ClientWizardProfile = {
+  company_name: '',
+  uuid_number: '',
+  primary_contact_first_name: '',
+  primary_contact_last_name: '',
+  email: '',
+  password: '',
+  owner_name: '',
+  phone: '',
+  cc_emails: '',
+  cc_phones: '',
+  address: '',
+  city: '',
+  state: '',
+  country: 'Turkey',
+  postal_code: '',
+  status: 'active',
+};
+
+export default function ClientWizard({
+  onSuccess,
+  onCancel,
+  mode = 'create',
+  clientId,
+  initialProfile,
+  initialContacts = [],
+}: ClientWizardProps) {
+  const isEdit = mode === 'edit';
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
 
-  const [profile, setProfile] = useState({
-    company_name: '',
-    uuid_number: '',
-    primary_contact_first_name: '',
-    primary_contact_last_name: '',
-    email: '',
-    password: '',
-    owner_name: '',
-    phone: '',
-    cc_emails: '',
-    cc_phones: '',
-    address: '',
-    city: '',
-    state: '',
-    country: 'Turkey',
-    postal_code: '',
-    status: 'active' as 'active' | 'inactive' | 'pending',
+  const [profile, setProfile] = useState<ClientWizardProfile>({
+    ...defaultProfile,
+    ...initialProfile,
+    phone: initialProfile?.phone ? formatMobileNumberInput(initialProfile.phone) : '',
   });
 
-  const [contacts, setContacts] = useState<
-    { first_name: string; last_name: string; email: string; phone: string; role: string }[]
-  >([]);
-
+  const [contacts, setContacts] = useState<ClientWizardContact[]>(initialContacts);
   const [showPassword, setShowPassword] = useState(false);
-
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; phone?: string }>({});
+
+  const [tempContact, setTempContact] = useState<ClientWizardContact>({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    role: '',
+  });
 
   const handleEmailChange = (value: string) => {
     setProfile((p) => ({ ...p, email: value }));
@@ -70,14 +119,6 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
     setTempContact((contact) => ({ ...contact, phone: formatted }));
   };
 
-  const [tempContact, setTempContact] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    role: '',
-  });
-
   const validateForm = () => {
     if (!profile.company_name.trim()) return 'Company name is required';
     if (!profile.uuid_number.trim()) return 'UUID number is required';
@@ -85,7 +126,9 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
     if (!profile.primary_contact_last_name) return 'Primary contact last name is required';
     if (!profile.email) return 'Primary contact email is required';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) return 'Invalid email format';
-    if (!profile.password || profile.password.length < 6) return 'Password must be at least 6 characters';
+    if (!isEdit && (!profile.password || profile.password.length < 6)) {
+      return 'Password must be at least 6 characters';
+    }
     if (getMobileNumberError(profile.phone, true)) return 'Enter a valid primary contact mobile number';
     if (!profile.address.trim()) return 'Address is required';
     if (!profile.city.trim()) return 'City is required';
@@ -129,23 +172,28 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
       return;
     }
 
-    const payload = {
-      profile,
-      contacts,
-    };
+    const payload = { profile, contacts };
 
     startTransition(async () => {
-      const res = await createClientAction(null, payload);
+      const res = isEdit
+        ? await updateClientWizardAction(clientId!, payload)
+        : await createClientAction(null, payload);
+
       if (!res.success) {
         const message =
           typeof res.error === 'string'
             ? res.error
-            : formatErrorMessage(res.error) || 'Failed to create client.';
+            : formatErrorMessage(res.error) || `Failed to ${isEdit ? 'update' : 'create'} client.`;
         setError(message);
         return;
       }
 
-      toast.success(res.message || 'Client created and login credentials set successfully.');
+      toast.success(
+        res.message ||
+          (isEdit
+            ? 'Client profile updated successfully.'
+            : 'Client created and login credentials set successfully.')
+      );
       onSuccess();
     });
   };
@@ -153,8 +201,14 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">New Client Contact Form</h2>
-        <p className="text-sm text-slate-500">Create the client profile, assign contacts, and set an initial password in one page.</p>
+        <h2 className="text-lg font-semibold text-slate-900">
+          {isEdit ? 'Edit Client Contact Form' : 'New Client Contact Form'}
+        </h2>
+        <p className="text-sm text-slate-500">
+          {isEdit
+            ? 'Update the client profile, primary contact, secondary contacts, and address details.'
+            : 'Create the client profile, assign contacts, and set an initial password in one page.'}
+        </p>
       </div>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -244,40 +298,40 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
               </p>
             )}
           </div>
-          <div className="w-full flex flex-col gap-1.5">
-            <FormLabel required>Password</FormLabel>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="client-initial-password"
-                name="client-initial-password"
-                autoComplete="new-password"
-                data-1p-ignore
-                data-lpignore="true"
-                readOnly
-                onFocus={(e) => {
-                  e.currentTarget.readOnly = false;
-                }}
-                placeholder="Create a temporary password"
-                value={profile.password}
-                onChange={(e) => setProfile({ ...profile, password: e.target.value })}
-                className="flex h-10 w-full rounded-md border border-input bg-white px-3 pr-10 py-2 text-sm ring-offset-background placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((value) => !value)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+          {!isEdit && (
+            <div className="w-full flex flex-col gap-1.5">
+              <FormLabel required>Password</FormLabel>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="client-initial-password"
+                  name="client-initial-password"
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  readOnly
+                  onFocus={(e) => {
+                    e.currentTarget.readOnly = false;
+                  }}
+                  placeholder="Create a temporary password"
+                  value={profile.password}
+                  onChange={(e) => setProfile({ ...profile, password: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-white px-3 pr-10 py-2 text-sm ring-offset-background placeholder:text-slate-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </section>
-
-
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-6">
@@ -333,7 +387,9 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
         <ModalErrorBox message={contactError} title="Contact Error" />
 
         <div className="mt-4 space-y-3">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Saved Secondary Contacts ({contacts.length})</h4>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            Saved Secondary Contacts ({contacts.length})
+          </h4>
           {contacts.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-400">
               No secondary contact officers added yet.
@@ -341,10 +397,17 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
           ) : (
             <div className="rounded-3xl border border-slate-100 bg-white divide-y divide-slate-100 overflow-hidden">
               {contacts.map((contact, idx) => (
-                <div key={idx} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                <div
+                  key={idx}
+                  className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between"
+                >
                   <div>
-                    <div className="font-semibold text-slate-900">{contact.first_name} {contact.last_name}</div>
-                    <div className="text-sm text-slate-500">{contact.email} {contact.role ? `• ${contact.role}` : ''}</div>
+                    <div className="font-semibold text-slate-900">
+                      {contact.first_name} {contact.last_name}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {contact.email} {contact.role ? `• ${contact.role}` : ''}
+                    </div>
                     {contact.phone ? <div className="text-sm text-slate-500">{contact.phone}</div> : null}
                   </div>
                   <Button type="button" variant="ghost" onClick={() => removeContact(idx)}>
@@ -406,15 +469,22 @@ export default function ClientWizard({ onSuccess, onCancel }: ClientWizardProps)
         </div>
       </section>
 
-
-      <ModalErrorBox message={error} title="Onboarding Error" />
+      <ModalErrorBox message={error} title={isEdit ? 'Update Error' : 'Onboarding Error'} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>
           Cancel
         </Button>
         <Button type="button" onClick={handleSubmit} isLoading={isPending} disabled={isPending}>
-          Create Client and Set Password <Save className="ml-2 h-4 w-4" />
+          {isEdit ? (
+            <>
+              Save Client Profile <Save className="ml-2 h-4 w-4" />
+            </>
+          ) : (
+            <>
+              Create Client and Set Password <Save className="ml-2 h-4 w-4" />
+            </>
+          )}
         </Button>
       </div>
     </div>

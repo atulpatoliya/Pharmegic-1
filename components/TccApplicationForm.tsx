@@ -32,7 +32,27 @@ interface ReachCertificateInfo {
   issued_at: string;
   expires_at: string | null;
   file_url?: string | null;
+  allocated_quantity?: number | null;
+  tonnage_band?: string | null;
   status: 'valid' | 'expired' | 'revoked' | 'missing';
+}
+
+function mapReachCertificateRecord(
+  cert: ReachCertificateInfo,
+  chemicalId: string
+): ReachCertificateRecord {
+  return {
+    id: cert.id,
+    certificate_number: cert.certificate_number,
+    chemical_id: chemicalId,
+    issued_at: cert.issued_at,
+    expires_at: cert.expires_at,
+    status: cert.status === 'revoked' ? 'revoked' : cert.status === 'valid' ? 'active' : 'expired',
+    file_url: cert.file_url ?? null,
+    type: 'REACH',
+    allocated_quantity: cert.allocated_quantity ?? null,
+    tonnage_band: cert.tonnage_band ?? null,
+  };
 }
 
 interface Substance {
@@ -95,7 +115,6 @@ export default function TccApplicationForm({
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState(
     editApplication?.purchase_order_number ?? ''
   );
-  const [invoiceNumber, setInvoiceNumber] = useState(editApplication?.invoice_number ?? '');
   const [boFile, setBoFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -106,7 +125,6 @@ export default function TccApplicationForm({
     setEuImporterCompanyName(editApplication.eu_importer_company_name?.trim() ?? '');
     setEuImporterAddress(editApplication.eu_importer_address ?? '');
     setPurchaseOrderNumber(editApplication.purchase_order_number ?? '');
-    setInvoiceNumber(editApplication.invoice_number ?? '');
     setBoFile(null);
     setError(null);
   }, [editApplication]);
@@ -116,16 +134,7 @@ export default function TccApplicationForm({
   const quotaContext = useMemo(() => {
     if (!selectedSubstance || !exportDate) return null;
     const reachRecords: ReachCertificateRecord[] = (selectedSubstance.reach_certificates ?? []).map(
-      (cert) => ({
-        id: cert.id,
-        certificate_number: cert.certificate_number,
-        chemical_id: selectedSubstance.id,
-        issued_at: cert.issued_at,
-        expires_at: cert.expires_at,
-        status: cert.status === 'revoked' ? 'revoked' : cert.status === 'valid' ? 'active' : 'expired',
-        file_url: cert.file_url ?? null,
-        type: 'REACH',
-      })
+      (cert) => mapReachCertificateRecord(cert, selectedSubstance.id)
     );
 
     return computeTccQuotaForExportDate({
@@ -162,15 +171,7 @@ export default function TccApplicationForm({
       const substance = authorizedSubstances.find((s) => s.id === chemicalId);
       if (!substance) return;
       const reachRecords: ReachCertificateRecord[] = (substance.reach_certificates ?? []).map(
-        (cert) => ({
-          id: cert.id,
-          certificate_number: cert.certificate_number,
-          chemical_id: substance.id,
-          issued_at: cert.issued_at,
-          expires_at: cert.expires_at,
-          status: cert.status === 'revoked' ? 'revoked' : cert.status === 'valid' ? 'active' : 'expired',
-          type: 'REACH',
-        })
+        (cert) => mapReachCertificateRecord(cert, substance.id)
       );
       const next = computeTccQuotaForExportDate({
         reachCertificates: reachRecords,
@@ -270,7 +271,6 @@ export default function TccApplicationForm({
       payload.append('eu_importer_company_name', euImporterCompanyName.trim());
       payload.append('eu_importer_address', euImporterAddress.trim());
       payload.append('purchase_order_number', purchaseOrderNumber.trim());
-      payload.append('invoice_number', invoiceNumber.trim());
       if (boFile) {
         payload.append('bo_attachment', boFile);
       }
@@ -351,7 +351,7 @@ export default function TccApplicationForm({
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 sm:col-span-2">
                     <FormLabel required>Purchase Order Number</FormLabel>
                     <Input
                       type="text"
@@ -359,16 +359,6 @@ export default function TccApplicationForm({
                       value={purchaseOrderNumber}
                       onChange={(e) => setPurchaseOrderNumber(e.target.value)}
                       required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <FormLabel>Invoice Number</FormLabel>
-                    <Input
-                      type="text"
-                      name="invoice_number"
-                      value={invoiceNumber}
-                      onChange={(e) => setInvoiceNumber(e.target.value)}
                     />
                   </div>
                 </div>

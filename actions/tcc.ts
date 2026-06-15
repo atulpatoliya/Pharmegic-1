@@ -18,6 +18,7 @@ import { revalidatePath } from 'next/cache';
 import { notifyAllAdmins, notifyUser } from '@/lib/notifications';
 import {
   computeTccQuotaForExportDate,
+  getReachCertAllocatedQuota,
   getRemainingQuota,
   getRemainingQuotaForReachPeriod,
   getTonnageBandMaxQuota,
@@ -30,6 +31,9 @@ import { formatErrorMessage } from '@/lib/format-error';
 import type { z } from 'zod';
 
 type TccApplicationInput = z.infer<typeof tccApplicationSchema>;
+
+const REACH_QUOTA_CERT_SELECT =
+  'id, certificate_number, client_id, chemical_id, status, expires_at, issued_at, type, allocated_quantity, tonnage_band, registration_number';
 
 function resolveEuImporterFields(data: TccApplicationInput) {
   return {
@@ -47,6 +51,7 @@ function tccSaveErrorMessage(err: unknown): string {
     message.includes('purchase_order_number') ||
     message.includes('invoice_number') ||
     message.includes('reach_certificate_id') ||
+    message.includes('certificate_issue_date') ||
     message.includes('PGRST204')
   ) {
     return 'Database is missing EU Importer columns. Run the latest database.sql migration in Supabase, then try again.';
@@ -93,7 +98,7 @@ async function validateClientTccSubmission(
   const [{ data: reachCerts }, { data: approvedForChem }] = await Promise.all([
     adminSupabase
       .from('certificates')
-      .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
+      .select(REACH_QUOTA_CERT_SELECT)
       .eq('client_id', clientId)
       .eq('chemical_id', data.chemical_id)
       .eq('type', REACH_CERTIFICATE_TYPE)
@@ -548,13 +553,65 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
     const newQuantity = result.data.quantity_mt;
     const quantityChanged = Number(existing.quantity_mt) !== newQuantity;
 
-    if (existing.status === 'approved' && quantityChanged) {
-      const { data: chem } = await adminSupabase
-        .from('chemicals')
-        .select('tonnage_band')
-        .eq('id', existing.chemical_id)
-        .single();
+    const { data: chem } = await adminSupabase
+      .from('chemicals')
+      .select('tonnage_band')
+      .eq('id', existing.chemical_id)
+      .single();
 
+    const { data: existingApp } = await adminSupabase
+      .from('tcc_applications')
+      .select('export_date')
+      .eq('id', applicationId)
+      .single();
+
+    const exportDate = result.data.export_date || existingApp?.export_date;
+
+    if (exportDate) {
+      const [{ data: reachCerts }, { data: approvedForChem }] = await Promise.all([
+        adminSupabase
+          .from('certificates')
+          .select(REACH_QUOTA_CERT_SELECT)
+          .eq('client_id', existing.client_id)
+          .eq('chemical_id', existing.chemical_id)
+          .eq('type', REACH_CERTIFICATE_TYPE)
+          .neq('status', 'revoked'),
+        adminSupabase
+          .from('tcc_applications')
+          .select(
+            'id, chemical_id, quantity_mt, status, export_date, reach_certificate_id, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)'
+          )
+          .eq('client_id', existing.client_id)
+          .eq('chemical_id', existing.chemical_id)
+          .eq('status', 'approved')
+          .neq('id', applicationId),
+      ]);
+
+      const quotaResult = computeTccQuotaForExportDate({
+        reachCertificates: reachCerts || [],
+        approvedApplications: approvedForChem || [],
+        chemicalId: existing.chemical_id,
+        exportDate,
+        tonnageBand: chem?.tonnage_band ?? null,
+        excludeApplicationId: existing.status === 'approved' ? undefined : applicationId,
+      });
+
+      if (!quotaResult.reachCert) {
+        return {
+          success: false,
+          error:
+            quotaResult.error ||
+            'No REACH Compliance Certificate covers the selected export shipment date.',
+        };
+      }
+
+      if (newQuantity > quotaResult.remainingQuota) {
+        return {
+          success: false,
+          error: `Quantity exceeds available quota for RC period ${quotaResult.reachCert.certificate_number}. Only ${quotaResult.remainingQuota} MT remaining.`,
+        };
+      }
+    } else if (existing.status === 'approved' && quantityChanged) {
       const { data: approvedForChem } = await adminSupabase
         .from('tcc_applications')
         .select('chemical_id, quantity_mt, status, export_date, updated_at, created_at, certificates!certificates_tcc_application_id_fkey(issued_at)')
@@ -574,6 +631,8 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
       }
     }
 
+    const issueDateValue = result.data.issue_date?.trim() || null;
+
     const { error: updateError } = await adminSupabase
       .from('tcc_applications')
       .update({
@@ -583,6 +642,7 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
         invoice_number: result.data.invoice_number?.trim() || null,
         quantity_mt: newQuantity,
         export_date: result.data.export_date,
+        certificate_issue_date: issueDateValue,
         registration_number: result.data.registration_number?.trim() || null,
         remarks: result.data.remarks?.trim() || null,
         updated_at: new Date().toISOString(),
@@ -691,6 +751,13 @@ export async function processTccAction(
 
     if (fetchError || !app) throw new Error('Application not found');
 
+    let matchedReachCert: {
+      id: string;
+      registration_number?: string | null;
+      allocated_quantity?: number | null;
+      tonnage_band?: string | null;
+    } | null = null;
+
     if (status === 'approved') {
       if (!app.export_date) {
         return { success: false, error: 'Cannot approve: export shipment date is missing.' };
@@ -699,7 +766,7 @@ export async function processTccAction(
       const [{ data: reachCerts }, { data: approvedForChem }] = await Promise.all([
         adminSupabase
           .from('certificates')
-          .select('id, certificate_number, chemical_id, status, expires_at, issued_at, type')
+          .select(REACH_QUOTA_CERT_SELECT)
           .eq('client_id', app.client_id)
           .eq('chemical_id', app.chemical_id)
           .eq('type', REACH_CERTIFICATE_TYPE)
@@ -721,6 +788,8 @@ export async function processTccAction(
           : null) ||
         findReachCertificateForExportDate(reachCerts || [], app.chemical_id, app.export_date);
 
+      matchedReachCert = reachCert;
+
       if (!reachCert) {
         return {
           success: false,
@@ -734,14 +803,18 @@ export async function processTccAction(
         app.chemical_id,
         reachCert
       );
-      const bandMax = getTonnageBandMaxQuota(app.chemicals.tonnage_band);
+      const resolvedBand = reachCert.tonnage_band || app.chemicals.tonnage_band;
       const requested = Number(app.quantity_mt);
-      const remaining = getRemainingQuotaForReachPeriod(exportedMt, app.chemicals.tonnage_band);
+      const remaining = getRemainingQuotaForReachPeriod(
+        exportedMt,
+        resolvedBand,
+        reachCert.allocated_quantity
+      );
 
-      if (bandMax != null && requested > remaining) {
+      if (requested > remaining) {
         return {
           success: false,
-          error: `Cannot approve: ${exportedMt} MT already used for this RC period. Only ${remaining} MT remaining.`,
+          error: `Cannot approve: ${exportedMt} MT already used for this RC period (${reachCert.certificate_number}). Only ${remaining} MT remaining.`,
         };
       }
 
@@ -838,21 +911,13 @@ export async function processTccAction(
       const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
       const certNumber = `TCC-${new Date().getFullYear()}-${randStr}`;
 
-      // 6. Fetch REACH registration number for this substance
-      const { data: reachCert } = await adminSupabase
-        .from('certificates')
-        .select('registration_number')
-        .eq('client_id', app.client_id)
-        .eq('chemical_id', app.chemical_id)
-        .eq('type', REACH_CERTIFICATE_TYPE)
-        .eq('status', 'active')
-        .order('issued_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      // 7. Generate certificate file from TCC Word template
-      const issueDate = new Date();
-      const expiryDate = new Date();
+      const issueDateRaw = app.certificate_issue_date
+        ? String(app.certificate_issue_date).split('T')[0]
+        : null;
+      const issueDate = issueDateRaw
+        ? new Date(`${issueDateRaw}T12:00:00`)
+        : new Date();
+      const expiryDate = new Date(issueDate);
       expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
       const certFile = await buildTccCertificateStoredFile({
@@ -860,7 +925,7 @@ export async function processTccAction(
         client: app.clients,
         chemical: app.chemicals,
         application: app,
-        registrationNumber: reachCert?.registration_number,
+        registrationNumber: matchedReachCert?.registration_number || null,
         validUntilDate: expiryDate.toISOString().split('T')[0],
         deliveryChallanNo: app.tracking_id,
       });
@@ -888,7 +953,7 @@ export async function processTccAction(
           chemical_id: app.chemical_id,
           tcc_application_id: applicationId,
           certificate_number: certNumber,
-          registration_number: reachCert?.registration_number || null,
+          registration_number: matchedReachCert?.registration_number || null,
           type: 'TCC',
           file_url: publicUrl,
           issued_at: issueDate.toISOString(),

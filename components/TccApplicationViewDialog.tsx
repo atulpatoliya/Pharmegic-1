@@ -14,6 +14,7 @@ import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { formatDisplayDate } from '@/lib/date-filter';
+import { getTccApplicationAvailableQuota, resolveTccApplicationCertificateYear, resolveTccApplicationRegistrationNumber, resolveTccApplicationTonnageBand } from '@/lib/tcc-application-quota';
 import {
   Building,
   FileText,
@@ -32,6 +33,7 @@ import {
 } from '@/components/TccApplicationAdminEditForm';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import {
+  buildTccCertificateApplicationPreviewUrl,
   buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
@@ -67,6 +69,12 @@ export interface TccViewApplication {
   bo_attachment_name?: string | null;
   created_at: string;
   updated_at: string;
+  certificate_issue_date?: string | null;
+  rc_remaining_quota?: number | null;
+  rc_period_certificate?: string | null;
+  rc_tonnage_band?: string | null;
+  rc_registration_number?: string | null;
+  rc_certificate_year?: number | null;
   client_chemicals?: { available_quantity: number } | null;
   clients: { company_name: string; email: string };
   chemicals: {
@@ -91,6 +99,12 @@ function resolveCertificate(app: TccViewApplication): TccViewCertificate | null 
   if (!c) return null;
   if (Array.isArray(c)) return c[0] ?? null;
   return c;
+}
+
+function resolveIssueDate(app: TccViewApplication): string | null {
+  const issuedAt = resolveCertificate(app)?.issued_at;
+  if (issuedAt) return issuedAt;
+  return app.certificate_issue_date ?? null;
 }
 
 function formatEmailList(emails: string[]): string {
@@ -204,13 +218,14 @@ export function TccApplicationViewDialog({
 
   if (!displayApp) return null;
 
-  const availableQuota =
-    displayApp.client_chemicals?.available_quantity ?? displayApp.chemicals.available_quantity;
+  const availableQuota = getTccApplicationAvailableQuota(displayApp);
   const showActions = allowReview && canReviewActions(displayApp.status) && !isEditing;
   const boUrl = displayApp.bo_attachment_url;
   const docxPreviewUrl = cert?.id
     ? `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`
-    : '';
+    : displayApp.id
+      ? `${buildTccCertificateApplicationPreviewUrl(displayApp.id)}&v=${previewVersion}`
+      : '';
   const totalSent = mailState.mail_resend_count + (mailState.mail_sent ? 1 : 0);
 
   const handleSendMail = () => {
@@ -320,7 +335,6 @@ export function TccApplicationViewDialog({
             <DetailItem label="Company name">{displayApp.eu_importer_company_name || '—'}</DetailItem>
             <DetailItem label="Address">{displayApp.eu_importer_address || '—'}</DetailItem>
             <DetailItem label="Purchase order number">{displayApp.purchase_order_number || '—'}</DetailItem>
-            <DetailItem label="Invoice number">{displayApp.invoice_number || '—'}</DetailItem>
           </div>
         </div>
 
@@ -343,11 +357,14 @@ export function TccApplicationViewDialog({
                   <span className="font-mono text-xs">{displayApp.chemicals.ec_number}</span>
                 </DetailItem>
               )}
-              {displayApp.chemicals.tonnage_band && (
-                <DetailItem label="Tonnage band">{displayApp.chemicals.tonnage_band}</DetailItem>
-              )}
-              <DetailItem label="Substance validity">
-                {formatDisplayDate(displayApp.chemicals.validity_date)}
+              <DetailItem label="Tonnage band">
+                {resolveTccApplicationTonnageBand(displayApp) || '—'}
+              </DetailItem>
+              <DetailItem label="Certificate year">
+                {resolveTccApplicationCertificateYear(displayApp) ?? '—'}
+              </DetailItem>
+              <DetailItem label="Issue date">
+                {formatDisplayDate(resolveIssueDate(displayApp))}
               </DetailItem>
               <DetailItem label="Quantity requested">
                 <span className="text-lg font-black text-teal-800">{displayApp.quantity_mt} MT</span>
@@ -355,8 +372,10 @@ export function TccApplicationViewDialog({
               <DetailItem label="Available quota (client)">
                 {availableQuota} MT
               </DetailItem>
-              <DetailItem label="Registration Number">
-                <span className="font-mono text-xs">{displayApp.registration_number}</span>
+              <DetailItem label="Registration number">
+                <span className="font-mono text-xs">
+                  {resolveTccApplicationRegistrationNumber(displayApp) || '—'}
+                </span>
               </DetailItem>
               <DetailItem label="Expected export date">
                 {formatDisplayDate(displayApp.export_date)}
@@ -496,13 +515,26 @@ export function TccApplicationViewDialog({
 
                 <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
               </div>
+            ) : docxPreviewUrl ? (
+              <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50/50">
+                <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <Badge variant="outline" className="text-[10px]">
+                      Draft preview
+                    </Badge>
+                    <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                      Based on current submission data. The final certificate is generated when you approve.
+                    </p>
+                  </div>
+                </div>
+                <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
+              </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
                 <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-sm font-semibold text-slate-600">Certificate not issued yet</p>
+                <p className="text-sm font-semibold text-slate-600">Certificate preview unavailable</p>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                  Review the client submission and PO attachment above. After you approve, the PDF certificate will
-                  appear here.
+                  Add an export shipment date to generate a draft certificate preview.
                 </p>
               </div>
             )}

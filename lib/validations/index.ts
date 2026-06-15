@@ -56,6 +56,17 @@ export const clientWizardSchema = z.object({
   contacts: z.array(contactSchema).default([]),
 });
 
+export const clientProfileEditSchema = clientProfileSchema
+  .omit({ password: true })
+  .extend({
+    password: z.string().optional().or(z.literal('')),
+  });
+
+export const clientWizardEditSchema = z.object({
+  profile: clientProfileEditSchema,
+  contacts: z.array(contactSchema).default([]),
+});
+
 // ============================================================================
 // ASSIGN CHEMICAL TO CLIENT
 // ============================================================================

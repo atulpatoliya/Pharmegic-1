@@ -29,10 +29,12 @@ import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
 import { FormLabel } from '@/components/ui/FormLabel';
 import { formatErrorMessage } from '@/lib/format-error';
 import { resolveQuotaConsumption, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuota, getTonnageBandMaxQuota, getReachCertAllocatedQuota } from '@/lib/quota';
+import { computeTccApplicationRcQuota } from '@/lib/tcc-application-quota';
 import {
   isActiveReachCertificate,
   mapLatestReachByChemical,
   mapAllReachByChemical,
+  getReachCertificateYear,
   isReachCertificateType,
   getReachCertsForClientChemical,
   findReachCertificatePeriodConflict,
@@ -46,7 +48,6 @@ import {
   getFirstDateOfYear,
   getLastDateOfYear,
   getTodayDateString,
-  getReachCertificateYear,
   getDefaultReachPeriodForYear,
   suggestRenewCertificateDates,
 } from '@/lib/reach-certificate';
@@ -1289,15 +1290,42 @@ export default function ClientDashboardDetails({
       if (match) cc = { available_quantity: Number(match.available_quantity ?? 0) };
     }
     const chemicalId = app.chemical_id as string | undefined;
-    const exportedRaw = chemicalId ? sumApprovedExports(tccHistory, chemicalId, chartYear) : 0;
-    const tonnageBand = chem?.tonnage_band ?? null;
-    const remainingQuota = getRemainingQuota(Number(cc?.available_quantity ?? 0), exportedRaw, tonnageBand);
+    const exportDate = (app.export_date as string | null | undefined) ?? null;
+    let remainingQuota = 0;
+    let rcPeriodCertificate: string | null = null;
+    let rcTonnageBand: string | null = null;
+    let rcRegistrationNumber: string | null = null;
+    let rcCertificateYear: number | null = null;
+
+    if (chemicalId && exportDate) {
+      const quota = computeTccApplicationRcQuota(
+        {
+          id: app.id as string,
+          chemical_id: chemicalId,
+          export_date: exportDate,
+          status: app.status as string,
+          chemicals: chem,
+        },
+        rcCertificates as import('@/lib/reach-certificate').ReachCertificateRecord[],
+        tccHistory
+      );
+      remainingQuota = quota.remainingQuota;
+      rcPeriodCertificate = quota.reachCert?.certificate_number ?? null;
+      rcTonnageBand = quota.reachCert?.tonnage_band ?? null;
+      rcRegistrationNumber = quota.reachCert?.registration_number ?? null;
+      rcCertificateYear = getReachCertificateYear(quota.reachCert?.issued_at ?? null);
+    } else if (chemicalId) {
+      const exportedRaw = sumApprovedExports(tccHistory, chemicalId, chartYear);
+      const tonnageBand = chem?.tonnage_band ?? null;
+      remainingQuota = getRemainingQuota(Number(cc?.available_quantity ?? 0), exportedRaw, tonnageBand);
+    }
     cc = { available_quantity: remainingQuota };
     return {
       id: app.id as string,
       tracking_id: app.tracking_id as string | undefined,
       quantity_mt: Number(app.quantity_mt ?? 0),
-      registration_number: (app.registration_number as string) || '',
+      registration_number:
+        rcRegistrationNumber?.trim() || (app.registration_number as string) || '',
       export_date: (app.export_date as string | null | undefined) ?? null,
       remarks: app.remarks as string | null | undefined,
       status: app.status as string,
@@ -1320,6 +1348,12 @@ export default function ClientDashboardDetails({
         validity_date: chem?.validity_date ?? null,
         available_quantity: remainingQuota,
       },
+      rc_remaining_quota: remainingQuota,
+      rc_period_certificate: rcPeriodCertificate,
+      rc_tonnage_band: rcTonnageBand,
+      rc_registration_number: rcRegistrationNumber,
+      rc_certificate_year: rcCertificateYear,
+      certificate_issue_date: (app.certificate_issue_date as string | null | undefined) ?? null,
       certificates: app.certificates as TccViewApplication['certificates'],
     };
   };
@@ -2642,10 +2676,16 @@ export default function ClientDashboardDetails({
                   <div>
                     <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px]">Available Quota</span>
                     <span className="font-bold text-slate-800">
-                      {selectedTccApp?.client_chemicals?.available_quantity ??
-                        selectedTccApp?.chemicals.available_quantity}{' '}
+                      {selectedTccApp?.rc_remaining_quota ??
+                        selectedTccApp?.chemicals.available_quantity ??
+                        0}{' '}
                       MT
                     </span>
+                    {selectedTccApp?.rc_period_certificate && (
+                      <span className="block text-[10px] text-slate-500 font-medium mt-0.5">
+                        RC period: {selectedTccApp.rc_period_certificate}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {selectedTccApp?.bo_attachment_url && (
