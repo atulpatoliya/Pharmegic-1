@@ -2,6 +2,8 @@
 
 import { renderAsync } from 'docx-preview';
 
+const DOCX_PREVIEW_CLASS = 'docx';
+
 function triggerBlobDownload(blob: Blob, fileName: string) {
   const safeName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
   const url = URL.createObjectURL(blob);
@@ -15,34 +17,62 @@ function triggerBlobDownload(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+function findDocxWrapper(host: HTMLElement): HTMLElement | null {
+  return (
+    host.querySelector(`.${DOCX_PREVIEW_CLASS}-wrapper`) ??
+    host.querySelector('.docx-wrapper') ??
+    host.querySelector('.docx-preview-wrapper')
+  );
+}
+
+function waitForLayout(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(resolve, 200);
+      });
+    });
+  });
+}
 
 async function convertDocxBlobToPdfAndDownload(blob: Blob, fileName: string): Promise<void> {
   const host = document.createElement('div');
-  host.style.cssText =
-    'position:fixed;left:0;top:0;width:794px;max-width:100vw;opacity:0;pointer-events:none;z-index:-1;overflow:hidden;background:#fff;';
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = [
+    'position:fixed',
+    'left:0',
+    'top:0',
+    'width:794px',
+    'background:#ffffff',
+    'pointer-events:none',
+    'clip:rect(0,0,0,0)',
+    'overflow:visible',
+  ].join(';');
   document.body.appendChild(host);
 
   try {
-    await renderAsync(blob, host, undefined, {
-      className: 'docx-preview',
+    await renderAsync(blob, host, host, {
+      className: DOCX_PREVIEW_CLASS,
       inWrapper: true,
       ignoreWidth: false,
       ignoreHeight: false,
       breakPages: true,
     });
 
-    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
+    await waitForLayout();
+
+    const wrapper = findDocxWrapper(host);
+    if (!wrapper) {
+      throw new Error('Certificate preview failed to render.');
+    }
 
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
       import('html2canvas'),
       import('jspdf'),
     ]);
 
-    const wrapper = host.querySelector('.docx-wrapper') as HTMLElement | null;
-    if (!wrapper) throw new Error('Certificate preview failed to render.');
-
     const pageElements = Array.from(wrapper.children).filter(
-      (el): el is HTMLElement => el instanceof HTMLElement
+      (el): el is HTMLElement => el instanceof HTMLElement && el.offsetHeight > 0
     );
     const targets = pageElements.length > 0 ? pageElements : [wrapper];
 
@@ -54,10 +84,19 @@ async function convertDocxBlobToPdfAndDownload(blob: Blob, fileName: string): Pr
       const canvas = await html2canvas(targets[i], {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
         scrollX: 0,
         scrollY: 0,
+        width: targets[i].scrollWidth,
+        height: targets[i].scrollHeight,
+        onclone: (_doc, clonedElement) => {
+          clonedElement.style.opacity = '1';
+          clonedElement.style.visibility = 'visible';
+          clonedElement.style.transform = 'none';
+          clonedElement.style.clip = 'auto';
+        },
       });
 
       if (canvas.width === 0 || canvas.height === 0) {
@@ -129,29 +168,11 @@ export async function downloadCertificatePdf(params: {
       const body = (await pdfRes.json().catch(() => null)) as { error?: string } | null;
       serverError = body?.error;
     }
-  } catch {
-    // Fall through to DOCX conversion.
-  }
-
-  try {
-    await downloadPdfFromDocxUrl(params.docxUrl, params.fileName);
-    return;
-  } catch (docxErr) {
-    const docxMessage = docxErr instanceof Error ? docxErr.message : 'PDF download failed.';
-
-    // Last resort: download the DOCX file directly when client-side PDF conversion fails.
-    try {
-      const docxRes = await fetch(params.docxUrl, { credentials: 'same-origin' });
-      if (docxRes.ok) {
-        const docxBlob = await docxRes.blob();
-        const docxName = params.fileName.replace(/\.pdf$/i, '.docx');
-        triggerBlobDownload(docxBlob, docxName);
-        return;
-      }
-    } catch {
-      // Fall through to error below.
+  } catch (err) {
+    if (err instanceof Error && !serverError) {
+      serverError = err.message;
     }
-
-    throw new Error(serverError || docxMessage);
   }
+
+  await downloadPdfFromDocxUrl(params.docxUrl, params.fileName);
 }
