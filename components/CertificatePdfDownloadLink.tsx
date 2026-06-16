@@ -25,6 +25,7 @@ export function CertificatePdfDownloadLink({
 
   const handleClick = async (event: React.MouseEvent | React.KeyboardEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     if (loading) return;
 
     setLoading(true);

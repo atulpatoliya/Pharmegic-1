@@ -6,7 +6,7 @@ import {
   buildReachAddressLines,
   formatReachCertDate,
 } from '@/services/reach-certificate-docx';
-import { getLastDateOfYear, getTodayDateString, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
+import { getLastDateOfYear, getTodayDateString, isReachCertificateType, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 
 function docxResponse(buffer: Buffer, fileName: string) {
   return new NextResponse(new Uint8Array(buffer), {
@@ -59,10 +59,9 @@ export async function GET(request: NextRequest) {
       `
       )
       .eq('id', certificateId)
-      .eq('type', REACH_CERTIFICATE_TYPE)
       .single();
 
-    if (error || !cert) {
+    if (error || !cert || !isReachCertificateType(cert)) {
       return NextResponse.json({ error: 'RC certificate not found.' }, { status: 404 });
     }
 
