@@ -39,6 +39,7 @@ import {
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { toast } from '@/store/toast';
+import { isEuReachFramework } from '@/lib/regulatory-registrations';
 
 export interface TccViewCertificate {
   id: string;
@@ -75,6 +76,7 @@ export interface TccViewApplication {
   rc_tonnage_band?: string | null;
   rc_registration_number?: string | null;
   rc_certificate_year?: number | null;
+  regulatory_framework?: string | null;
   client_chemicals?: { available_quantity: number } | null;
   clients: { company_name: string; email: string };
   chemicals: {
@@ -219,7 +221,8 @@ export function TccApplicationViewDialog({
   if (!displayApp) return null;
 
   const availableQuota = getTccApplicationAvailableQuota(displayApp);
-  const showActions = allowReview && canReviewActions(displayApp.status) && !isEditing;
+  const showActions =
+    allowReview && canReviewActions(displayApp.status) && !isEditing && isEuReachFramework(displayApp.regulatory_framework);
   const boUrl = displayApp.bo_attachment_url;
   const docxPreviewUrl = cert?.id
     ? `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`

@@ -53,6 +53,7 @@ import {
 } from '@/lib/reach-certificate';
 import { buildRcChemicalSummaries, buildRcHistoryRows, type RcChemicalSummaryRow } from '@/lib/rc-chemical-summary';
 import RcCertificatesTable from '@/components/RcCertificatesTable';
+import { canManageAdminRecords } from '@/lib/auth/roles';
 import {
   deleteReachCertificateAction,
   renewReachCertificateAction,
@@ -413,7 +414,8 @@ export default function ClientDashboardDetails({
   const [tccRejectionReason, setTccRejectionReason] = useState('');
   const [tccActionError, setTccActionError] = useState<string | null>(null);
   const canReviewTcc = currentUserRole !== 'CLIENT';
-  const canDeleteClient = currentUserRole === 'MASTER_ADMIN' || currentUserRole === 'SUPER_ADMIN';
+  const canManageRc = canManageAdminRecords(currentUserRole);
+  const canDeleteClient = canManageRc;
 
   type ModalErrorKey =
     | 'email'
@@ -1624,7 +1626,7 @@ export default function ClientDashboardDetails({
         description="Manage issue/expiry dates & remaining quota per year | Expired certificates retain quantity for TCC applications using old date."
         extraActions={
           <>
-            {currentUserRole !== 'CLIENT' && selectedRcCertIds.length > 0 && (
+            {canManageRc && selectedRcCertIds.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -1637,7 +1639,7 @@ export default function ClientDashboardDetails({
                 Send Mail ({selectedRcCertIds.length})
               </Button>
             )}
-            {currentUserRole !== 'CLIENT' && (
+            {canManageRc && (
               <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800 ml-2 font-bold" onClick={openAssignChemModal}>
                 + Assign Sub. (New RC)
               </Button>
@@ -1645,24 +1647,34 @@ export default function ClientDashboardDetails({
           </>
         }
         exportFilename={`${client.company_name.replace(/\s+/g, '_')}_rc_certificates`}
-        onEdit={openEditRcCertModal}
-        onRenew={openRenewRcModal}
-        onDelete={(cert) => {
-          if (!cert.id) {
-            setRcDeleteTarget({
-              kind: 'pending',
-              chemicalId: cert.chemical_id,
-              chemical_name: cert.chemical_name || 'Unknown',
-            });
-          } else {
-            setRcDeleteTarget({
-              kind: 'issued',
-              id: cert.id,
-              certificate_number: cert.certificate_number,
-              chemical_name: (cert.chemicals || cert.chemical)?.chemical_name || 'Unknown',
-            });
-          }
-        }}
+        onEdit={canManageRc ? openEditRcCertModal : undefined}
+        onRenew={canManageRc ? openRenewRcModal : undefined}
+        onDelete={
+          canManageRc
+            ? (cert) => {
+                const isPending = !cert.id;
+                if (isPending) {
+                  if (!cert.chemical_id) {
+                    toast.error('Cannot remove this substance assignment.');
+                    return;
+                  }
+                  setRcDeleteTarget({
+                    kind: 'pending',
+                    chemicalId: cert.chemical_id,
+                    chemical_name: cert.chemical_name || 'Unknown',
+                  });
+                  return;
+                }
+
+                setRcDeleteTarget({
+                  kind: 'issued',
+                  id: cert.id,
+                  certificate_number: cert.certificate_number,
+                  chemical_name: (cert.chemicals || cert.chemical)?.chemical_name || 'Unknown',
+                });
+              }
+            : undefined
+        }
         clientId={client.id}
       />
 
@@ -2635,7 +2647,7 @@ export default function ClientDashboardDetails({
         isOpen={isTccViewOpen}
         onClose={() => setIsTccViewOpen(false)}
         allowReview={canReviewTcc}
-        allowAdminEdit={currentUserRole === 'MASTER_ADMIN' || currentUserRole === 'SUPER_ADMIN'}
+        allowAdminEdit={canManageRc}
         onApplicationUpdated={(updates) => {
           setViewTccApp((prev) => (prev ? { ...prev, ...updates } : prev));
         }}

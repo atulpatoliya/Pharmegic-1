@@ -27,6 +27,7 @@ import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
 } from '@/lib/reach-certificate-download';
+import { canManageAdminRecords } from '@/lib/auth/roles';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import {
   Building,
@@ -112,6 +113,42 @@ function matchesText(haystack: string, needle: string) {
   return haystack.toLowerCase().includes(needle.trim().toLowerCase());
 }
 
+function findClientChemRow(
+  clientChemicals: any[] | undefined,
+  clientId: string,
+  chemicalId: string | null | undefined
+) {
+  if (!clientChemicals || !chemicalId) return undefined;
+  return clientChemicals.find(
+    (row) => row.chemical_id === chemicalId && row.client_id === clientId
+  );
+}
+
+function resolveClientChemForActions(
+  clientChemicals: any[] | undefined,
+  cert: RcCertificateTableRecord,
+  group: { clientId: string; chemicalId: string | null }
+) {
+  const clientId = cert.client_id || group.clientId;
+  const chemicalId = cert.chemical_id ?? group.chemicalId;
+  const existing = findClientChemRow(clientChemicals, clientId, chemicalId);
+  if (existing) return existing;
+
+  const chem = cert.chemicals || cert.chemical;
+  if (!chemicalId || !chem) return undefined;
+
+  return {
+    client_id: clientId,
+    chemical_id: chemicalId,
+    chemicals: chem,
+    tonnage_band: cert.tonnage_band || chem.tonnage_band,
+    validity_date: cert.expires_at,
+    registration_number: cert.registration_number,
+    issued_date: cert.issued_at?.slice(0, 10),
+    certificate_number: cert.certificate_number,
+  };
+}
+
 export default function RcCertificatesTable({
   certificates,
   clientChemicals,
@@ -132,6 +169,7 @@ export default function RcCertificatesTable({
   tccHistory,
 }: RcCertificatesTableProps) {
   const [columnFilters, setColumnFilters] = useState(INITIAL_FILTERS);
+  const canManageRc = canManageAdminRecords(currentUserRole);
 
   const filteredCertificates = useMemo(() => {
     return certificates.filter((cert) => {
@@ -461,9 +499,7 @@ export default function RcCertificatesTable({
                 groupedData.flatMap((group) => {
                   if (group.certs.length === 0) {
                     const chemId = group.chemicalId;
-                    const cc = clientChemicals && chemId
-                      ? clientChemicals.find((c: any) => c.chemical_id === chemId)
-                      : undefined;
+                    const cc = findClientChemRow(clientChemicals, group.clientId, chemId);
 
                     return (
                       <tr
@@ -540,7 +576,7 @@ export default function RcCertificatesTable({
                         {/* Actions column */}
                         <td className="px-4 py-3.5 align-middle text-center">
                           <div className="flex justify-center gap-1">
-                            {currentUserRole !== 'CLIENT' && (
+                            {canManageRc && (
                               <>
                                 {cc && onEdit && (
                                   <Button
@@ -555,6 +591,7 @@ export default function RcCertificatesTable({
                                 )}
                                 {onDelete && (
                                   <Button
+                                    type="button"
                                     variant="ghost"
                                     size="sm"
                                     className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
@@ -562,6 +599,7 @@ export default function RcCertificatesTable({
                                     onClick={() =>
                                       onDelete({
                                         chemical_id: group.chemicalId,
+                                        client_id: group.clientId,
                                         id: '',
                                         chemical_name: group.chemicalName,
                                       })
@@ -585,9 +623,7 @@ export default function RcCertificatesTable({
 
                     // Find mapping from clientChemicals to calculate edit/renew actions
                     const chemId = cert.chemical_id;
-                    const cc = clientChemicals && chemId
-                      ? clientChemicals.find((c: any) => c.chemical_id === chemId)
-                      : undefined;
+                    const cc = resolveClientChemForActions(clientChemicals, cert, group);
 
                     const siblingCerts = cc && certificates
                       ? getReachCertsForClientChemical(
@@ -746,7 +782,7 @@ export default function RcCertificatesTable({
                               <Download className="h-4 w-4" />
                             </CertificatePdfDownloadLink>
 
-                            {currentUserRole !== 'CLIENT' && (
+                            {canManageRc && (
                               <>
                                 <Link
                                   href={
@@ -760,7 +796,7 @@ export default function RcCertificatesTable({
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </Link>
-                                {cc && onEdit && (
+                                {cc && onEdit ? (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -770,8 +806,24 @@ export default function RcCertificatesTable({
                                   >
                                     <PenLine className="h-4 w-4" />
                                   </Button>
+                                ) : (
+                                  canManageRc &&
+                                  cert.chemical_id && (
+                                    <Link
+                                      href={`/admin/clients/${cert.client_id}/rc-preview/${cert.chemical_id}?certId=${cert.id}`}
+                                      title="Edit certificate"
+                                    >
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-slate-600 hover:bg-slate-100"
+                                      >
+                                        <PenLine className="h-4 w-4" />
+                                      </Button>
+                                    </Link>
+                                  )
                                 )}
-                                {canRenewRow && cc && onRenew && (
+                                {canRenewRow && cc && onRenew ? (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -781,9 +833,26 @@ export default function RcCertificatesTable({
                                   >
                                     <RotateCcw className="h-4 w-4" />
                                   </Button>
+                                ) : (
+                                  canRenewRow &&
+                                  cert.chemical_id && (
+                                    <Link
+                                      href={`/admin/clients/${cert.client_id}`}
+                                      title="Renew certificate on client profile"
+                                    >
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50"
+                                      >
+                                        <RotateCcw className="h-4 w-4" />
+                                      </Button>
+                                    </Link>
+                                  )
                                 )}
                                 {onDelete && (
                                   <Button
+                                    type="button"
                                     variant="ghost"
                                     size="sm"
                                     className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50"

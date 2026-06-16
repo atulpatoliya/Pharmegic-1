@@ -236,6 +236,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     message TEXT NOT NULL,
+    link TEXT,
     read BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -315,6 +316,7 @@ ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS rc_smtp_cc_default TE
 ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS tcc_application_notification_emails TEXT DEFAULT '';
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS regulatory_registrations TEXT[] DEFAULT '{}';
 ALTER TABLE public.tcc_applications ADD COLUMN IF NOT EXISTS regulatory_framework TEXT;
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS link TEXT;
 
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS chemical_id UUID REFERENCES public.chemicals(id) ON DELETE SET NULL;
 ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS registration_number TEXT;

@@ -178,6 +178,63 @@ async function validateClientTccSubmission(
   return { ok: true as const, authChem, reachCert: quotaResult.reachCert, remainingQuota: quotaResult.remainingQuota };
 }
 
+function extractBoStoragePath(publicUrl: string | null | undefined): string | null {
+  if (!publicUrl?.trim()) return null;
+  const markers = [`/object/public/${CERTIFICATES_BUCKET}/`, `/${CERTIFICATES_BUCKET}/`];
+  for (const marker of markers) {
+    const idx = publicUrl.indexOf(marker);
+    if (idx >= 0) {
+      return decodeURIComponent(publicUrl.slice(idx + marker.length).split('?')[0] ?? '');
+    }
+  }
+  const boIdx = publicUrl.indexOf('/bo/');
+  if (boIdx >= 0) {
+    return decodeURIComponent(publicUrl.slice(boIdx + 1).split('?')[0] ?? '');
+  }
+  return null;
+}
+
+export async function purgeNotificationOnlyTccApplications(): Promise<{ deleted: number }> {
+  const session = await getSession();
+  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
+    return { deleted: 0 };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  const { data: apps, error } = await adminSupabase
+    .from('tcc_applications')
+    .select('id, bo_attachment_url, regulatory_framework')
+    .in('regulatory_framework', ['uk_reach', 'turkey_kkdik']);
+
+  if (error || !apps?.length) {
+    return { deleted: 0 };
+  }
+
+  const storagePaths = apps
+    .map((app) => extractBoStoragePath(app.bo_attachment_url))
+    .filter((path): path is string => Boolean(path));
+
+  if (storagePaths.length > 0) {
+    await adminSupabase.storage.from(CERTIFICATES_BUCKET).remove(storagePaths);
+  }
+
+  const { error: deleteError } = await adminSupabase
+    .from('tcc_applications')
+    .delete()
+    .in('regulatory_framework', ['uk_reach', 'turkey_kkdik']);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  revalidatePath('/admin/approvals');
+  revalidatePath('/admin');
+  revalidatePath('/client');
+
+  return { deleted: apps.length };
+}
+
 // ============================================================================
 // APPLY FOR TCC (Client Action)
 // ============================================================================
@@ -336,7 +393,8 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     await notifyAllAdmins(
       adminSupabase,
       'New TCC application',
-      `${companyLabel} submitted ${euData.quantity_mt} MT for ${chemical.chemical_name}. Review in Approvals.`
+      `${companyLabel} submitted ${euData.quantity_mt} MT for ${chemical.chemical_name}. Review in Approvals.`,
+      '/admin/approvals'
     );
 
     await notifyTccApplicationByEmail(adminSupabase, {
@@ -898,11 +956,28 @@ export async function processTccAction(
 
     if (fetchError || !app) throw new Error('Application not found');
 
-    if (status === 'approved' && !isEuReachFramework(app.regulatory_framework)) {
+    if (!isEuReachFramework(app.regulatory_framework)) {
+      const storagePath = extractBoStoragePath(app.bo_attachment_url);
+      if (storagePath) {
+        await adminSupabase.storage.from(CERTIFICATES_BUCKET).remove([storagePath]);
+      }
+
+      const { error: deleteError } = await adminSupabase
+        .from('tcc_applications')
+        .delete()
+        .eq('id', applicationId);
+
+      if (deleteError) throw deleteError;
+
+      revalidatePath('/admin/approvals');
+      revalidatePath('/admin');
+      revalidatePath('/client');
+      revalidatePath(`/admin/clients/${app.client_id}`);
+
       return {
-        success: false,
-        error:
-          'Only EU REACH applications can be approved for TCC certificate issuance. UK REACH and Turkey KKDIK submissions are notification-only.',
+        success: true,
+        message:
+          'UK REACH / Turkey KKDIK notification request removed. These submissions are email-only and are not approved in this portal.',
       };
     }
 
@@ -1143,7 +1218,8 @@ export async function processTccAction(
           adminSupabase,
           clientUser.id,
           'TCC Certificate Issued',
-          `Your certificate ${certNumber} has been issued for ${app.chemicals.chemical_name}.`
+          `Your certificate ${certNumber} has been issued for ${app.chemicals.chemical_name}.`,
+          '/client/certificates'
         );
       }
 
@@ -1165,7 +1241,8 @@ export async function processTccAction(
           adminSupabase,
           clientUser.id,
           status === 'rejected' ? 'TCC Application Rejected' : 'TCC Changes Required',
-          rejectionReason || `Your TCC application for ${app.chemicals.chemical_name} requires attention.`
+          rejectionReason || `Your TCC application for ${app.chemicals.chemical_name} requires attention.`,
+          '/client'
         );
       }
 

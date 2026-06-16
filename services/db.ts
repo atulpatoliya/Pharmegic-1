@@ -17,7 +17,11 @@ export async function getAdminDashboardStats(supabase: SupabaseClient) {
     activeClientsRes,
   ] = await Promise.all([
     supabase.from('clients').select('*', { count: 'exact', head: true }),
-    supabase.from('tcc_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase
+      .from('tcc_applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .or('regulatory_framework.is.null,regulatory_framework.eq.eu_reach'),
     supabase
       .from('clients')
       .select('country, regulatory_registrations, status')
@@ -424,7 +428,11 @@ async function enrichTccApplicationsWithRcQuota(
   });
 }
 
-export async function getTccApplications(supabase: SupabaseClient, statusFilter = 'all') {
+export async function getTccApplications(
+  supabase: SupabaseClient,
+  statusFilter = 'all',
+  options?: { euReachOnly?: boolean }
+) {
   let query = supabase.from('tcc_applications').select(`
     *,
     clients (company_name, email),
@@ -432,6 +440,10 @@ export async function getTccApplications(supabase: SupabaseClient, statusFilter 
     client_chemicals (available_quantity),
     certificates!certificates_tcc_application_id_fkey (*)
   `);
+
+  if (options?.euReachOnly) {
+    query = query.or('regulatory_framework.is.null,regulatory_framework.eq.eu_reach');
+  }
 
   if (statusFilter && statusFilter !== 'all') {
     query = query.eq('status', statusFilter);

@@ -24,6 +24,7 @@ import { ResponsiveTableScroll } from './ui/ResponsiveTableScroll';
 import type { TccEmailDefaults } from '@/components/TccApplicationViewDialog';
 import type { CsvColumn } from '@/lib/export-csv';
 import { toast } from '@/store/toast';
+import { isEuReachFramework } from '@/lib/regulatory-registrations';
 import {
   Clock,
   CheckCircle,
@@ -75,6 +76,7 @@ interface Application {
   rc_tonnage_band?: string | null;
   rc_registration_number?: string | null;
   rc_certificate_year?: number | null;
+  regulatory_framework?: string | null;
   client_chemicals?: { available_quantity: number } | null;
   clients: {
     company_name: string;
@@ -281,6 +283,10 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
   };
 
   const handleOpenAction = (app: Application, type: 'approved' | 'rejected' | 'changes_required') => {
+    if (!isEuReachFramework(app.regulatory_framework)) {
+      toast.error('UK REACH and Turkey KKDIK requests are notification-only and are not reviewed here.');
+      return;
+    }
     setSelectedApp(app);
     setActionType(type);
     setRejectionReason('');

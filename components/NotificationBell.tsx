@@ -8,10 +8,12 @@ import {
   markAllNotificationsReadAction,
 } from '@/actions/notifications';
 import type { NotificationRow } from '@/lib/notifications';
+import { resolveNotificationLink } from '@/lib/notification-links';
 
 interface NotificationBellProps {
   initialNotifications: NotificationRow[];
   unreadCount: number;
+  role?: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT';
 }
 
 function formatWhen(iso: string) {
@@ -33,6 +35,7 @@ function formatWhen(iso: string) {
 export default function NotificationBell({
   initialNotifications,
   unreadCount: initialUnreadCount,
+  role,
 }: NotificationBellProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -57,14 +60,27 @@ export default function NotificationBell({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
-  const handleMarkRead = (id: string) => {
+  const handleNotificationClick = (notification: NotificationRow) => {
+    const href = resolveNotificationLink(notification, role);
+
     startTransition(async () => {
-      const res = await markNotificationReadAction(id);
-      if (res.success) {
-        setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-        setUnreadCount((c) => Math.max(0, c - 1));
-        router.refresh();
+      if (!notification.read) {
+        const res = await markNotificationReadAction(notification.id);
+        if (res.success) {
+          setItems((prev) =>
+            prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+          );
+          setUnreadCount((c) => Math.max(0, c - 1));
+        }
       }
+
+      setOpen(false);
+
+      if (href) {
+        router.push(href);
+      }
+
+      router.refresh();
     });
   };
 
@@ -124,9 +140,9 @@ export default function NotificationBell({
                   <li key={n.id}>
                     <button
                       type="button"
-                      onClick={() => !n.read && handleMarkRead(n.id)}
+                      onClick={() => handleNotificationClick(n)}
                       disabled={isPending}
-                      className={`w-full text-left px-4 py-3 transition-colors hover:bg-slate-50 ${
+                      className={`w-full text-left px-4 py-3 transition-colors hover:bg-slate-50 cursor-pointer ${
                         !n.read ? 'bg-primary/5' : ''
                       }`}
                     >

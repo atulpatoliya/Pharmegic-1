@@ -4,6 +4,7 @@ export type NotificationRow = {
   id: string;
   title: string;
   message: string;
+  link?: string | null;
   read: boolean;
   created_at: string;
 };
@@ -12,12 +13,14 @@ export async function notifyUser(
   supabase: SupabaseClient,
   userId: string,
   title: string,
-  message: string
+  message: string,
+  link?: string | null
 ) {
   const { error } = await supabase.from('notifications').insert({
     user_id: userId,
     title,
     message,
+    link: link?.trim() || null,
     read: false,
   });
   if (error) throw error;
@@ -26,7 +29,8 @@ export async function notifyUser(
 export async function notifyAllAdmins(
   supabase: SupabaseClient,
   title: string,
-  message: string
+  message: string,
+  link?: string | null
 ) {
   const { data: admins, error: fetchErr } = await supabase
     .from('users')
@@ -40,6 +44,7 @@ export async function notifyAllAdmins(
     user_id: a.id,
     title,
     message,
+    link: link?.trim() || null,
     read: false,
   }));
 

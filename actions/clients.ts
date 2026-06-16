@@ -758,13 +758,18 @@ export async function removeChemicalFromClientAction(clientId: string, chemicalI
 
   const adminSupabase = createAdminClient();
   try {
-    const { error } = await adminSupabase
+    const { data: updated, error } = await adminSupabase
       .from('client_chemicals')
       .update({ status: 'trashed' })
       .eq('client_id', clientId)
-      .eq('chemical_id', chemicalId);
+      .eq('chemical_id', chemicalId)
+      .eq('status', 'active')
+      .select('id');
 
     if (error) throw error;
+    if (!updated?.length) {
+      return { success: false, error: 'Substance assignment not found or already removed.' };
+    }
     
     await adminSupabase.from('activity_logs').insert({
       client_id: clientId,
@@ -778,6 +783,7 @@ export async function removeChemicalFromClientAction(clientId: string, chemicalI
     revalidatePath(`/admin/clients/${clientId}`);
     revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
     revalidatePath(`/admin/clients/${clientId}/chemicals`);
+    revalidatePath('/admin/rc-certificates');
     return { success: true, message: 'Substance moved to trash.' };
   } catch (err) {
     return { success: false, error: formatErrorMessage(err) };

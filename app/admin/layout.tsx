@@ -24,7 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .eq('read', false),
     adminSupabase
       .from('notifications')
-      .select('id, title, message, read, created_at')
+      .select('id, title, message, link, read, created_at')
       .eq('user_id', session.userId)
       .order('created_at', { ascending: false })
       .limit(40),

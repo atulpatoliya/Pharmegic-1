@@ -51,12 +51,25 @@ export default async function AdminRcCertificatesPage() {
     .eq('status', 'approved')
     .order('created_at', { ascending: false });
 
+  const { data: clientChemicalsRaw, error: clientChemError } = await adminSupabase
+    .from('client_chemicals')
+    .select('*, chemicals(*)')
+    .neq('status', 'trashed');
+
   if (error) {
     console.error('[RC CERTIFICATES PAGE]', error);
   }
   if (tccError) {
     console.error('[RC CERTIFICATES PAGE TCC HISTORY]', tccError);
   }
+  if (clientChemError) {
+    console.error('[RC CERTIFICATES PAGE CLIENT CHEMICALS]', clientChemError);
+  }
+
+  const clientChemicals = (clientChemicalsRaw || []).map((row: any) => ({
+    ...row,
+    chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+  }));
 
   const normalized = (certificates || []).map((row) => ({
     ...row,
@@ -71,5 +84,12 @@ export default async function AdminRcCertificatesPage() {
     client_chemicals: Array.isArray(row.client_chemicals) ? row.client_chemicals[0] ?? null : row.client_chemicals,
   }));
 
-  return <RcCertificatesDashboard initialCertificates={normalized as never} tccHistory={tccHistory} />;
+  return (
+    <RcCertificatesDashboard
+      initialCertificates={normalized as never}
+      clientChemicals={clientChemicals}
+      currentUserRole={session.role}
+      tccHistory={tccHistory}
+    />
+  );
 }

@@ -65,6 +65,7 @@ export default function TopNavbar({
         <NotificationBell
           initialNotifications={notifications}
           unreadCount={notificationCount}
+          role={role}
         />
 
         <div className="hidden sm:flex items-center gap-3 border-l border-slate-100 pl-4">

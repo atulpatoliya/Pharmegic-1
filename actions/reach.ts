@@ -275,7 +275,8 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
       adminSupabase,
       clientUser.id,
       'RC Compliance Certificate Issued',
-      `Your RC certificate ${certNumber} for ${chemical.chemical_name} is valid until ${expiryDate.toLocaleDateString()}. You may now apply for TCC permits for this substance.`
+      `Your RC certificate ${certNumber} for ${chemical.chemical_name} is valid until ${expiryDate.toLocaleDateString()}. You may now apply for TCC permits for this substance.`,
+      '/client'
     );
   }
 
