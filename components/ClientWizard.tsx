@@ -144,8 +144,6 @@ export default function ClientWizard({
     }
     if (getMobileNumberError(profile.phone, true)) return 'Enter a valid primary contact mobile number';
     if (!profile.address.trim()) return 'Address is required';
-    if (!profile.city.trim()) return 'City is required';
-    if (!profile.state.trim()) return 'State is required';
     if (!profile.postal_code.trim()) return 'Postal code is required';
     if (!profile.country.trim()) return 'Country is required';
     if (regulatoryRegistrations.length === 0) {
@@ -475,14 +473,12 @@ export default function ClientWizard({
             placeholder="Istanbul"
             value={profile.city}
             onChange={(e) => setProfile({ ...profile, city: e.target.value })}
-            required
           />
           <Input
             label="State"
             placeholder="Marmara"
             value={profile.state}
             onChange={(e) => setProfile({ ...profile, state: e.target.value })}
-            required
           />
           <Input
             label="Postal Code"
