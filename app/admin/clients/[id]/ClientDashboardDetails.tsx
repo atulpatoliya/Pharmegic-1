@@ -50,6 +50,8 @@ import {
   getTodayDateString,
   getDefaultReachPeriodForYear,
   suggestRenewCertificateDates,
+  buildRcCertificateYearOptions,
+  getRcCertificateYearRange,
 } from '@/lib/reach-certificate';
 import { buildRcChemicalSummaries, buildRcHistoryRows, type RcChemicalSummaryRow } from '@/lib/rc-chemical-summary';
 import RcCertificatesTable from '@/components/RcCertificatesTable';
@@ -203,12 +205,7 @@ export default function ClientDashboardDetails({
     [clientChemicals, certificates, tccHistory]
   );
 
-  const rcYearOptions = useMemo(() => {
-    return Array.from({ length: 51 }, (_, i) => 1995 + i).map((year) => ({
-      value: String(year),
-      label: String(year),
-    }));
-  }, []);
+  const rcYearOptions = useMemo(() => buildRcCertificateYearOptions(), []);
 
   const emptyAssignChemData = () => {
     const year = new Date().getFullYear();
@@ -232,7 +229,7 @@ export default function ClientDashboardDetails({
   const [assignChemData, setAssignChemData] = useState(emptyAssignChemData);
 
   const availableRcYearOptions = useMemo(() => {
-    const allYears = Array.from({ length: 51 }, (_, i) => 1995 + i);
+    const allYears = getRcCertificateYearRange();
 
     const chemId = assignChemData.target_chemical_id;
     if (!chemId || chemId === 'new_substance') {
@@ -759,7 +756,7 @@ export default function ClientDashboardDetails({
     if (!cc) return;
 
     const current = new Date().getFullYear();
-    const allYears = Array.from({ length: 51 }, (_, i) => 1995 + i);
+    const allYears = getRcCertificateYearRange();
     const siblingCerts = getReachCertsForClientChemical(
       certificates || [],
       chemId,

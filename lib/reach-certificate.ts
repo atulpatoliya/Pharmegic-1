@@ -1,5 +1,22 @@
 export const REACH_CERTIFICATE_TYPE = 'REACH';
 
+export const RC_CERTIFICATE_YEAR_MIN = 2020;
+export const RC_CERTIFICATE_YEAR_MAX = 2045;
+
+export function getRcCertificateYearRange(): number[] {
+  return Array.from(
+    { length: RC_CERTIFICATE_YEAR_MAX - RC_CERTIFICATE_YEAR_MIN + 1 },
+    (_, index) => RC_CERTIFICATE_YEAR_MIN + index
+  );
+}
+
+export function buildRcCertificateYearOptions(): { value: string; label: string }[] {
+  return getRcCertificateYearRange().map((year) => ({
+    value: String(year),
+    label: String(year),
+  }));
+}
+
 export function isReachCertificateType(cert: {
   type?: string | null;
   certificate_number?: string | null;
