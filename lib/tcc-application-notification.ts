@@ -5,12 +5,13 @@ import { sendTccApplicationNotificationEmail } from '@/services/email';
 
 export type TccApplicationNotificationDetails = {
   clientCompanyName: string;
-  chemicalName: string;
+  chemicalName?: string | null;
   casNumber?: string | null;
   ecNumber?: string | null;
+  caseNumber?: string | null;
   quantityMt: number;
   exportDate: string;
-  applicationId: string;
+  applicationId?: string | null;
   regulatoryFramework: string;
   euImporterCompanyName?: string | null;
   euImporterAddress?: string | null;

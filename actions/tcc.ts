@@ -11,7 +11,7 @@ import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import { appendMailSentHistory } from '@/lib/certificate-mail-history';
 import { buildTccSmtpConfig } from '@/lib/certificate-smtp-settings';
-import { adminTccApplicationUpdateSchema, tccApplicationSchema } from '@/lib/validations';
+import { adminTccApplicationUpdateSchema, tccEuApplicationSchema, tccNotificationApplicationSchema } from '@/lib/validations';
 import { uploadBoAttachment, validateBoAttachment } from '@/lib/tcc-attachments';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
@@ -31,18 +31,25 @@ import {
   clientHasRegulatoryRegistration,
   getRegulatoryRegistrationLabel,
   isEuReachFramework,
+  isNotificationOnlyFramework,
   type RegulatoryRegistration,
 } from '@/lib/regulatory-registrations';
 import { canClientEditTccApplication } from '@/lib/tcc-application';
 import { formatErrorMessage } from '@/lib/format-error';
 import type { z } from 'zod';
 
-type TccApplicationInput = z.infer<typeof tccApplicationSchema>;
+type TccEuApplicationInput = z.infer<typeof tccEuApplicationSchema>;
+type TccNotificationApplicationInput = z.infer<typeof tccNotificationApplicationSchema>;
 
 const REACH_QUOTA_CERT_SELECT =
   'id, certificate_number, client_id, chemical_id, status, expires_at, issued_at, type, allocated_quantity, tonnage_band, registration_number';
 
-function resolveEuImporterFields(data: TccApplicationInput) {
+function resolveEuImporterFields(
+  data: Pick<
+    TccEuApplicationInput,
+    'eu_importer_company_name' | 'eu_importer_address' | 'purchase_order_number' | 'invoice_number'
+  >
+) {
   return {
     eu_importer_company_name: data.eu_importer_company_name.trim(),
     eu_importer_address: data.eu_importer_address.trim(),
@@ -70,17 +77,29 @@ function tccSaveErrorMessage(err: unknown): string {
 }
 
 function parseTccApplicationFormData(formData: FormData) {
-  return tccApplicationSchema.safeParse({
-    chemical_id: formData.get('chemical_id'),
+  const regulatoryFramework = String(formData.get('regulatory_framework') ?? '').trim();
+  const common = {
     quantity_mt: formData.get('quantity_mt'),
-    registration_number: formData.get('registration_number') ?? '',
     export_date: formData.get('export_date'),
-    remarks: formData.get('remarks') ?? '',
     eu_importer_company_name: formData.get('eu_importer_company_name') ?? '',
     eu_importer_address: formData.get('eu_importer_address') ?? '',
     purchase_order_number: formData.get('purchase_order_number') ?? '',
     invoice_number: formData.get('invoice_number') ?? '',
-    regulatory_framework: formData.get('regulatory_framework'),
+    regulatory_framework: regulatoryFramework,
+  };
+
+  if (isNotificationOnlyFramework(regulatoryFramework)) {
+    return tccNotificationApplicationSchema.safeParse({
+      ...common,
+      case_number: formData.get('case_number') ?? '',
+    });
+  }
+
+  return tccEuApplicationSchema.safeParse({
+    ...common,
+    chemical_id: formData.get('chemical_id'),
+    registration_number: formData.get('registration_number') ?? '',
+    remarks: formData.get('remarks') ?? '',
   });
 }
 
@@ -215,15 +234,45 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       return { success: false, error: boValidation.error };
     }
 
+    const isEuReach = isEuReachFramework(framework);
+
+    if (!isEuReach) {
+      const notificationData = result.data as TccNotificationApplicationInput;
+      const frameworkLabel = getRegulatoryRegistrationLabel(framework);
+      const companyLabel = client.company_name || 'A client';
+
+      await notifyTccApplicationByEmail(adminSupabase, {
+        clientCompanyName: companyLabel,
+        caseNumber: notificationData.case_number.trim(),
+        quantityMt: notificationData.quantity_mt,
+        exportDate: notificationData.export_date,
+        regulatoryFramework: framework,
+        euImporterCompanyName: euImporter.eu_importer_company_name,
+        euImporterAddress: euImporter.eu_importer_address,
+        purchaseOrderNumber: euImporter.purchase_order_number,
+        poAttachment: {
+          buffer: Buffer.from(await boFile.arrayBuffer()),
+          fileName: boFile.name,
+          contentType: boFile.type || 'application/octet-stream',
+        },
+      });
+
+      return {
+        success: true,
+        message: `${frameworkLabel} request submitted. Admin notification email sent.`,
+      };
+    }
+
+    const euData = result.data as TccEuApplicationInput;
+
     const { data: chemical } = await adminSupabase
       .from('chemicals')
       .select('chemical_name, cas_number, ec_number')
-      .eq('id', result.data.chemical_id)
+      .eq('id', euData.chemical_id)
       .single();
 
     if (!chemical) return { success: false, error: 'Chemical not found.' };
 
-    const isEuReach = isEuReachFramework(framework);
     let authChemId: string;
     let reachCertId: string | null = null;
     let availableBeforeRequest = 0;
@@ -235,45 +284,27 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
         }
       | null = null;
 
-    if (isEuReach) {
-      const validation = await validateClientTccSubmission(adminSupabase, clientId, result.data);
-      if (!validation.ok) {
-        return { success: false, error: validation.error };
-      }
-      authChemId = validation.authChem.id;
-      reachCertId = validation.reachCert.id;
-      availableBeforeRequest = validation.remainingQuota;
-      reachCert = validation.reachCert;
-    } else {
-      const { data: authChem } = await adminSupabase
-        .from('client_chemicals')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('chemical_id', result.data.chemical_id)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (!authChem) {
-        return {
-          success: false,
-          error: 'This chemical is not authorized for your company. Contact your administrator.',
-        };
-      }
-      authChemId = authChem.id;
+    const validation = await validateClientTccSubmission(adminSupabase, clientId, euData);
+    if (!validation.ok) {
+      return { success: false, error: validation.error };
     }
+    authChemId = validation.authChem.id;
+    reachCertId = validation.reachCert.id;
+    availableBeforeRequest = validation.remainingQuota;
+    reachCert = validation.reachCert;
 
     const { data: app, error: appError } = await adminSupabase
       .from('tcc_applications')
       .insert({
         client_id: clientId,
-        chemical_id: result.data.chemical_id,
+        chemical_id: euData.chemical_id,
         client_chemical_id: authChemId,
         reach_certificate_id: reachCertId,
         regulatory_framework: framework,
-        quantity_mt: result.data.quantity_mt,
-        registration_number: result.data.registration_number || null,
-        export_date: result.data.export_date,
-        remarks: result.data.remarks || null,
+        quantity_mt: euData.quantity_mt,
+        registration_number: euData.registration_number || null,
+        export_date: euData.export_date,
+        remarks: euData.remarks || null,
         ...euImporter,
         status: 'pending',
       })
@@ -294,7 +325,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       entity_type: 'tcc_applications',
       entity_id: app.id,
       metadata: {
-        quantity: result.data.quantity_mt,
+        quantity: euData.quantity_mt,
         chemical: chemical.chemical_name,
         regulatory_framework: framework,
       },
@@ -304,10 +335,8 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     const frameworkLabel = getRegulatoryRegistrationLabel(framework);
     await notifyAllAdmins(
       adminSupabase,
-      isEuReach ? 'New TCC application' : `New ${frameworkLabel} request`,
-      isEuReach
-        ? `${companyLabel} submitted ${result.data.quantity_mt} MT for ${chemical.chemical_name}. Review in Approvals.`
-        : `${companyLabel} submitted a ${frameworkLabel} notification request for ${chemical.chemical_name}.`
+      'New TCC application',
+      `${companyLabel} submitted ${euData.quantity_mt} MT for ${chemical.chemical_name}. Review in Approvals.`
     );
 
     await notifyTccApplicationByEmail(adminSupabase, {
@@ -315,17 +344,15 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       chemicalName: chemical.chemical_name,
       casNumber: chemical.cas_number,
       ecNumber: chemical.ec_number,
-      quantityMt: result.data.quantity_mt,
-      exportDate: result.data.export_date,
+      quantityMt: euData.quantity_mt,
+      exportDate: euData.export_date,
       applicationId: app.id,
       regulatoryFramework: framework,
       euImporterCompanyName: euImporter.eu_importer_company_name,
       euImporterAddress: euImporter.eu_importer_address,
       purchaseOrderNumber: euImporter.purchase_order_number,
-      currentAvailableMt: isEuReach ? availableBeforeRequest : null,
-      projectedBalanceMt: isEuReach
-        ? Math.max(0, availableBeforeRequest - result.data.quantity_mt)
-        : null,
+      currentAvailableMt: availableBeforeRequest,
+      projectedBalanceMt: Math.max(0, availableBeforeRequest - euData.quantity_mt),
       rcCertificateNumber: reachCert?.certificate_number ?? null,
       rcPeriodStart: reachCert?.issued_at ?? null,
       rcPeriodEnd: reachCert?.expires_at ?? null,
@@ -342,9 +369,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
     revalidatePath('/admin/approvals');
     return {
       success: true,
-      message: isEuReach
-        ? 'TCC Application submitted. Status: Pending Review.'
-        : `${frameworkLabel} request submitted. Admin notification sent.`,
+      message: 'TCC Application submitted. Status: Pending Review.',
     };
   } catch (err: unknown) {
     return { success: false, error: tccSaveErrorMessage(err) };
@@ -399,6 +424,15 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
       };
     }
 
+    if (isNotificationOnlyFramework(result.data.regulatory_framework)) {
+      return {
+        success: false,
+        error: 'UK REACH and Turkey KKDIK requests cannot be edited. Submit a new notification if needed.',
+      };
+    }
+
+    const euData = result.data as TccEuApplicationInput;
+
     const { data: existing, error: loadError } = await adminSupabase
       .from('tcc_applications')
       .select('id, client_id, status, bo_attachment_url, bo_attachment_name, regulatory_framework')
@@ -414,36 +448,14 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
       return { success: false, error: 'Approved applications cannot be edited.' };
     }
 
-    const isEuReach = isEuReachFramework(result.data.regulatory_framework);
-    let authChemId: string;
-    let reachCertId: string | null = null;
-
-    if (isEuReach) {
-      const validation = await validateClientTccSubmission(adminSupabase, clientId, result.data, {
-        excludeApplicationId: applicationId,
-      });
-      if (!validation.ok) {
-        return { success: false, error: validation.error };
-      }
-      authChemId = validation.authChem.id;
-      reachCertId = validation.reachCert.id;
-    } else {
-      const { data: authChem } = await adminSupabase
-        .from('client_chemicals')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('chemical_id', result.data.chemical_id)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (!authChem) {
-        return {
-          success: false,
-          error: 'This chemical is not authorized for your company. Contact your administrator.',
-        };
-      }
-      authChemId = authChem.id;
+    const validation = await validateClientTccSubmission(adminSupabase, clientId, euData, {
+      excludeApplicationId: applicationId,
+    });
+    if (!validation.ok) {
+      return { success: false, error: validation.error };
     }
+    const authChemId = validation.authChem.id;
+    const reachCertId = validation.reachCert.id;
 
     const boFile = formData.get('bo_attachment');
     const hasNewBo = boFile instanceof File && boFile.size > 0;
@@ -459,19 +471,19 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
     }
 
     const resetStatus = ['changes_required', 'modification_requested', 'rejected'].includes(existing.status);
-    const euImporter = resolveEuImporterFields(result.data);
+    const euImporter = resolveEuImporterFields(euData);
 
     const { error: updateError } = await adminSupabase
       .from('tcc_applications')
       .update({
-        chemical_id: result.data.chemical_id,
+        chemical_id: euData.chemical_id,
         client_chemical_id: authChemId,
         reach_certificate_id: reachCertId,
-        regulatory_framework: result.data.regulatory_framework,
-        quantity_mt: result.data.quantity_mt,
-        registration_number: result.data.registration_number || null,
-        export_date: result.data.export_date,
-        remarks: result.data.remarks || null,
+        regulatory_framework: euData.regulatory_framework,
+        quantity_mt: euData.quantity_mt,
+        registration_number: euData.registration_number || null,
+        export_date: euData.export_date,
+        remarks: euData.remarks || null,
         ...euImporter,
         ...(resetStatus ? { status: 'pending', rejection_reason: null } : {}),
       })
@@ -497,7 +509,7 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
       action: 'UPDATE_TCC_APPLICATION',
       entity_type: 'tcc_applications',
       entity_id: applicationId,
-      metadata: { quantity: result.data.quantity_mt },
+      metadata: { quantity: euData.quantity_mt },
     });
 
     revalidatePath('/client');

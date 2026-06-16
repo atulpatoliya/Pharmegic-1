@@ -97,21 +97,32 @@ export const internalNoteSchema = z.object({
 // ============================================================================
 // TCC APPLICATION
 // ============================================================================
-export const tccApplicationSchema = z.object({
-  chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
+const tccApplicationCommonSchema = {
   quantity_mt: z.coerce.number().positive({ message: 'Quantity must be greater than 0' }),
   regulatory_framework: regulatoryRegistrationSchema,
-  registration_number: z
-    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
   export_date: z.string().min(1, { message: 'Expected export date is required' }),
-  remarks: z
-    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
   eu_importer_company_name: z.string().min(1, { message: 'EU importer company name is required' }),
   eu_importer_address: z.string().min(1, { message: 'EU importer address is required' }),
   purchase_order_number: z.string().min(1, { message: 'Purchase order number is required' }),
   invoice_number: z
     .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
+};
+
+export const tccEuApplicationSchema = z.object({
+  ...tccApplicationCommonSchema,
+  chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
+  registration_number: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
+  remarks: z
+    .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
 });
+
+export const tccNotificationApplicationSchema = z.object({
+  ...tccApplicationCommonSchema,
+  case_number: z.string().min(1, { message: 'Case number is required' }),
+});
+
+export const tccApplicationSchema = tccEuApplicationSchema;
 
 export const adminTccApplicationUpdateSchema = z.object({
   application_id: z.string().uuid({ message: 'Application id is required' }),

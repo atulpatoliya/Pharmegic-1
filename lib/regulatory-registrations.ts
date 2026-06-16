@@ -41,6 +41,13 @@ export function isEuReachFramework(value?: string | null): boolean {
   return !value || value === REGULATORY_REGISTRATIONS.EU_REACH;
 }
 
+export function isNotificationOnlyFramework(value?: string | null): boolean {
+  return (
+    value === REGULATORY_REGISTRATIONS.UK_REACH ||
+    value === REGULATORY_REGISTRATIONS.TURKEY_KKDIK
+  );
+}
+
 export function clientHasRegulatoryRegistration(
   registrations: string[] | null | undefined,
   framework: RegulatoryRegistration

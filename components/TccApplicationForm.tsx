@@ -27,6 +27,7 @@ import { ModalErrorBox } from './ui/ModalErrorBox';
 import { FormLabel } from './ui/FormLabel';
 import {
   REGULATORY_REGISTRATION_OPTIONS,
+  isNotificationOnlyFramework,
   type RegulatoryRegistration,
 } from '@/lib/regulatory-registrations';
 
@@ -122,6 +123,7 @@ export default function TccApplicationForm({
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState(
     editApplication?.purchase_order_number ?? ''
   );
+  const [caseNumber, setCaseNumber] = useState('');
   const [boFile, setBoFile] = useState<File | null>(null);
   const allowedFrameworks = REGULATORY_REGISTRATION_OPTIONS.filter((option) =>
     regulatoryRegistrations.includes(option.value)
@@ -133,6 +135,8 @@ export default function TccApplicationForm({
   );
 
   const isEuReach = regulatoryFramework === 'eu_reach';
+  const isNotificationOnly = isNotificationOnlyFramework(regulatoryFramework);
+  const showChemicalField = isEuReach || isEditing;
 
   useEffect(() => {
     if (!editApplication) return;
@@ -149,7 +153,7 @@ export default function TccApplicationForm({
   const selectedSubstance = authorizedSubstances.find((s) => s.id === chemicalId);
 
   const quotaContext = useMemo(() => {
-    if (!selectedSubstance || !exportDate) return null;
+    if (!isEuReach || !selectedSubstance || !exportDate) return null;
     const reachRecords: ReachCertificateRecord[] = (selectedSubstance.reach_certificates ?? []).map(
       (cert) => mapReachCertificateRecord(cert, selectedSubstance.id)
     );
@@ -162,7 +166,7 @@ export default function TccApplicationForm({
       tonnageBand: selectedSubstance.tonnage_band,
       excludeApplicationId: editApplication?.id,
     });
-  }, [selectedSubstance, exportDate, approvedExports, editApplication?.id]);
+  }, [isEuReach, selectedSubstance, exportDate, approvedExports, editApplication?.id]);
 
   const matchedReachCert = quotaContext?.reachCert ?? null;
   const initialQuota = quotaContext?.remainingQuota ?? 0;
@@ -190,23 +194,22 @@ export default function TccApplicationForm({
   const handleExportDateChange = (value: string) => {
     setExportDate(value);
     setError(null);
-    if (selectedSubstance && quantity && exportDate) {
-      const substance = authorizedSubstances.find((s) => s.id === chemicalId);
-      if (!substance) return;
-      const reachRecords: ReachCertificateRecord[] = (substance.reach_certificates ?? []).map(
-        (cert) => mapReachCertificateRecord(cert, substance.id)
-      );
-      const next = computeTccQuotaForExportDate({
-        reachCertificates: reachRecords,
-        approvedApplications: approvedExports,
-        chemicalId: substance.id,
-        exportDate: value,
-        tonnageBand: substance.tonnage_band,
-        excludeApplicationId: editApplication?.id,
-      });
-      if (quantity && Number(quantity) > next.remainingQuota) {
-        setQuantity('');
-      }
+    if (!isEuReach || !selectedSubstance || !quantity) return;
+    const substance = authorizedSubstances.find((s) => s.id === chemicalId);
+    if (!substance) return;
+    const reachRecords: ReachCertificateRecord[] = (substance.reach_certificates ?? []).map(
+      (cert) => mapReachCertificateRecord(cert, substance.id)
+    );
+    const next = computeTccQuotaForExportDate({
+      reachCertificates: reachRecords,
+      approvedApplications: approvedExports,
+      chemicalId: substance.id,
+      exportDate: value,
+      tonnageBand: substance.tonnage_band,
+      excludeApplicationId: editApplication?.id,
+    });
+    if (quantity && Number(quantity) > next.remainingQuota) {
+      setQuantity('');
     }
   };
 
@@ -221,8 +224,13 @@ export default function TccApplicationForm({
     e.preventDefault();
     setError(null);
 
-    if (!chemicalId) {
+    if (isEuReach && !chemicalId) {
       setError('Please select an authorized chemical substance.');
+      return;
+    }
+
+    if (isNotificationOnly && !caseNumber.trim()) {
+      setError('Case number is required.');
       return;
     }
 
@@ -281,7 +289,7 @@ export default function TccApplicationForm({
       return;
     }
 
-    if (selectedSubstance?.validity_date) {
+    if (selectedSubstance?.validity_date && isEuReach) {
       const expiry = new Date(selectedSubstance.validity_date);
       const shipment = new Date(exportDate);
       if (shipment > expiry) {
@@ -295,7 +303,12 @@ export default function TccApplicationForm({
       if (isEditing && editApplication) {
         payload.append('application_id', editApplication.id);
       }
-      payload.append('chemical_id', chemicalId);
+      if (isEuReach) {
+        payload.append('chemical_id', chemicalId);
+      }
+      if (isNotificationOnly) {
+        payload.append('case_number', caseNumber.trim());
+      }
       payload.append('quantity_mt', quantity);
       payload.append('export_date', exportDate);
       payload.append('eu_importer_company_name', euImporterCompanyName.trim());
@@ -360,6 +373,9 @@ export default function TccApplicationForm({
                   onChange={() => {
                     setRegulatoryFramework(option.value);
                     setError(null);
+                    if (isNotificationOnlyFramework(option.value)) {
+                      setChemicalId('');
+                    }
                   }}
                   className="mt-1 h-4 w-4 border-slate-300 text-primary focus:ring-primary"
                 />
@@ -373,6 +389,19 @@ export default function TccApplicationForm({
                 </div>
               </label>
             ))
+          )}
+          {isNotificationOnly && (
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <FormLabel required>Case Number</FormLabel>
+              <Input
+                type="text"
+                name="case_number"
+                value={caseNumber}
+                onChange={(e) => setCaseNumber(e.target.value)}
+                placeholder="Enter case number"
+                required
+              />
+            </div>
           )}
         </CardContent>
       </Card>
@@ -441,29 +470,31 @@ export default function TccApplicationForm({
                   </div>
                 </div>
 
+                {showChemicalField && (
                 <div className="space-y-2">
-                  <FormLabel required>Chemical Substance</FormLabel>
+                  <FormLabel required={isEuReach}>Chemical Substance</FormLabel>
                   <Select
                     value={chemicalId}
                     onChange={(e) => handleChemicalChange(e.target.value)}
                     options={[
                       { value: '', label: 'Select authorized substance...' },
-                      ...authorizedSubstances.map((s) => {
+                      ...eligibleSubstances.map((s) => {
                         const hasRc = (s.reach_certificates?.length ?? 0) > 0;
                         let label = `${s.chemical_name} (CAS: ${s.cas_number})`;
-                        if (!hasRc) {
+                        if (isEuReach && !hasRc) {
                           label += ' — RC certificate required';
                         }
                         return {
                           value: s.id,
                           label,
-                          disabled: !hasRc,
+                          disabled: isEuReach && !hasRc,
                         };
                       }),
                     ]}
-                    required
+                    required={isEuReach}
                   />
                 </div>
+                )}
 
                 <div className="space-y-2">
                   <FormLabel required>Expected Export Shipment Date</FormLabel>
@@ -472,7 +503,7 @@ export default function TccApplicationForm({
                     onChange={handleExportDateChange}
                     required
                   />
-                  {matchedReachCert && (
+                  {isEuReach && matchedReachCert && (
                     <p className="text-[10px] text-slate-500 font-medium">
                       RC period:{' '}
                       <span className="font-bold text-slate-700">
@@ -484,7 +515,7 @@ export default function TccApplicationForm({
                       ({matchedReachCert.certificate_number})
                     </p>
                   )}
-                  {noReachForExportDate && (
+                  {isEuReach && noReachForExportDate && (
                     <p className="text-[11px] text-rose-600 font-semibold">
                       No RC certificate covers this export date.
                     </p>
@@ -497,22 +528,28 @@ export default function TccApplicationForm({
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={exportDate && initialQuota > 0 ? initialQuota : undefined}
+                    max={isEuReach && exportDate && initialQuota > 0 ? initialQuota : undefined}
                     placeholder={
-                      exportDate && initialQuota > 0 ? `Max ${initialQuota} MT` : 'e.g. 25.50'
+                      isEuReach && exportDate && initialQuota > 0
+                        ? `Max ${initialQuota} MT`
+                        : 'e.g. 25.50'
                     }
                     value={quantity}
                     onChange={(e) => handleQuantityChange(e.target.value)}
-                    disabled={isEuReach && (noQuotaLeft || noReachForExportDate || !exportDate) && !isEditing}
+                    disabled={
+                      isEuReach &&
+                      (noQuotaLeft || noReachForExportDate || !exportDate) &&
+                      !isEditing
+                    }
                     required
                   />
-                  {selectedSubstance && exportDate && matchedReachCert && (
+                  {isEuReach && selectedSubstance && exportDate && matchedReachCert && (
                     <p className="text-[10px] text-slate-500 font-medium">
                       Available for this RC period:{' '}
                       <span className="font-bold text-slate-700">{initialQuota} MT</span>
                     </p>
                   )}
-                  {quotaExceeded && (
+                  {isEuReach && quotaExceeded && (
                     <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
                       <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                       Request exceeds available quota by {(requestedAmt - initialQuota).toFixed(2)} MT.
@@ -571,10 +608,12 @@ export default function TccApplicationForm({
                     disabled={
                       isPending ||
                       !regulatoryFramework ||
+                      (isNotificationOnly && !caseNumber.trim()) ||
                       (isEuReach &&
                         (quotaExceeded ||
                           (noQuotaLeft && !isEditing) ||
-                          noReachForExportDate)) ||
+                          noReachForExportDate ||
+                          !chemicalId)) ||
                       !exportDate ||
                       !quantity ||
                       Number(quantity) <= 0
@@ -720,7 +759,7 @@ export default function TccApplicationForm({
             <Card className="border-slate-100 bg-blue-50/30">
               <CardContent className="p-5 text-sm text-blue-900 font-medium">
                 This framework is notification-only. Your request will be emailed to the admin team without
-                EU REACH quota calculation or certificate issuance.
+                EU REACH quota calculation, certificate issuance, or portal application record.
               </CardContent>
             </Card>
           )}

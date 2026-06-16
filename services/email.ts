@@ -84,12 +84,13 @@ export async function sendEmail({ to, subject, html, cc, smtpConfig, attachments
 interface SendTccApplicationNotificationOptions {
   to: string[];
   clientCompanyName: string;
-  chemicalName: string;
+  chemicalName?: string | null;
   casNumber?: string | null;
   ecNumber?: string | null;
+  caseNumber?: string | null;
   quantityMt: number;
   exportDate: string;
-  applicationId: string;
+  applicationId?: string | null;
   regulatoryFramework: string;
   euImporterCompanyName?: string | null;
   euImporterAddress?: string | null;
@@ -121,7 +122,7 @@ function getTccApplicationNotificationHtml(
   const quotaSection = isEuReach
     ? `<div class="section-title">Tonnage Quota Calculator</div>
       <div class="detail">
-        <p><strong>Selected chemical:</strong> ${escapeEmailHtml(details.chemicalName)}</p>
+        <p><strong>Selected chemical:</strong> ${escapeEmailHtml(details.chemicalName || '—')}</p>
         <p><strong>CAS number:</strong> ${escapeEmailHtml(details.casNumber || '—')}</p>
         <p><strong>EC number:</strong> ${escapeEmailHtml(details.ecNumber || '—')}</p>
         <p><strong>Current available:</strong> ${details.currentAvailableMt ?? 0} MT</p>
@@ -144,7 +145,7 @@ function getTccApplicationNotificationHtml(
       <div class="detail">
         <p><strong>Regulatory framework:</strong> ${escapeEmailHtml(frameworkLabel)}</p>
         <p><strong>Client:</strong> ${escapeEmailHtml(details.clientCompanyName)}</p>
-        <p><strong>Chemical:</strong> ${escapeEmailHtml(details.chemicalName)}</p>
+        ${isEuReach ? `<p><strong>Chemical:</strong> ${escapeEmailHtml(details.chemicalName || '—')}</p>` : `<p><strong>Case number:</strong> ${escapeEmailHtml(details.caseNumber || '—')}</p>`}
         <p><strong>Quantity requested:</strong> ${details.quantityMt} MT</p>
         <p><strong>Expected export date:</strong> ${formatEmailDate(details.exportDate)}</p>
       </div>
@@ -158,7 +159,7 @@ function getTccApplicationNotificationHtml(
 
       ${quotaSection}
 
-      <p style="font-size:13px;color:#64748b;">${isEuReach ? 'Sign in to the admin portal and open <strong>Approvals</strong> to review this application.' : 'This request was recorded for admin notification only.'}${details.poAttachment ? ' The PO attachment is included with this email.' : ''}</p>`;
+      <p style="font-size:13px;color:#64748b;">${isEuReach ? 'Sign in to the admin portal and open <strong>Approvals</strong> to review this application.' : 'This is a notification-only request. No application record was created in the portal.'}${details.poAttachment ? ' The PO attachment is included with this email.' : ''}</p>`;
 
   return buildEmailShell({
     subtitle: isEuReach ? 'New TCC Requested' : `New ${frameworkLabel} Request`,
@@ -172,6 +173,7 @@ export async function sendTccApplicationNotificationEmail({
   chemicalName,
   casNumber,
   ecNumber,
+  caseNumber,
   quantityMt,
   exportDate,
   applicationId,
@@ -196,6 +198,7 @@ export async function sendTccApplicationNotificationEmail({
     chemicalName,
     casNumber,
     ecNumber,
+    caseNumber,
     quantityMt,
     exportDate,
     applicationId,
