@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "import:clients": "node scripts/import-clients-from-excel.js",
-    "import:clients:dry": "node scripts/import-clients-from-excel.js --dry-run"
+    "import:clients:dry": "node scripts/import-clients-from-excel.js --dry-run",
+    "prepare:eu-reach": "node scripts/prepare-eu-reach-template.mjs && node scripts/generate-eu-reach-preview-pdf.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

@@ -1,24 +1,28 @@
 /**
- * Converts EU REACH REGISTRATION CERTIFICATE.docx sample values into merge placeholders.
- * Preserves the original Word layout (text boxes, floating tables, images).
+ * Builds EU REACH certificate templates from the master Word source.
  *
- * Source: templates/CT_EU_REACH_v2.docx
- * Output: templates/CT_2026_v2.docx
+ * Edit design: templates/source/EU_REACH_SOURCE.docx
+ * Outputs:
+ *   templates/EU_REACH_CERTIFICATE.docx         — print/PDF (full layout)
+ *   templates/EU_REACH_CERTIFICATE_preview.docx — browser DOCX fallback only
  *
- * Run: node scripts/prepare-reach-template-v2.mjs
+ * Run: node scripts/prepare-eu-reach-template.mjs
  */
 import fs from 'fs';
 import path from 'path';
 import PizZip from 'pizzip';
 
 const root = process.cwd();
-const source = path.join(root, 'templates', 'CT_EU_REACH_v2.docx');
-const target = path.join(root, 'templates', 'CT_2026_v2.docx');
-const previewTarget = path.join(root, 'templates', 'CT_2026_v2_preview.docx');
+const sourceDir = path.join(root, 'templates', 'source');
+const source = path.join(sourceDir, 'EU_REACH_SOURCE.docx');
+const target = path.join(root, 'templates', 'EU_REACH_CERTIFICATE.docx');
+const previewTarget = path.join(root, 'templates', 'EU_REACH_CERTIFICATE_preview.docx');
 
 if (!fs.existsSync(source)) {
-  console.error('templates/CT_EU_REACH_v2.docx not found.');
-  console.error('Copy EU REACH REGISTRATION CERTIFICATE.docx to templates/CT_EU_REACH_v2.docx');
+  console.error('templates/source/EU_REACH_SOURCE.docx not found.');
+  console.error(
+    'Copy your EU REACH REGISTRATION CERTIFICATE.docx to templates/source/EU_REACH_SOURCE.docx'
+  );
   process.exit(1);
 }
 
@@ -148,13 +152,15 @@ const drawings = (xml.match(/<w:drawing>/g) || []).length;
 const tblp = (xml.match(/<w:tblpPr/g) || []).length;
 console.log(`Layout preserved: drawings=${drawings}, floatingTables=${tblp}`);
 
+fs.mkdirSync(path.dirname(target), { recursive: true });
+
 zip.file('word/document.xml', xml);
 fs.writeFileSync(target, zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }));
-console.log(`Template written to ${target}`);
+console.log(`Runtime template written to ${target}`);
 
 const previewZip = new PizZip(fs.readFileSync(source));
 previewZip.file('word/document.xml', flattenForBrowserPreview(xml));
 fs.writeFileSync(previewTarget, previewZip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }));
 const previewDrawings = (flattenForBrowserPreview(xml).match(/<w:drawing>/g) || []).length;
 console.log(`Browser preview template written to ${previewTarget} (drawings=${previewDrawings})`);
-console.log('Run: node scripts/generate-rc-template-preview-pdf.mjs  (admin Settings PDF preview)');
+console.log('Run: node scripts/generate-eu-reach-preview-pdf.mjs');

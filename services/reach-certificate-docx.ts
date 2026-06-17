@@ -5,22 +5,9 @@ import { promisify } from 'util';
 import { randomUUID } from 'crypto';
 import { tmpdir } from 'os';
 import PizZip from 'pizzip';
+import { EU_REACH_TEMPLATE } from '@/lib/eu-reach-certificate-template';
 
 const execFileAsync = promisify(execFile);
-
-const RC_TEMPLATE_PATH = path.join(process.cwd(), 'templates', 'CT_2026_v2.docx');
-const RC_BROWSER_PREVIEW_TEMPLATE_PATH = path.join(
-  process.cwd(),
-  'templates',
-  'CT_2026_v2_preview.docx'
-);
-/** Bundled sample PDF for admin Settings when live conversion is unavailable. */
-export const BUNDLED_RC_PREVIEW_PDF = path.join(
-  process.cwd(),
-  'public',
-  'previews',
-  'rc-template-2-sample.pdf'
-);
 
 export type ReachCertificateDocxData = {
   companyName: string;
@@ -113,12 +100,12 @@ export function buildReachAddressLines(client: {
 }
 
 function resolveTemplatePath(browserPreview = false): string {
-  if (browserPreview && fs.existsSync(RC_BROWSER_PREVIEW_TEMPLATE_PATH)) {
-    return RC_BROWSER_PREVIEW_TEMPLATE_PATH;
+  if (browserPreview && fs.existsSync(EU_REACH_TEMPLATE.browserPreview)) {
+    return EU_REACH_TEMPLATE.browserPreview;
   }
-  if (fs.existsSync(RC_TEMPLATE_PATH)) return RC_TEMPLATE_PATH;
+  if (fs.existsSync(EU_REACH_TEMPLATE.runtime)) return EU_REACH_TEMPLATE.runtime;
   throw new Error(
-    'EU REACH certificate template not found. Copy EU REACH REGISTRATION CERTIFICATE.docx to templates/CT_EU_REACH_v2.docx and run: node scripts/prepare-reach-template-v2.mjs'
+    'EU REACH certificate template not found. Copy your Word file to templates/source/EU_REACH_SOURCE.docx and run: node scripts/prepare-eu-reach-template.mjs'
   );
 }
 
@@ -295,6 +282,9 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
     fs.rmSync(workDir, { recursive: true, force: true });
   }
 }
+
+export { EU_REACH_TEMPLATE };
+export const BUNDLED_RC_PREVIEW_PDF = EU_REACH_TEMPLATE.bundledPreviewPdf;
 
 export async function generateReachCertificateFromTemplate(data: ReachCertificateDocxData): Promise<Buffer> {
   const docxBuffer = generateReachCertificateDocx(data);

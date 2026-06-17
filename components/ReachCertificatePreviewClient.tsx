@@ -103,6 +103,9 @@ export default function ReachCertificatePreviewClient({
   const [tonnageBand, setTonnageBand] = useState(defaults.tonnageBand || chemical.tonnage_band || '');
 
   const docxPreviewUrl = useMemo(() => {
+    if (cert) {
+      return buildReachCertificateDocxPreviewUrl(cert.id);
+    }
     const params = new URLSearchParams({
       clientId,
       chemicalId,
@@ -112,7 +115,7 @@ export default function ReachCertificatePreviewClient({
       tonnageBand,
     });
     return `/api/reach-certificate/docx?${params.toString()}`;
-  }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
+  }, [cert, clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
 
   const pdfPreviewUrl = useMemo(() => {
     return buildReachCertificatePdfPreviewUrl({

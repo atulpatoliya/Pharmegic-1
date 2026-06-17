@@ -8,6 +8,7 @@ import { appendMailSentHistory } from '@/lib/certificate-mail-history';
 import { buildRcSmtpConfig } from '@/lib/certificate-smtp-settings';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
+import { clearReachCertificateStorageFiles } from '@/lib/reach-certificate-storage';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
 import { getTonnageBandMaxQuota } from '@/lib/quota';
@@ -325,10 +326,7 @@ export async function regenerateReachCertificateFile(certId: string) {
 
   const certNumber = cert.certificate_number;
 
-  // Remove legacy Template 1 files so preview/download cannot serve stale PDFs.
-  await adminSupabase.storage
-    .from(CERTIFICATES_BUCKET)
-    .remove([`${certNumber}.pdf`, `${certNumber}.docx`]);
+  await clearReachCertificateStorageFiles(adminSupabase, certNumber);
 
   const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
     registrationNumber: cert.registration_number,

@@ -136,7 +136,26 @@ Add `GOTENBERG_URL=http://127.0.0.1:3001` to your production `.env`, then restar
 
 Microsoft Word or LibreOffice on the machine is used automatically for PDF generation.
 
-> Place `CT_Draftr.docx` in the project root and run `node scripts/prepare-reach-template.mjs` to refresh `templates/CT_2026.docx`.
+### EU REACH RC Certificate template
+
+Design source (edit in Word):
+
+```text
+templates/source/EU_REACH_SOURCE.docx
+```
+
+Prepare runtime templates and Settings preview PDF:
+
+```bash
+node scripts/prepare-eu-reach-template.mjs
+node scripts/generate-eu-reach-preview-pdf.mjs
+```
+
+This writes:
+
+- `templates/EU_REACH_CERTIFICATE.docx` — used for all client PDFs/DOCX
+- `templates/EU_REACH_CERTIFICATE_preview.docx` — browser fallback only
+- `public/previews/eu-reach-certificate-sample.pdf` — Settings preview on servers without LibreOffice/Gotenberg
 
 ### TCC Certificate template
 

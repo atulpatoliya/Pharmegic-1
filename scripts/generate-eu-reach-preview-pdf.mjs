@@ -1,7 +1,6 @@
 /**
- * Generates public/previews/rc-template-2-sample.pdf for admin Settings preview.
- * Uses the same sample data as lib/certificate-template-preview-data.ts (template_2).
- * Run after template changes: node scripts/prepare-reach-template-v2.mjs && node scripts/generate-rc-template-preview-pdf.mjs
+ * Generates public/previews/eu-reach-certificate-sample.pdf for admin Settings preview.
+ * Run: node scripts/prepare-eu-reach-template.mjs && node scripts/generate-eu-reach-preview-pdf.mjs
  */
 import fs from 'fs';
 import path from 'path';
@@ -79,14 +78,14 @@ try { $word.Quit() } catch {}
   });
 }
 
-const templatePath = path.join(projectRoot, 'templates', 'CT_2026_v2.docx');
+const templatePath = path.join(projectRoot, 'templates', 'EU_REACH_CERTIFICATE.docx');
 const outDir = path.join(projectRoot, 'public', 'previews');
-const docxOut = path.join(outDir, 'rc-template-2-sample.docx');
-const pdfOut = path.join(outDir, 'rc-template-2-sample.pdf');
+const docxOut = path.join(outDir, 'eu-reach-certificate-sample.docx');
+const pdfOut = path.join(outDir, 'eu-reach-certificate-sample.pdf');
 
 if (!fs.existsSync(templatePath)) {
   console.error(`Template not found: ${templatePath}`);
-  console.error('Run: node scripts/prepare-reach-template-v2.mjs');
+  console.error('Run: node scripts/prepare-eu-reach-template.mjs');
   process.exit(1);
 }
 
@@ -109,8 +108,7 @@ for (const bin of librePaths) {
     await execFileAsync(bin, ['--headless', '--convert-to', 'pdf', '--outdir', outDir, docxOut], {
       timeout: 120000,
     });
-    const generated = path.join(outDir, 'rc-template-2-sample.pdf');
-    if (fs.existsSync(generated)) {
+    if (fs.existsSync(pdfOut)) {
       converted = true;
       break;
     }
@@ -134,4 +132,7 @@ if (!converted || !fs.existsSync(pdfOut)) {
 }
 
 fs.unlinkSync(docxOut);
+if (fs.existsSync(path.join(outDir, 'rc-template-2-sample.pdf'))) {
+  fs.unlinkSync(path.join(outDir, 'rc-template-2-sample.pdf'));
+}
 console.log(`Settings preview PDF written to ${pdfOut} (${fs.statSync(pdfOut).size} bytes)`);
