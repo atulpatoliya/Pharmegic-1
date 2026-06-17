@@ -7,7 +7,6 @@ import {
 import {
   DOCX_CONTENT_TYPE,
   PDF_CONTENT_TYPE,
-  downloadReachCertificateFile,
   uploadReachCertificateFile,
 } from '@/lib/reach-certificate-storage';
 import {
@@ -58,10 +57,7 @@ export async function resolveReachCertificatePreview(
     void uploadReachCertificateFile(supabase, pdfFileName, pdfBuffer, PDF_CONTENT_TYPE);
     return { mode: 'pdf', buffer: pdfBuffer, fileName: pdfFileName };
   } catch {
-    const storedPdf = await downloadReachCertificateFile(supabase, pdfFileName);
-    if (storedPdf) {
-      return { mode: 'pdf', buffer: storedPdf, fileName: pdfFileName };
-    }
+    // Never serve stale storage PDFs — preview uses fresh DOCX when convert fails.
   }
 
   const docxUrl = await uploadReachCertificateFile(

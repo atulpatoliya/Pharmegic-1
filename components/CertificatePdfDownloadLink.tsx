@@ -8,6 +8,7 @@ type CertificatePdfDownloadLinkProps = {
   pdfUrl: string;
   docxUrl: string;
   fileName: string;
+  previewDocxUrl?: string | null;
   className?: string;
   children: React.ReactNode;
   title?: string;
@@ -17,6 +18,7 @@ export function CertificatePdfDownloadLink({
   pdfUrl,
   docxUrl,
   fileName,
+  previewDocxUrl,
   className,
   children,
   title,
@@ -30,7 +32,7 @@ export function CertificatePdfDownloadLink({
 
     setLoading(true);
     try {
-      await downloadCertificatePdf({ pdfUrl, docxUrl, fileName });
+      await downloadCertificatePdf({ pdfUrl, docxUrl, fileName, previewDocxUrl });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'PDF download failed.';
       toast.error(message);

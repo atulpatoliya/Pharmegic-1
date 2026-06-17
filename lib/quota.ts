@@ -11,6 +11,19 @@ const TONNAGE_BAND_QUOTA: Record<string, number> = {
   '1000+ tonnes': 20000,
 };
 
+/** Prefer certificate tonnage, then chemical registry band; empty → fallback (default "None"). */
+export function resolveDisplayedTonnageBand(
+  certTonnage?: string | null,
+  chemicalTonnage?: string | null,
+  fallback = 'None'
+): string {
+  const fromCert = certTonnage?.trim();
+  if (fromCert) return fromCert;
+  const fromChem = chemicalTonnage?.trim();
+  if (fromChem) return fromChem;
+  return fallback;
+}
+
 export type TccExportRecord = {
   id?: string;
   chemical_id?: string;

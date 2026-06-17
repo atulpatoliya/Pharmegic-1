@@ -9,6 +9,7 @@ import {
 import {
   getReachCertAllocatedQuota,
   getTonnageBandMaxQuota,
+  resolveDisplayedTonnageBand,
   sumApprovedExportsInReachWindow,
   type TccExportRecord,
 } from '@/lib/quota';
@@ -62,7 +63,11 @@ export function buildRcChemicalSummaries(
     const activeCert = certs.find((cert) => isActiveReachCertificate(cert)) ?? null;
     const latestCert = certs[0] ?? null;
     const displayCert = activeCert ?? latestCert;
-    const tonnageBand = cc.chemicals?.tonnage_band?.trim() || '';
+    const tonnageBand = resolveDisplayedTonnageBand(
+      displayCert?.tonnage_band ?? latestCert?.tonnage_band,
+      cc.chemicals?.tonnage_band,
+      ''
+    );
     const years = [
       ...new Set(
         certs

@@ -138,14 +138,11 @@ export default function ReachCertificatePreviewClient({
 
     if (isEditing || !fieldsMatchDefaults) return liveUrl;
     if (cert?.file_url) return cert.file_url;
-    if (isPending && pendingPreviewAssets?.pdfUrl) return pendingPreviewAssets.pdfUrl;
     return liveUrl;
   }, [
     isEditing,
     fieldsMatchDefaults,
     cert?.file_url,
-    isPending,
-    pendingPreviewAssets?.pdfUrl,
     clientId,
     chemicalId,
     registrationNumber,
@@ -167,6 +164,7 @@ export default function ReachCertificatePreviewClient({
   const downloadDocxUrl = cert
     ? buildReachCertificateDocxPreviewUrl(cert.id)
     : docxPreviewUrl;
+  const downloadPreviewDocxUrl = isPending ? pendingPreviewAssets?.docxUrl ?? null : null;
   const downloadFileName = cert
     ? `${cert.certificate_number}.pdf`
     : `RC-preview-${chemicalId.slice(0, 8)}.pdf`;
@@ -285,6 +283,7 @@ export default function ReachCertificatePreviewClient({
           <CertificatePdfDownloadLink
             pdfUrl={downloadPdfUrl}
             docxUrl={downloadDocxUrl}
+            previewDocxUrl={downloadPreviewDocxUrl}
             fileName={downloadFileName}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-60"
           >
@@ -422,14 +421,10 @@ export default function ReachCertificatePreviewClient({
           certificateType="rc"
           docxUrl={docxPreviewUrl}
           pdfUrl={pdfPreviewUrl}
-          directPdfUrl={
-            fieldsMatchDefaults && !isEditing
-              ? cert?.file_url ?? pendingPreviewAssets?.pdfUrl ?? null
-              : null
-          }
+          directPdfUrl={fieldsMatchDefaults && !isEditing && cert?.file_url ? cert.file_url : null}
           directDocxUrl={
-            fieldsMatchDefaults && !isEditing && !cert?.file_url && !pendingPreviewAssets?.pdfUrl
-              ? pendingPreviewAssets?.docxUrl ?? null
+            fieldsMatchDefaults && !isEditing && !cert?.file_url && pendingPreviewAssets?.docxUrl
+              ? pendingPreviewAssets.docxUrl
               : null
           }
         />

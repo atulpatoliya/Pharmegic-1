@@ -28,7 +28,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { ModalErrorBox } from '@/components/ui/ModalErrorBox';
 import { FormLabel } from '@/components/ui/FormLabel';
 import { formatErrorMessage } from '@/lib/format-error';
-import { resolveQuotaConsumption, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuota, getTonnageBandMaxQuota, getReachCertAllocatedQuota } from '@/lib/quota';
+import { resolveQuotaConsumption, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuota, getTonnageBandMaxQuota, getReachCertAllocatedQuota, resolveDisplayedTonnageBand } from '@/lib/quota';
 import { computeTccApplicationRcQuota } from '@/lib/tcc-application-quota';
 import {
   isActiveReachCertificate,
@@ -1507,6 +1507,7 @@ export default function ClientDashboardDetails({
       'Chemical Name',
       'CAS Number',
       'EC Number',
+      'Tonnage Band',
       'Certificate No.',
       'Registration No.',
       'Issue Date',
@@ -1526,6 +1527,7 @@ export default function ClientDashboardDetails({
         summary.chemicalName,
         summary.casNumber,
         summary.ecNumber,
+        resolveDisplayedTonnageBand(cert.tonnage_band, summary.tonnageBand || null),
         cert.certificate_number,
         cert.registration_number || '',
         cert.issued_at ? new Date(cert.issued_at).toLocaleDateString('en-GB') : '',

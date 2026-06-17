@@ -21,6 +21,7 @@ import {
 } from '@/lib/reach-certificate';
 import {
   getReachCertAllocatedQuota,
+  resolveDisplayedTonnageBand,
   sumApprovedExportsInReachWindow,
 } from '@/lib/quota';
 import {
@@ -166,11 +167,9 @@ function buildPendingReachPreviewUrls(
     issuedDate: cc?.issued_date?.split?.('T')[0] || undefined,
     validatedDate: cc?.validity_date?.split?.('T')[0] || undefined,
     tonnageBand:
-      cc?.tonnage_band && cc.tonnage_band !== 'None'
-        ? cc.tonnage_band
-        : tonnageBand && tonnageBand !== 'None'
-          ? tonnageBand
-          : undefined,
+      tonnageBand && tonnageBand !== 'None'
+        ? tonnageBand
+        : cc?.chemicals?.tonnage_band?.trim() || undefined,
   };
 
   return {
@@ -325,13 +324,16 @@ export default function RcCertificatesTable({
           casNumber: chem?.cas_number || 'N/A',
           ecNumber: chem?.ec_number || 'N/A',
           registrationNumber: cert.registration_number?.trim() || 'N/A',
-          tonnageBand: chem?.tonnage_band || 'None',
+          tonnageBand: resolveDisplayedTonnageBand(cert.tonnage_band, chem?.tonnage_band),
           certs: [],
         };
         groupMap.set(groupKey, group);
         groups.push(group);
       }
       group.certs.push(cert);
+      if (cert.tonnage_band?.trim()) {
+        group.tonnageBand = cert.tonnage_band.trim();
+      }
     }
 
     // Add any client chemicals that don't have any certificates in the filteredCertificates list
@@ -368,7 +370,7 @@ export default function RcCertificatesTable({
             casNumber: chem?.cas_number || 'N/A',
             ecNumber: chem?.ec_number || 'N/A',
             registrationNumber: cc.registration_number?.trim() || 'N/A',
-            tonnageBand: cc.tonnage_band || chem?.tonnage_band || 'None',
+            tonnageBand: resolveDisplayedTonnageBand(null, chem?.tonnage_band),
             certs: [],
           };
           groupMap.set(groupKey, group);
@@ -407,6 +409,14 @@ export default function RcCertificatesTable({
       { header: 'Chemical', value: (row) => (row.chemicals || row.chemical)?.chemical_name || '' },
       { header: 'CAS Number', value: (row) => (row.chemicals || row.chemical)?.cas_number || '' },
       { header: 'EC Number', value: (row) => (row.chemicals || row.chemical)?.ec_number || '' },
+      {
+        header: 'Tonnage Band',
+        value: (row) =>
+          resolveDisplayedTonnageBand(
+            row.tonnage_band,
+            (row.chemicals || row.chemical)?.tonnage_band
+          ),
+      },
       { header: 'Issued Date', value: (row) => formatDisplayDate(row.issued_at) },
       { header: 'Expiry Date', value: (row) => formatDisplayDate(row.expires_at) },
       {

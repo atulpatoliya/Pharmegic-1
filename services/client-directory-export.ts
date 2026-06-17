@@ -6,6 +6,8 @@ import {
   mergeImportCompatibleRows,
   toImportDateValue,
 } from '@/lib/client-directory-import';
+import { REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
+import { resolveDisplayedTonnageBand } from '@/lib/quota';
 import { buildExcelArrayBuffer, type ExcelSheet } from '@/lib/export-excel';
 
 type ExportRow = Record<string, string | number | boolean | null | undefined>;
@@ -35,6 +37,7 @@ export async function buildClientDirectoryExportBuffer(
     { data: contacts, error: contactsError },
     { data: clientChemicals, error: clientChemicalsError },
     { data: users, error: usersError },
+    { data: reachCerts, error: reachCertsError },
   ] = await Promise.all([
     supabase.from('clients').select('*').in('id', clientIds).order('company_name', { ascending: true }),
     supabase.from('client_contacts').select('*').in('client_id', clientIds).order('created_at', { ascending: true }),
@@ -45,9 +48,16 @@ export async function buildClientDirectoryExportBuffer(
       .neq('status', 'trashed')
       .order('created_at', { ascending: true }),
     supabase.from('users').select('client_id, email, login_password').in('client_id', clientIds),
+    supabase
+      .from('certificates')
+      .select('client_id, chemical_id, tonnage_band, issued_at')
+      .in('client_id', clientIds)
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .order('issued_at', { ascending: false }),
   ]);
 
-  const queryError = clientsError || contactsError || clientChemicalsError || usersError;
+  const queryError =
+    clientsError || contactsError || clientChemicalsError || usersError || reachCertsError;
   if (queryError) {
     throw queryError;
   }
@@ -58,6 +68,14 @@ export async function buildClientDirectoryExportBuffer(
   const loginByClientId = new Map(
     (users || []).map((user) => [user.client_id as string, user])
   );
+
+  const tonnageByClientChemical = new Map<string, string>();
+  for (const cert of reachCerts || []) {
+    const key = `${cert.client_id}:${cert.chemical_id}`;
+    if (!tonnageByClientChemical.has(key) && cert.tonnage_band?.trim()) {
+      tonnageByClientChemical.set(key, cert.tonnage_band.trim());
+    }
+  }
 
   const clientRows: ExportRow[] = (clients || []).map((client) => {
     const login = loginByClientId.get(client.id);
@@ -91,12 +109,18 @@ export async function buildClientDirectoryExportBuffer(
 
   const authorizedChemicalRows: ExportRow[] = (clientChemicals || []).map((row) => {
     const chemical = unwrapRelation(row.chemicals) as ChemicalRef | null;
+    const tonnageKey = `${row.client_id}:${row.chemical_id}`;
+    const tonnageBand = resolveDisplayedTonnageBand(
+      tonnageByClientChemical.get(tonnageKey),
+      chemical?.tonnage_band,
+      ''
+    );
     return {
       'Company Name': clientNameById.get(row.client_id) ?? '',
       'Chemical Name': chemical?.chemical_name ?? '',
       'CAS Number': chemical?.cas_number ?? '',
       'EC Number': chemical?.ec_number ?? '',
-      'Tonnage Band': formatTonnageBandForExport(chemical?.tonnage_band),
+      'Tonnage Band': formatTonnageBandForExport(tonnageBand),
       'Available Quantity (MT)': row.available_quantity ?? 0,
       'Registration Number': row.registration_number ?? '',
       'Issued Date': toImportDateValue(row.issued_date),

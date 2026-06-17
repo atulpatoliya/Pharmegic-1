@@ -146,15 +146,25 @@ export type CertificateDownloadResult = {
   fileName: string;
 };
 
+function appendCacheBuster(url: string): string {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_=${Date.now()}`;
+}
+
 export async function downloadCertificatePdf(params: {
   pdfUrl: string;
   docxUrl: string;
   fileName: string;
+  /** Same public DOCX URL shown in Office Online preview (full layout). */
+  previewDocxUrl?: string | null;
 }): Promise<CertificateDownloadResult> {
   let serverError: string | undefined;
 
   try {
-    const pdfRes = await fetch(params.pdfUrl, { credentials: 'same-origin' });
+    const pdfRes = await fetch(appendCacheBuster(params.pdfUrl), {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
     const contentType = pdfRes.headers.get('Content-Type') || '';
 
     if (pdfRes.ok) {
@@ -179,13 +189,33 @@ export async function downloadCertificatePdf(params: {
     }
   }
 
-  const docxRes = await fetch(params.docxUrl, { credentials: 'same-origin' });
-  if (!docxRes.ok) {
-    const body = (await docxRes.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(serverError || body?.error || 'Failed to load certificate document.');
+  const docxSources = [params.previewDocxUrl, params.docxUrl].filter(
+    (url): url is string => Boolean(url?.trim())
+  );
+
+  let lastError = serverError;
+
+  for (const docxUrl of docxSources) {
+    try {
+      const docxRes = await fetch(appendCacheBuster(docxUrl), {
+        credentials: docxUrl.startsWith('/') ? 'same-origin' : 'omit',
+        cache: 'no-store',
+      });
+      if (!docxRes.ok) {
+        const body = (await docxRes.json().catch(() => null)) as { error?: string } | null;
+        lastError = body?.error || serverError;
+        continue;
+      }
+
+      const docxBlob = await docxRes.blob();
+      await convertDocxBlobToPdfAndDownload(docxBlob, params.fileName);
+      return { format: 'pdf', fileName: params.fileName };
+    } catch (err) {
+      if (err instanceof Error) {
+        lastError = err.message;
+      }
+    }
   }
 
-  const docxBlob = await docxRes.blob();
-  await convertDocxBlobToPdfAndDownload(docxBlob, params.fileName);
-  return { format: 'pdf', fileName: params.fileName };
+  throw new Error(lastError || 'Failed to load certificate document.');
 }

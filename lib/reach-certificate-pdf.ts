@@ -6,12 +6,8 @@ import {
   type ReachPdfChemical,
   type ReachPdfSource,
 } from '@/lib/reach-pdf-data';
-import { CERTIFICATES_BUCKET } from '@/lib/storage';
-import {
-  convertReachDocxToPdf,
-  generateReachCertificateDocx,
-} from '@/services/reach-certificate-docx';
-import { downloadReachCertificateFile } from '@/lib/reach-certificate-storage';
+import { generateReachCertificateDocx } from '@/services/reach-certificate-docx';
+import { resolveReachCertificatePreview } from '@/lib/reach-certificate-preview';
 
 type ReachCertPdfInput = {
   certificateNumber: string;
@@ -34,24 +30,6 @@ export type ReachCertificateDownloadFile = {
   format: 'pdf' | 'docx';
 };
 
-function cachePdfToStorage(
-  supabase: SupabaseClient,
-  certificateNumber: string,
-  pdfBuffer: Buffer
-): void {
-  void supabase.storage
-    .from(CERTIFICATES_BUCKET)
-    .upload(`${certificateNumber}.pdf`, pdfBuffer, {
-      contentType: PDF_CONTENT_TYPE,
-      upsert: true,
-    })
-    .then(({ error }) => {
-      if (error) {
-        console.warn(`[REACH PDF] Failed to cache ${certificateNumber}.pdf:`, error.message);
-      }
-    });
-}
-
 function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
   return generateReachCertificateDocx(
     buildReachDocxData(input.client, input.chemical, {
@@ -63,43 +41,27 @@ function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
   );
 }
 
-async function tryConvertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
-  return convertReachDocxToPdf(docxBuffer);
-}
-
 /**
- * Always builds from the current EU REACH template.
- * Never serves stale files from storage (old Template 1 PDFs/DOCXs).
+ * Always builds from the current EU REACH template and current field values.
+ * Never serves stale files from storage.
  */
 export async function resolveReachCertificateDownloadFile(
   supabase: SupabaseClient,
   input: ReachCertPdfInput
 ): Promise<ReachCertificateDownloadFile> {
   const certNumber = input.certificateNumber;
-  const freshDocx = buildFreshReachDocx(input);
-  const pdfFileName = `${certNumber}.pdf`;
+  const result = await resolveReachCertificatePreview(supabase, input);
 
-  try {
-    const pdfBuffer = await tryConvertDocxToPdf(freshDocx);
-    cachePdfToStorage(supabase, certNumber, pdfBuffer);
+  if (result.mode === 'pdf') {
     return {
-      buffer: pdfBuffer,
+      buffer: result.buffer,
       contentType: PDF_CONTENT_TYPE,
-      fileName: pdfFileName,
+      fileName: result.fileName,
       format: 'pdf',
     };
-  } catch {
-    const storedPdf = await downloadReachCertificateFile(supabase, pdfFileName);
-    if (storedPdf) {
-      return {
-        buffer: storedPdf,
-        contentType: PDF_CONTENT_TYPE,
-        fileName: pdfFileName,
-        format: 'pdf',
-      };
-    }
   }
 
+  const freshDocx = buildFreshReachDocx(input);
   return {
     buffer: freshDocx,
     contentType: DOCX_CONTENT_TYPE,

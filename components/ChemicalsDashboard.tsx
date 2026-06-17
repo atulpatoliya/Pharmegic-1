@@ -232,13 +232,6 @@ export default function ChemicalsDashboard({
     e.preventDefault();
     setFormError(null);
 
-    // Check basic validations locally before hitting server
-    if (!/^\d{2,7}-\d{2}-\d$/.test(formData.cas_number)) {
-      setFormError('Invalid CAS number format (must match e.g. 110-80-5).');
-      toast.error('Invalid CAS number format (must match e.g. 110-80-5).');
-      return;
-    }
-
     startTransition(async () => {
       const payload = new FormData();
       payload.append('chemical_name', formData.chemical_name);
@@ -281,12 +274,6 @@ export default function ChemicalsDashboard({
     if (!selectedChemical) return;
     setFormError(null);
 
-    // Check basic validations locally before hitting server
-    if (!/^\d{2,7}-\d{2}-\d$/.test(formData.cas_number)) {
-      setFormError('Invalid CAS number format (must match e.g. 110-80-5).');
-      toast.error('Invalid CAS number format (must match e.g. 110-80-5).');
-      return;
-    }
     if (!formData.ec_number.trim()) {
       setFormError('EC number is required.');
       toast.error('EC number is required.');

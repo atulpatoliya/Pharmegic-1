@@ -74,12 +74,8 @@ export const SUBSTANCE_IMPORT_DEFAULTS = {
   available_quantity: 0,
 } as const;
 
-const CAS_REGEX = /^\d{2,7}-\d{2}-\d$/;
-
 export function normalizeCasNumber(value: string): string {
-  return String(value || '')
-    .trim()
-    .replace(/\.$/, '');
+  return String(value || '').trim();
 }
 
 function parseTonnageBand(value: string): string | null {
@@ -393,13 +389,6 @@ export function parseSpreadsheetBuffer(
 
     const substance = rowToSubstance(row, headerMap, rowNumber);
     if (substance) {
-      if (!CAS_REGEX.test(substance.cas_number)) {
-        skippedRows.push({
-          rowNumber,
-          reason: `Invalid CAS number format: ${substance.cas_number}`,
-        });
-        return;
-      }
       substances.push(substance);
       return;
     }
