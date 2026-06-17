@@ -14,7 +14,13 @@ import { Dialog } from './ui/Dialog';
 import { toast } from '@/store/toast';
 import ClientWizard from './ClientWizard';
 import { ClientDirectoryExport } from '@/components/ClientDirectoryExport';
+import { ClientDirectoryImport } from '@/components/ClientDirectoryImport';
 import { ResponsiveTableScroll } from './ui/ResponsiveTableScroll';
+import {
+  normalizeRegulatoryRegistrations,
+  REGULATORY_REGISTRATION_OPTIONS,
+  type RegulatoryRegistration,
+} from '@/lib/regulatory-registrations';
 
 import {
   Search,
@@ -30,8 +36,21 @@ import {
   X,
   Plus,
   Briefcase,
-  AlertCircle
+  AlertCircle,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
+
+type SortColumn = 'company' | 'location' | 'registered';
+type SortDirection = 'asc' | 'desc';
+
+function getClientLocationLabel(client: Client) {
+  const city = client.city?.trim() || '';
+  const country = client.country?.trim() || '';
+  if (!city && !country) return '';
+  return city && country ? `${city}, ${country}` : city || country;
+}
 
 interface ChemicalOption {
   id: string;
@@ -56,6 +75,7 @@ interface Client {
   country: string | null;
   postal_code: string | null;
   status: 'active' | 'inactive' | 'pending';
+  regulatory_registrations?: string[] | null;
   created_at: string;
 }
 
@@ -73,6 +93,8 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [clients, setClients] = useState<Client[]>(initialClients);
 
   // Modals state
@@ -140,10 +162,60 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
     return matchesSearch && matchesStatus;
   });
 
+  const sortedClients = useMemo(() => {
+    if (!sortColumn) return filteredClients;
+
+    const list = [...filteredClients];
+    list.sort((a, b) => {
+      let compare = 0;
+      if (sortColumn === 'company') {
+        compare = a.company_name.localeCompare(b.company_name, undefined, { sensitivity: 'base' });
+      } else if (sortColumn === 'location') {
+        compare = getClientLocationLabel(a).localeCompare(getClientLocationLabel(b), undefined, {
+          sensitivity: 'base',
+        });
+      } else {
+        compare = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      return sortDirection === 'asc' ? compare : -compare;
+    });
+    return list;
+  }, [filteredClients, sortColumn, sortDirection]);
+
   const filteredClientIds = useMemo(
     () => filteredClients.map((client) => client.id),
     [filteredClients]
   );
+
+  const toggleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortColumn(column);
+    setSortDirection('asc');
+  };
+
+  const renderSortableHeader = (label: string, column: SortColumn) => {
+    const active = sortColumn === column;
+    const SortIcon = !active ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
+    const sortHint = !active ? 'Sort' : sortDirection === 'asc' ? 'Sorted A to Z' : 'Sorted Z to A';
+
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSort(column)}
+        className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors ${
+          active ? 'text-teal-700' : 'text-slate-500 hover:text-slate-800'
+        }`}
+        title={sortHint}
+        aria-label={`${label}: ${sortHint}`}
+      >
+        <span>{label}</span>
+        <SortIcon className={`h-3.5 w-3.5 shrink-0 ${active ? '' : 'opacity-40'}`} />
+      </button>
+    );
+  };
 
   const allFilteredSelected =
     filteredClientIds.length > 0 && filteredClientIds.every((id) => selectedClientIds.includes(id));
@@ -257,6 +329,29 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
     }
   };
 
+  const getReachBadges = (registrations: string[] | null | undefined) => {
+    const values = normalizeRegulatoryRegistrations(registrations);
+    if (values.length === 0) {
+      return <span className="text-slate-400 text-xs font-medium">Not set</span>;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-1 max-w-[180px]">
+        {values.map((value: RegulatoryRegistration) => {
+          const option = REGULATORY_REGISTRATION_OPTIONS.find((item) => item.value === value);
+          const label = option?.shortLabel ?? value;
+          const variant =
+            value === 'eu_reach' ? 'success' : value === 'uk_reach' ? 'neutral' : 'warning';
+          return (
+            <Badge key={value} variant={variant} className="text-[10px] font-semibold">
+              {label}
+            </Badge>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8 animate-slide-in">
       {/* Header section */}
@@ -268,6 +363,7 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:self-start">
+          <ClientDirectoryImport />
           <ClientDirectoryExport
             filteredClientIds={filteredClientIds}
             selectedClientIds={selectedClientIds}
@@ -311,7 +407,7 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
       {/* Main clients list table */}
       <Card className="border-slate-100 overflow-hidden">
         <ResponsiveTableScroll>
-          <table className="w-full text-left border-collapse min-w-[900px] text-xs sm:text-sm">
+          <table className="w-full text-left border-collapse min-w-[1020px] text-xs sm:text-sm">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100">
                 <th className="p-4 w-12 text-center">
@@ -324,23 +420,30 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
                     className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
                   />
                 </th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Company Profile</th>
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {renderSortableHeader('Company Profile', 'company')}
+                </th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Primary Representative</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Location</th>
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {renderSortableHeader('Location', 'location')}
+                </th>
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">REACH</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Registered</th>
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {renderSortableHeader('Registered', 'registered')}
+                </th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
-              {filteredClients.length === 0 ? (
+              {sortedClients.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
                     No clients found matching the selected search criteria.
                   </td>
                 </tr>
               ) : (
-                filteredClients.map((client) => {
+                sortedClients.map((client) => {
                   const isSelected = selectedClientIds.includes(client.id);
                   return (
                   <tr
@@ -404,6 +507,7 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
                         <span className="text-slate-400">Not set</span>
                       )}
                     </td>
+                    <td className="p-4 align-top">{getReachBadges(client.regulatory_registrations)}</td>
                     <td className="p-4">{getStatusBadge(client.status)}</td>
                     <td className="p-4 text-slate-500 font-medium">
                       <div className="flex items-center gap-1.5 text-xs">

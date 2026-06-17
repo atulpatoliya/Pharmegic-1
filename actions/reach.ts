@@ -666,6 +666,59 @@ export async function updateReachCertificateAction(
 }
 
 // ============================================================================
+// ISSUE RC CERTIFICATE WITH EXPLICIT DETAILS (assign/import/edit flow)
+// ============================================================================
+export async function issueReachCertificateWithDetailsAction(
+  clientId: string,
+  chemicalId: string,
+  input: {
+    registrationNumber: string;
+    issuedDate: string;
+    validatedDate: string;
+    tonnageBand?: string | null;
+    allocatedQuantity?: number | null;
+  }
+) {
+  const session = await requireAdmin();
+  if (!session) return { success: false as const, error: 'Unauthorized.' };
+
+  try {
+    const bandMax = getTonnageBandMaxQuota(input.tonnageBand) ?? 0;
+    const allocated =
+      input.allocatedQuantity != null && input.allocatedQuantity > 0
+        ? input.allocatedQuantity
+        : bandMax;
+
+    const result = await createReachCertificate({
+      clientId,
+      chemicalId,
+      userId: session.userId,
+      registrationNumber: input.registrationNumber.trim(),
+      issuedDate: input.issuedDate,
+      validatedDate: input.validatedDate,
+      allocatedQuantity: allocated,
+      tonnageBand: input.tonnageBand || null,
+    });
+
+    if (!result.success) return result;
+
+    revalidatePath(`/admin/clients/${clientId}`);
+    revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
+    revalidatePath('/admin/rc-certificates');
+
+    return {
+      success: true as const,
+      message: result.message || 'RC Certificate issued.',
+      certificateId: result.certificateId,
+      certNumber: result.certNumber,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: message };
+  }
+}
+
+// ============================================================================
 // ISSUE RC CERTIFICATE (Admin — renew from substance table)
 // ============================================================================
 export async function issueReachCertificateAction(clientId: string, chemicalId: string) {

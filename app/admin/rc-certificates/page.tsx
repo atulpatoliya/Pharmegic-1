@@ -53,7 +53,15 @@ export default async function AdminRcCertificatesPage() {
 
   const { data: clientChemicalsRaw, error: clientChemError } = await adminSupabase
     .from('client_chemicals')
-    .select('*, chemicals(*)')
+    .select(`
+      *,
+      chemicals (*),
+      clients (
+        id,
+        company_name,
+        email
+      )
+    `)
     .neq('status', 'trashed');
 
   if (error) {
@@ -69,6 +77,7 @@ export default async function AdminRcCertificatesPage() {
   const clientChemicals = (clientChemicalsRaw || []).map((row: any) => ({
     ...row,
     chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+    clients: Array.isArray(row.clients) ? row.clients[0] : row.clients,
   }));
 
   const normalized = (certificates || []).map((row) => ({

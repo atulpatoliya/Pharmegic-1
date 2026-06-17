@@ -310,6 +310,12 @@ export default function RcCertificatesTable({
           clientCompanyNames.set(cert.client_id, cert.clients.company_name);
         }
       }
+      for (const cc of clientChemicals) {
+        const ccClientName = cc.clients?.company_name;
+        if (ccClientName) {
+          clientCompanyNames.set(cc.client_id, ccClientName);
+        }
+      }
 
       for (const cc of clientChemicals) {
         const chemId = cc.chemical_id;
@@ -318,12 +324,13 @@ export default function RcCertificatesTable({
 
         if (!groupMap.has(groupKey)) {
           const chem = cc.chemicals;
-          const companyName = clientCompanyNames.get(clientId) || '—';
+          const companyName =
+            cc.clients?.company_name || clientCompanyNames.get(clientId) || '—';
           const group = {
             key: groupKey,
             clientId,
             companyName: companyName,
-            clientEmail: '',
+            clientEmail: cc.clients?.email || '',
             chemicalId: chemId,
             chemicalName: chem?.chemical_name || 'Unknown Substance',
             casNumber: chem?.cas_number || 'N/A',

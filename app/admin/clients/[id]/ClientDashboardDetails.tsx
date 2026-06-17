@@ -61,6 +61,7 @@ import {
   renewReachCertificateAction,
   updateReachCertificateAction,
   sendBulkReachCertificatesEmailAction,
+  issueReachCertificateWithDetailsAction,
 } from '@/actions/reach';
 import {
   buildReachCertificateDocxPreviewUrl,
@@ -1113,6 +1114,26 @@ export default function ClientDashboardDetails({
           return;
         }
         certMessage = certRes.message;
+      } else if (
+        assignChemData.registration_number.trim() &&
+        assignChemData.issued_date &&
+        assignChemData.validated_date
+      ) {
+        const bandMax = getTonnageBandMaxQuota(assignChemData.tonnage_band);
+        const issueRes = await issueReachCertificateWithDetailsAction(client.id, renewChemicalId, {
+          registrationNumber: assignChemData.registration_number.trim(),
+          issuedDate: assignChemData.issued_date,
+          validatedDate: assignChemData.validated_date,
+          tonnageBand: assignChemData.tonnage_band || null,
+          allocatedQuantity: assignChemData.allocated_quantity
+            ? Number(assignChemData.allocated_quantity)
+            : (bandMax ?? 0),
+        });
+        if (!issueRes.success) {
+          setModalError('assignChem', toErrorMessage(issueRes.error, 'Failed to issue RC certificate.'));
+          return;
+        }
+        certMessage = issueRes.message;
       }
 
       toast.success(certMessage || editRes.message || 'Substance and RC details updated.');

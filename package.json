@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:clients": "node scripts/import-clients-from-excel.js",
+    "import:clients:dry": "node scripts/import-clients-from-excel.js --dry-run"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
