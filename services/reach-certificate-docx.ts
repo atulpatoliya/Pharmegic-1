@@ -130,6 +130,18 @@ function applyPlaceholders(xml: string, data: ReachCertificateDocxData): string 
   for (const [key, value] of Object.entries(map)) {
     result = result.split(key).join(value);
   }
+
+  // If the chemical name is very long (>= 60 chars), dynamically reduce its font size in the XML
+  // from 10pt (value 20) to 7.5pt (value 15) to prevent table expansion and ensure it fits on 1 page.
+  if (data.chemicalName.length >= 60) {
+    const escapedName = escapeReachXml(data.chemicalName);
+    const targetSizeTag = `<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapedName}</w:t>`;
+    const replacementSizeTag = `<w:sz w:val="15"/><w:szCs w:val="15"/></w:rPr><w:t>${escapedName}</w:t>`;
+    if (result.includes(targetSizeTag)) {
+      result = result.replace(targetSizeTag, replacementSizeTag);
+    }
+  }
+
   return result;
 }
 
