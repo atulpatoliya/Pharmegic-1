@@ -55,6 +55,14 @@ function sanitizeDocxCloneForPdf(root: HTMLElement): void {
     if (!(table instanceof HTMLElement)) return;
     table.style.borderCollapse = 'collapse';
     table.style.borderSpacing = '0';
+    table.style.width = '100%';
+  });
+
+  root.querySelectorAll('td p, th p').forEach((p) => {
+    if (p instanceof HTMLElement) {
+      p.style.margin = '0';
+      p.style.padding = '0';
+    }
   });
 
   root.querySelectorAll('td, th').forEach((cell) => {
@@ -62,6 +70,38 @@ function sanitizeDocxCloneForPdf(root: HTMLElement): void {
     cell.style.textDecoration = 'none';
     cell.style.borderCollapse = 'collapse';
     cell.style.verticalAlign = 'middle';
+    
+    // Prevent common table labels from wrapping and getting clipped
+    const text = (cell.innerText || cell.textContent || '').trim();
+    const isLabel = 
+      text === 'Substance Name' ||
+      text === 'CAS Number' ||
+      text === 'EC Number' ||
+      text === 'Tonnage Band' ||
+      text === 'Registration Number' ||
+      text === 'Authorized Holder' ||
+      text === 'Authorized Quantity' ||
+      text === 'Date of Issuance' ||
+      text === 'Date of Expiration' ||
+      text.startsWith('Substance') ||
+      text.startsWith('CAS No') ||
+      text.startsWith('EC No') ||
+      text.startsWith('Tonnage');
+
+    if (isLabel) {
+      cell.style.whiteSpace = 'nowrap';
+      cell.style.width = '180px';
+      cell.style.minWidth = '180px';
+      
+      // Ensure inner paragraph/span elements also do not wrap and have no margins
+      cell.querySelectorAll('p, span').forEach((inner) => {
+        if (inner instanceof HTMLElement) {
+          inner.style.whiteSpace = 'nowrap';
+          inner.style.margin = '0';
+          inner.style.padding = '0';
+        }
+      });
+    }
   });
 }
 
