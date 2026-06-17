@@ -99,10 +99,7 @@ export function buildReachAddressLines(client: {
   };
 }
 
-function resolveTemplatePath(browserPreview = false): string {
-  if (browserPreview && fs.existsSync(EU_REACH_TEMPLATE.browserPreview)) {
-    return EU_REACH_TEMPLATE.browserPreview;
-  }
+function resolveTemplatePath(): string {
   if (fs.existsSync(EU_REACH_TEMPLATE.runtime)) return EU_REACH_TEMPLATE.runtime;
   throw new Error(
     'EU REACH certificate template not found. Copy your Word file to templates/source/EU_REACH_SOURCE.docx and run: node scripts/prepare-eu-reach-template.mjs'
@@ -135,11 +132,8 @@ function applyPlaceholders(xml: string, data: ReachCertificateDocxData): string 
   return result;
 }
 
-export function generateReachCertificateDocx(
-  data: ReachCertificateDocxData,
-  options?: { browserPreview?: boolean }
-): Buffer {
-  const templatePath = resolveTemplatePath(options?.browserPreview === true);
+export function generateReachCertificateDocx(data: ReachCertificateDocxData): Buffer {
+  const templatePath = resolveTemplatePath();
   const zip = new PizZip(fs.readFileSync(templatePath));
   const xml = applyPlaceholders(zip.files['word/document.xml'].asText(), data);
   zip.file('word/document.xml', xml);

@@ -23,8 +23,7 @@ export async function GET(_request: NextRequest) {
   try {
     const sample = getRcTemplatePreviewSample();
     const docxBuffer = generateReachCertificateDocx(
-      buildReachDocxData(sample.client, sample.chemical, sample.options),
-      { browserPreview: true }
+      buildReachDocxData(sample.client, sample.chemical, sample.options)
     );
 
     return docxResponse(docxBuffer, 'rc-template-preview.docx');

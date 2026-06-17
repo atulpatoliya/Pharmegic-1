@@ -9,6 +9,7 @@ type CertificatePdfDownloadLinkProps = {
   docxUrl: string;
   fileName: string;
   previewDocxUrl?: string | null;
+  certificateType?: 'rc' | 'tcc';
   className?: string;
   children: React.ReactNode;
   title?: string;
@@ -19,6 +20,7 @@ export function CertificatePdfDownloadLink({
   docxUrl,
   fileName,
   previewDocxUrl,
+  certificateType,
   className,
   children,
   title,
@@ -32,7 +34,18 @@ export function CertificatePdfDownloadLink({
 
     setLoading(true);
     try {
-      await downloadCertificatePdf({ pdfUrl, docxUrl, fileName, previewDocxUrl });
+      const result = await downloadCertificatePdf({
+        pdfUrl,
+        docxUrl,
+        fileName,
+        previewDocxUrl,
+        certificateType,
+      });
+      if (result.format === 'docx') {
+        toast.success(
+          'Downloaded Word file (same layout as preview). For PDF on the server, enable Gotenberg/LibreOffice.'
+        );
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'PDF download failed.';
       toast.error(message);

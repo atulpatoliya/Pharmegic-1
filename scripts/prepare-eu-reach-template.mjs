@@ -1,10 +1,8 @@
 /**
- * Builds EU REACH certificate templates from the master Word source.
+ * Builds EU REACH certificate template from the master Word source.
  *
  * Edit design: templates/source/EU_REACH_SOURCE.docx
- * Outputs:
- *   templates/EU_REACH_CERTIFICATE.docx         — print/PDF (full layout)
- *   templates/EU_REACH_CERTIFICATE_preview.docx — browser DOCX fallback only
+ * Output: templates/EU_REACH_CERTIFICATE.docx — used everywhere (print/PDF/preview)
  *
  * Run: node scripts/prepare-eu-reach-template.mjs
  */
@@ -16,7 +14,6 @@ const root = process.cwd();
 const sourceDir = path.join(root, 'templates', 'source');
 const source = path.join(sourceDir, 'EU_REACH_SOURCE.docx');
 const target = path.join(root, 'templates', 'EU_REACH_CERTIFICATE.docx');
-const previewTarget = path.join(root, 'templates', 'EU_REACH_CERTIFICATE_preview.docx');
 
 if (!fs.existsSync(source)) {
   console.error('templates/source/EU_REACH_SOURCE.docx not found.');
@@ -95,39 +92,6 @@ if (xml.includes('>India<')) {
   xml = xml.split('>India<').join('>{{ADDR_LINE3}}<');
 }
 
-function flattenForBrowserPreview(sourceXml) {
-  const marker = '<w:drawing>';
-  const endMarker = '</w:drawing>';
-  let result = '';
-  let cursor = 0;
-
-  while (cursor < sourceXml.length) {
-    const start = sourceXml.indexOf(marker, cursor);
-    if (start === -1) {
-      result += sourceXml.slice(cursor);
-      break;
-    }
-
-    result += sourceXml.slice(cursor, start);
-    const end = sourceXml.indexOf(endMarker, start);
-    if (end === -1) {
-      result += sourceXml.slice(start);
-      break;
-    }
-
-    const block = sourceXml.slice(start, end + endMarker.length);
-    const hasTextBox = block.includes('<w:txbxContent>');
-    const hasImage = block.includes('<a:blip') || block.includes('r:embed');
-    if (!hasTextBox && hasImage) {
-      result += block;
-    }
-
-    cursor = end + endMarker.length;
-  }
-
-  return result.replace(/<w:tblpPr[^/]*\/>/g, '');
-}
-
 const placeholders = [
   '{{COMPANY_NAME}}',
   '{{ADDR_LINE1}}',
@@ -157,10 +121,4 @@ fs.mkdirSync(path.dirname(target), { recursive: true });
 zip.file('word/document.xml', xml);
 fs.writeFileSync(target, zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }));
 console.log(`Runtime template written to ${target}`);
-
-const previewZip = new PizZip(fs.readFileSync(source));
-previewZip.file('word/document.xml', flattenForBrowserPreview(xml));
-fs.writeFileSync(previewTarget, previewZip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }));
-const previewDrawings = (flattenForBrowserPreview(xml).match(/<w:drawing>/g) || []).length;
-console.log(`Browser preview template written to ${previewTarget} (drawings=${previewDrawings})`);
 console.log('Run: node scripts/generate-eu-reach-preview-pdf.mjs');

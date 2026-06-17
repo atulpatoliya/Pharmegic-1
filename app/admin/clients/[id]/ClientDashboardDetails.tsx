@@ -1847,6 +1847,7 @@ export default function ClientDashboardDetails({
                               pdfUrl={buildReachCertificatePdfDownloadUrl(historyRow.cert.id)}
                               docxUrl={buildReachCertificateDocxPreviewUrl(historyRow.cert.id)}
                               fileName={`${historyRow.cert.certificate_number}.pdf`}
+                              certificateType="rc"
                               title="Download PDF"
                               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                             >

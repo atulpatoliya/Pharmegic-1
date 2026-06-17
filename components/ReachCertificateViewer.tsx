@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import ReachCertificateOfficeViewer from '@/components/ReachCertificateOfficeViewer';
 import ReachCertificatePdfViewer from '@/components/ReachCertificatePdfViewer';
@@ -11,6 +11,7 @@ type ReachCertificateViewerProps = {
   pdfUrl: string;
   directPdfUrl?: string | null;
   directDocxUrl?: string | null;
+  onPreviewDocxUrl?: (docxUrl: string) => void;
 };
 
 /**
@@ -23,9 +24,22 @@ export default function ReachCertificateViewer({
   pdfUrl,
   directPdfUrl,
   directDocxUrl,
+  onPreviewDocxUrl,
 }: ReachCertificateViewerProps) {
   const [officeDocxUrl, setOfficeDocxUrl] = useState<string | null>(directDocxUrl || null);
   const [preferDirectPdf, setPreferDirectPdf] = useState(Boolean(directPdfUrl && !directDocxUrl));
+
+  useEffect(() => {
+    if (directDocxUrl) {
+      onPreviewDocxUrl?.(directDocxUrl);
+    }
+  }, [directDocxUrl, onPreviewDocxUrl]);
+
+  const handleDocxPreview = (url: string) => {
+    setPreferDirectPdf(false);
+    setOfficeDocxUrl(url);
+    onPreviewDocxUrl?.(url);
+  };
 
   if (certificateType === 'rc') {
     if (officeDocxUrl) {
@@ -39,10 +53,7 @@ export default function ReachCertificateViewer({
         key={activePdfUrl}
         pdfUrl={activePdfUrl}
         fallbackPdfUrl={preferDirectPdf ? pdfUrl : directPdfUrl}
-        onDocxPreview={(url) => {
-          setPreferDirectPdf(false);
-          setOfficeDocxUrl(url);
-        }}
+        onDocxPreview={handleDocxPreview}
       />
     );
   }

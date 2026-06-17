@@ -23,12 +23,20 @@ const PDF_CONTENT_TYPE = 'application/pdf';
 const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-export type ReachCertificateDownloadFile = {
-  buffer: Buffer;
-  contentType: string;
-  fileName: string;
-  format: 'pdf' | 'docx';
-};
+export type ReachCertificateDownloadFile =
+  | {
+      buffer: Buffer;
+      contentType: string;
+      fileName: string;
+      format: 'pdf';
+    }
+  | {
+      buffer: Buffer;
+      contentType: string;
+      fileName: string;
+      format: 'docx';
+      docxUrl: string | null;
+    };
 
 function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
   return generateReachCertificateDocx(
@@ -67,6 +75,7 @@ export async function resolveReachCertificateDownloadFile(
     contentType: DOCX_CONTENT_TYPE,
     fileName: `${certNumber}.docx`,
     format: 'docx',
+    docxUrl: result.docxUrl,
   };
 }
 

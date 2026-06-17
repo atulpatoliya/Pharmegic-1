@@ -7,13 +7,11 @@ const TEMPLATES_DIR = path.join(process.cwd(), 'templates');
  *
  * templates/
  *   EU_REACH_CERTIFICATE.docx          — runtime print/PDF (placeholders applied)
- *   EU_REACH_CERTIFICATE_preview.docx  — browser DOCX fallback only
  *   source/EU_REACH_SOURCE.docx        — master Word file (edit design here)
  */
 export const EU_REACH_TEMPLATE = {
   source: path.join(TEMPLATES_DIR, 'source', 'EU_REACH_SOURCE.docx'),
   runtime: path.join(TEMPLATES_DIR, 'EU_REACH_CERTIFICATE.docx'),
-  browserPreview: path.join(TEMPLATES_DIR, 'EU_REACH_CERTIFICATE_preview.docx'),
   bundledPreviewPdf: path.join(
     process.cwd(),
     'public',

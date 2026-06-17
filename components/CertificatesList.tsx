@@ -226,6 +226,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
                               : buildReachCertificateDocxPreviewUrl(cert.id)
                           }
                           fileName={`${cert.certificate_number}.pdf`}
+                          certificateType={cert.type === 'TCC' ? 'tcc' : 'rc'}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-lg transition-colors border border-emerald-100 disabled:opacity-60"
                         >
                           <Download className="h-3.5 w-3.5" /> PDF

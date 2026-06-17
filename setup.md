@@ -153,8 +153,7 @@ node scripts/generate-eu-reach-preview-pdf.mjs
 
 This writes:
 
-- `templates/EU_REACH_CERTIFICATE.docx` — used for all client PDFs/DOCX
-- `templates/EU_REACH_CERTIFICATE_preview.docx` — browser fallback only
+- `templates/EU_REACH_CERTIFICATE.docx` — used for all client PDFs/DOCX and Settings preview
 - `public/previews/eu-reach-certificate-sample.pdf` — Settings preview on servers without LibreOffice/Gotenberg
 
 ### TCC Certificate template

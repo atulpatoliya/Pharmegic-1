@@ -32,6 +32,7 @@ import {
   buildReachCertificatePdfDownloadUrl,
   buildReachCertificatePdfDownloadUrlByClientChemical,
   buildReachCertificatePdfPreviewUrl,
+  buildReachCertificatePdfPreviewUrlByCertificateId,
 } from '@/lib/reach-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
@@ -104,6 +105,9 @@ export default function ReachCertificatePreviewClient({
   const [issuedDate, setIssuedDate] = useState(defaults.issuedDate);
   const [validatedDate, setValidatedDate] = useState(defaults.validatedDate);
   const [tonnageBand, setTonnageBand] = useState(defaults.tonnageBand || chemical.tonnage_band || '');
+  const [livePreviewDocxUrl, setLivePreviewDocxUrl] = useState<string | null>(
+    pendingPreviewAssets?.docxUrl ?? null
+  );
 
   const fieldsMatchDefaults =
     registrationNumber === defaults.registrationNumber &&
@@ -127,7 +131,21 @@ export default function ReachCertificatePreviewClient({
   }, [cert, clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
 
   const pdfPreviewUrl = useMemo(() => {
-    const liveUrl = buildReachCertificatePdfPreviewUrl({
+    if (cert) {
+      if (isEditing || !fieldsMatchDefaults) {
+        return buildReachCertificatePdfPreviewUrl({
+          clientId,
+          chemicalId,
+          registrationNumber: registrationNumber.trim() || '—',
+          issuedDate,
+          validatedDate,
+          tonnageBand,
+        });
+      }
+      return buildReachCertificatePdfPreviewUrlByCertificateId(cert.id);
+    }
+
+    return buildReachCertificatePdfPreviewUrl({
       clientId,
       chemicalId,
       registrationNumber: registrationNumber.trim() || '—',
@@ -135,14 +153,10 @@ export default function ReachCertificatePreviewClient({
       validatedDate,
       tonnageBand,
     });
-
-    if (isEditing || !fieldsMatchDefaults) return liveUrl;
-    if (cert?.file_url) return cert.file_url;
-    return liveUrl;
   }, [
+    cert,
     isEditing,
     fieldsMatchDefaults,
-    cert?.file_url,
     clientId,
     chemicalId,
     registrationNumber,
@@ -164,7 +178,7 @@ export default function ReachCertificatePreviewClient({
   const downloadDocxUrl = cert
     ? buildReachCertificateDocxPreviewUrl(cert.id)
     : docxPreviewUrl;
-  const downloadPreviewDocxUrl = isPending ? pendingPreviewAssets?.docxUrl ?? null : null;
+  const downloadPreviewDocxUrl = livePreviewDocxUrl ?? pendingPreviewAssets?.docxUrl ?? null;
   const downloadFileName = cert
     ? `${cert.certificate_number}.pdf`
     : `RC-preview-${chemicalId.slice(0, 8)}.pdf`;
@@ -285,6 +299,7 @@ export default function ReachCertificatePreviewClient({
             docxUrl={downloadDocxUrl}
             previewDocxUrl={downloadPreviewDocxUrl}
             fileName={downloadFileName}
+            certificateType="rc"
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-60"
           >
             <Download className="h-4 w-4" /> {downloadLabel}
@@ -421,12 +436,8 @@ export default function ReachCertificatePreviewClient({
           certificateType="rc"
           docxUrl={docxPreviewUrl}
           pdfUrl={pdfPreviewUrl}
-          directPdfUrl={fieldsMatchDefaults && !isEditing && cert?.file_url ? cert.file_url : null}
-          directDocxUrl={
-            fieldsMatchDefaults && !isEditing && !cert?.file_url && pendingPreviewAssets?.docxUrl
-              ? pendingPreviewAssets.docxUrl
-              : null
-          }
+          directDocxUrl={livePreviewDocxUrl ?? pendingPreviewAssets?.docxUrl ?? null}
+          onPreviewDocxUrl={setLivePreviewDocxUrl}
         />
       </div>
 

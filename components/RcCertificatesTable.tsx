@@ -28,7 +28,7 @@ import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificateDocxPreviewUrlByClientChemical,
   buildReachCertificatePdfDownloadUrl,
-  buildReachCertificatePdfPreviewUrl,
+  buildReachCertificatePdfDownloadUrlByClientChemical,
 } from '@/lib/reach-certificate-download';
 import { canManageAdminRecords } from '@/lib/auth/roles';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
@@ -173,7 +173,7 @@ function buildPendingReachPreviewUrls(
   };
 
   return {
-    pdfUrl: buildReachCertificatePdfPreviewUrl(previewParams),
+    pdfUrl: buildReachCertificatePdfDownloadUrlByClientChemical(previewParams),
     docxUrl: buildReachCertificateDocxPreviewUrlByClientChemical(previewParams),
   };
 }
@@ -639,6 +639,7 @@ export default function RcCertificatesTable({
                                   pdfUrl={previewUrls.pdfUrl}
                                   docxUrl={previewUrls.docxUrl}
                                   fileName={`${group.chemicalName.replace(/\s+/g, '_')}_rc-preview.pdf`}
+                                  certificateType="rc"
                                   title="Download PDF"
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                                 >
@@ -868,6 +869,7 @@ export default function RcCertificatesTable({
                               pdfUrl={buildReachCertificatePdfDownloadUrl(cert.id)}
                               docxUrl={buildReachCertificateDocxPreviewUrl(cert.id)}
                               fileName={`${cert.certificate_number || 'rc-certificate'}.pdf`}
+                              certificateType="rc"
                               title="Download PDF"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                             >

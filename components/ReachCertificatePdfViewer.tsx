@@ -50,8 +50,10 @@ export default function ReachCertificatePdfViewer({
 
   const loadUrl = useCallback(
     async (url: string, container: HTMLDivElement): Promise<'pdf' | 'docx' | 'failed'> => {
-      const res = await fetch(url, {
+      const fetchUrl = url.includes('?') ? `${url}&_=${Date.now()}` : `${url}?_=${Date.now()}`;
+      const res = await fetch(fetchUrl, {
         credentials: url.startsWith('/') ? 'same-origin' : 'omit',
+        cache: 'no-store',
       });
 
       const contentType = res.headers.get('Content-Type') || '';
@@ -70,13 +72,33 @@ export default function ReachCertificatePdfViewer({
         throw new Error(body?.error || 'Failed to load certificate preview.');
       }
 
-      if (!contentType.includes('application/pdf')) {
-        throw new Error('Certificate preview is not available as PDF.');
+      const data = await res.arrayBuffer();
+      const bytes = new Uint8Array(data);
+      const looksLikePdf =
+        contentType.includes('application/pdf') ||
+        contentType.includes('application/octet-stream') ||
+        (bytes.length >= 4 &&
+          bytes[0] === 0x25 &&
+          bytes[1] === 0x50 &&
+          bytes[2] === 0x44 &&
+          bytes[3] === 0x46);
+
+      if (looksLikePdf) {
+        await renderPdfBuffer(data, container);
+        return 'pdf';
       }
 
-      const data = await res.arrayBuffer();
-      await renderPdfBuffer(data, container);
-      return 'pdf';
+      const looksLikeDocx =
+        contentType.includes('wordprocessingml') ||
+        contentType.includes('officedocument') ||
+        (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b);
+
+      if (looksLikeDocx && url.startsWith('http')) {
+        onDocxPreview?.(url);
+        return 'docx';
+      }
+
+      throw new Error('Certificate preview is not available as PDF.');
     },
     [onDocxPreview, renderPdfBuffer]
   );

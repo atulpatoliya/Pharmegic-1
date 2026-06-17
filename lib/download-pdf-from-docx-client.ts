@@ -5,16 +5,29 @@ import { renderAsync } from 'docx-preview';
 const DOCX_PREVIEW_CLASS = 'docx';
 
 function triggerBlobDownload(blob: Blob, fileName: string) {
-  const safeName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = safeName;
+  anchor.download = fileName;
   anchor.style.display = 'none';
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+async function downloadDocxFromUrl(docxUrl: string, fileName: string): Promise<CertificateDownloadResult> {
+  const res = await fetch(appendCacheBuster(docxUrl), {
+    credentials: docxUrl.startsWith('/') ? 'same-origin' : 'omit',
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error || 'Failed to load certificate document.');
+  }
+  const docxName = fileName.replace(/\.pdf$/i, '.docx');
+  triggerBlobDownload(await res.blob(), docxName);
+  return { format: 'docx', fileName: docxName };
 }
 
 function findDocxWrapper(host: HTMLElement): HTMLElement | null {
@@ -157,6 +170,8 @@ export async function downloadCertificatePdf(params: {
   fileName: string;
   /** Same public DOCX URL shown in Office Online preview (full layout). */
   previewDocxUrl?: string | null;
+  /** RC certificates must not use browser DOCX→PDF (broken layout on live). */
+  certificateType?: 'rc' | 'tcc';
 }): Promise<CertificateDownloadResult> {
   let serverError: string | undefined;
 
@@ -168,6 +183,19 @@ export async function downloadCertificatePdf(params: {
     const contentType = pdfRes.headers.get('Content-Type') || '';
 
     if (pdfRes.ok) {
+      if (contentType.includes('application/json')) {
+        const body = (await pdfRes.json()) as {
+          downloadMode?: string;
+          docxUrl?: string;
+          fileName?: string;
+          error?: string;
+        };
+        if (body.downloadMode === 'docx' && body.docxUrl) {
+          return downloadDocxFromUrl(body.docxUrl, body.fileName || params.fileName);
+        }
+        throw new Error(body.error || 'Certificate download failed.');
+      }
+
       const blob = await pdfRes.blob();
 
       if (contentType.includes('application/pdf')) {
@@ -176,6 +204,11 @@ export async function downloadCertificatePdf(params: {
       }
 
       if (isDocxContentType(contentType)) {
+        if (params.certificateType === 'rc') {
+          const docxName = params.fileName.replace(/\.pdf$/i, '.docx');
+          triggerBlobDownload(blob, docxName);
+          return { format: 'docx', fileName: docxName };
+        }
         await convertDocxBlobToPdfAndDownload(blob, params.fileName);
         return { format: 'pdf', fileName: params.fileName };
       }
@@ -193,8 +226,23 @@ export async function downloadCertificatePdf(params: {
     (url): url is string => Boolean(url?.trim())
   );
 
-  let lastError = serverError;
+  if (params.certificateType === 'rc') {
+    for (const docxUrl of docxSources) {
+      try {
+        return await downloadDocxFromUrl(docxUrl, params.fileName);
+      } catch (err) {
+        if (err instanceof Error) {
+          serverError = err.message;
+        }
+      }
+    }
+    throw new Error(
+      serverError ||
+        'PDF conversion is not available on this server. Install LibreOffice or set GOTENBERG_URL, or download the Word file.'
+    );
+  }
 
+  let lastError = serverError;
   for (const docxUrl of docxSources) {
     try {
       const docxRes = await fetch(appendCacheBuster(docxUrl), {
@@ -206,9 +254,7 @@ export async function downloadCertificatePdf(params: {
         lastError = body?.error || serverError;
         continue;
       }
-
-      const docxBlob = await docxRes.blob();
-      await convertDocxBlobToPdfAndDownload(docxBlob, params.fileName);
+      await convertDocxBlobToPdfAndDownload(await docxRes.blob(), params.fileName);
       return { format: 'pdf', fileName: params.fileName };
     } catch (err) {
       if (err instanceof Error) {

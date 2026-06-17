@@ -9,6 +9,10 @@ export function buildReachCertificateDocxPreviewUrl(certificateId: string): stri
   return `/api/reach-certificate/docx?certificateId=${encodeURIComponent(certificateId)}`;
 }
 
+export function buildReachCertificatePdfPreviewUrlByCertificateId(certificateId: string): string {
+  return `/api/reach-certificate/preview/pdf?certificateId=${encodeURIComponent(certificateId)}`;
+}
+
 export function buildReachCertificatePdfPreviewUrl(params: {
   clientId: string;
   chemicalId: string;
