@@ -37,6 +37,26 @@ export default function ReachCertificateDocxViewer({ docxUrl }: ReachCertificate
           ignoreHeight: false,
           breakPages: true,
         });
+
+        // After rendering, apply the styling fixes to match PDF download output
+        container.querySelectorAll('td, th').forEach((cell) => {
+          if (!(cell instanceof HTMLElement)) return;
+          const text = (cell.innerText || cell.textContent || '').trim().toLowerCase();
+          if (text === 'substance name') {
+            const nextCell = cell.nextElementSibling;
+            if (nextCell && nextCell instanceof HTMLElement) {
+              const p = nextCell.querySelector('p');
+              if (p) {
+                const chemName = (p.innerText || p.textContent || '').trim();
+                if (chemName.length >= 60) {
+                  p.style.marginTop = '-5px';
+                  p.style.marginBottom = '-2px';
+                  p.style.lineHeight = '1.1';
+                }
+              }
+            }
+          }
+        });
       } catch (err: unknown) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Certificate preview failed.');

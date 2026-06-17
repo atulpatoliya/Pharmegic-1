@@ -116,6 +116,22 @@ function sanitizeDocxCloneForPdf(root: HTMLElement): void {
         }
       });
     }
+
+    // Substance Name long text margin-top: -5px fix
+    if (text === 'substance name') {
+      const nextCell = cell.nextElementSibling;
+      if (nextCell && nextCell instanceof HTMLElement) {
+        const p = nextCell.querySelector('p');
+        if (p) {
+          const chemName = (p.innerText || p.textContent || '').trim();
+          if (chemName.length >= 60) {
+            p.style.marginTop = '-5px';
+            p.style.marginBottom = '-2px';
+            p.style.lineHeight = '1.1';
+          }
+        }
+      }
+    }
   });
 }
 
