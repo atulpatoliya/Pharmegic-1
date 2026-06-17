@@ -26,7 +26,7 @@ import {
   CheckCircle2,
   PenLine,
 } from 'lucide-react';
-import ReachCertificatePdfViewer from '@/components/ReachCertificatePdfViewer';
+import ReachCertificateViewer from '@/components/ReachCertificateViewer';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificateDocxPreviewUrlByClientChemical,
@@ -428,7 +428,12 @@ export default function ReachCertificatePreviewClient({
           <FileText className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold text-slate-800">EU REACH Registration Certificate</h3>
         </div>
-        <ReachCertificatePdfViewer key={pdfPreviewUrl} pdfUrl={pdfPreviewUrl} />
+        <ReachCertificateViewer
+          key={pdfPreviewUrl}
+          certificateType="rc"
+          docxUrl={docxPreviewUrl}
+          pdfUrl={pdfPreviewUrl}
+        />
       </div>
 
       {isPending && (

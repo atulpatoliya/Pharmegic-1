@@ -4,10 +4,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ReachCertificatePdfViewerProps = {
   pdfUrl: string;
+  /** When server PDF conversion is unavailable (live without Gotenberg), switch to DOCX preview. */
+  onUnavailable?: () => void;
 };
 
 /** Renders server-generated PDF — exact match to EU_REACH_CERTIFICATE.docx print output. */
-export default function ReachCertificatePdfViewer({ pdfUrl }: ReachCertificatePdfViewerProps) {
+export default function ReachCertificatePdfViewer({
+  pdfUrl,
+  onUnavailable,
+}: ReachCertificatePdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +92,10 @@ export default function ReachCertificatePdfViewer({ pdfUrl }: ReachCertificatePd
         if (!cancelled) setLoading(false);
       } catch (err: unknown) {
         if (!cancelled) {
+          if (onUnavailable) {
+            onUnavailable();
+            return;
+          }
           setError(err instanceof Error ? err.message : 'Certificate preview failed.');
           setLoading(false);
         }
@@ -98,7 +107,7 @@ export default function ReachCertificatePdfViewer({ pdfUrl }: ReachCertificatePd
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl, renderPdfBuffer]);
+  }, [pdfUrl, renderPdfBuffer, onUnavailable]);
 
   return (
     <div className="relative min-h-[820px] bg-slate-100 overflow-auto">
