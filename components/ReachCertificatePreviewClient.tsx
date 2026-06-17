@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -105,6 +105,7 @@ export default function ReachCertificatePreviewClient({
   const [validatedDate, setValidatedDate] = useState(defaults.validatedDate);
   const [tonnageBand, setTonnageBand] = useState(defaults.tonnageBand || chemical.tonnage_band || '');
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [officeDocxUrl, setOfficeDocxUrl] = useState<string | null>(null);
 
   const fieldsMatchDefaults =
     registrationNumber === defaults.registrationNumber &&
@@ -164,6 +165,10 @@ export default function ReachCertificatePreviewClient({
     previewVersion,
   ]);
 
+  useEffect(() => {
+    setOfficeDocxUrl(null);
+  }, [pdfPreviewUrl]);
+
   const downloadPdfUrl = cert
     ? buildReachCertificatePdfDownloadUrl(cert.id)
     : buildReachCertificatePdfDownloadUrlByClientChemical({
@@ -204,6 +209,7 @@ export default function ReachCertificatePreviewClient({
         toast.success(res.message || 'RC Certificate updated.');
         setIsEditing(false);
         setPreviewVersion((v) => v + 1);
+        setOfficeDocxUrl(null);
         router.refresh();
       } else {
         toast.error(res.error || 'Failed to update RC certificate.');
@@ -295,8 +301,15 @@ export default function ReachCertificatePreviewClient({
             pdfUrl={downloadPdfUrl}
             docxUrl={downloadDocxUrl}
             previewDocxUrl={downloadDocxUrl}
+            officeDocxUrl={officeDocxUrl}
             fileName={downloadFileName}
             certificateType="rc"
+            clientId={clientId}
+            chemicalId={chemicalId}
+            registrationNumber={registrationNumber.trim() || '—'}
+            issuedDate={issuedDate}
+            validatedDate={validatedDate}
+            tonnageBand={tonnageBand}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-60"
           >
             <Download className="h-4 w-4" /> {downloadLabel}
@@ -433,6 +446,7 @@ export default function ReachCertificatePreviewClient({
           certificateType="rc"
           docxUrl={docxPreviewUrl}
           pdfUrl={pdfPreviewUrl}
+          onOfficeDocxUrl={setOfficeDocxUrl}
         />
       </div>
 

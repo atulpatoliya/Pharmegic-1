@@ -9,6 +9,7 @@ type ReachCertificateViewerProps = {
   certificateType?: 'rc' | 'tcc';
   docxUrl: string;
   pdfUrl?: string;
+  onOfficeDocxUrl?: (docxUrl: string) => void;
 };
 
 /**
@@ -19,9 +20,15 @@ export default function ReachCertificateViewer({
   certificateType = 'rc',
   docxUrl,
   pdfUrl,
+  onOfficeDocxUrl,
 }: ReachCertificateViewerProps) {
   const [officeDocxUrl, setOfficeDocxUrl] = useState<string | null>(null);
   const [useDocxFallback, setUseDocxFallback] = useState(false);
+
+  const handleOfficeDocxUrl = (url: string) => {
+    setOfficeDocxUrl(url);
+    onOfficeDocxUrl?.(url);
+  };
 
   if (certificateType === 'rc') {
     if (officeDocxUrl) {
@@ -33,7 +40,7 @@ export default function ReachCertificateViewer({
         <ReachCertificatePdfViewer
           key={pdfUrl}
           pdfUrl={pdfUrl}
-          onOfficeDocxUrl={setOfficeDocxUrl}
+          onOfficeDocxUrl={handleOfficeDocxUrl}
           onUnavailable={() => setUseDocxFallback(true)}
         />
       );

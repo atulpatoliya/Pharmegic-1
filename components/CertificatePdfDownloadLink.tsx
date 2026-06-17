@@ -9,7 +9,14 @@ type CertificatePdfDownloadLinkProps = {
   docxUrl: string;
   fileName: string;
   previewDocxUrl?: string | null;
+  officeDocxUrl?: string | null;
   certificateType?: 'rc' | 'tcc';
+  clientId?: string;
+  chemicalId?: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string | null;
   className?: string;
   children: React.ReactNode;
   title?: string;
@@ -20,7 +27,14 @@ export function CertificatePdfDownloadLink({
   docxUrl,
   fileName,
   previewDocxUrl,
+  officeDocxUrl,
   certificateType,
+  clientId,
+  chemicalId,
+  registrationNumber,
+  issuedDate,
+  validatedDate,
+  tonnageBand,
   className,
   children,
   title,
@@ -39,7 +53,14 @@ export function CertificatePdfDownloadLink({
         docxUrl,
         fileName,
         previewDocxUrl,
+        officeDocxUrl,
         certificateType,
+        clientId,
+        chemicalId,
+        registrationNumber,
+        issuedDate,
+        validatedDate,
+        tonnageBand,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'PDF download failed.';

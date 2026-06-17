@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
-import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
+import { resolveReachCertificateDownload } from '@/lib/reach-certificate-pdf';
 import {
   loadReachCertificateInputByCertificateId,
   loadReachCertificateInputByClientChemical,
@@ -41,13 +41,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    try {
-      const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
+    const file = await resolveReachCertificateDownload(adminSupabase, input);
+    if (file.format === 'pdf') {
       return attachmentResponse(file.buffer, file.fileName, file.contentType);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Certificate download failed.';
-      return NextResponse.json({ error: message }, { status: 503 });
     }
+    return NextResponse.json({
+      downloadMode: 'docx',
+      docxUrl: file.docxUrl,
+      fileName: file.fileName,
+    });
   }
 
   if (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN') {
@@ -77,11 +79,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Client substance not found.' }, { status: 404 });
   }
 
-  try {
-    const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
+  const file = await resolveReachCertificateDownload(adminSupabase, input);
+  if (file.format === 'pdf') {
     return attachmentResponse(file.buffer, file.fileName, file.contentType);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Certificate download failed.';
-    return NextResponse.json({ error: message }, { status: 503 });
   }
+  return NextResponse.json({
+    downloadMode: 'docx',
+    docxUrl: file.docxUrl,
+    fileName: file.fileName,
+  });
 }

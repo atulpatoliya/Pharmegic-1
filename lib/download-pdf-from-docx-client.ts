@@ -1,5 +1,6 @@
 'use client';
 
+import { buildReachCertificateConvertPdfUrl } from '@/lib/reach-certificate-download';
 import { renderAsync } from 'docx-preview';
 
 const DOCX_PREVIEW_CLASS = 'docx';
@@ -194,15 +195,120 @@ async function downloadPdfFromDocxSources(
   throw new Error(lastError || 'Failed to generate certificate PDF.');
 }
 
+function extractCertificateIdFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.searchParams.get('certificateId');
+  } catch {
+    return null;
+  }
+}
+
+/** RC download via server LibreOffice/Gotenberg — matches Office Online preview layout. */
+async function downloadRcPdfViaServerConvert(params: {
+  docxUrl: string;
+  fileName: string;
+  pdfUrl: string;
+  clientId?: string;
+  chemicalId?: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string | null;
+}): Promise<CertificateDownloadResult> {
+  const certificateId = extractCertificateIdFromUrl(params.pdfUrl);
+  const convertUrls = [
+    buildReachCertificateConvertPdfUrl({
+      docxUrl: params.docxUrl,
+      fileName: params.fileName,
+    }),
+    certificateId
+      ? buildReachCertificateConvertPdfUrl({
+          certificateId,
+          fileName: params.fileName,
+        })
+      : null,
+    params.clientId && params.chemicalId
+      ? buildReachCertificateConvertPdfUrl({
+          clientId: params.clientId,
+          chemicalId: params.chemicalId,
+          registrationNumber: params.registrationNumber,
+          issuedDate: params.issuedDate,
+          validatedDate: params.validatedDate,
+          tonnageBand: params.tonnageBand,
+          fileName: params.fileName,
+        })
+      : null,
+  ].filter((url): url is string => Boolean(url));
+
+  let lastError: string | undefined;
+
+  for (const convertUrl of convertUrls) {
+    try {
+      const res = await fetch(appendCacheBuster(convertUrl), {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        lastError = body?.error || 'Server PDF conversion failed.';
+        continue;
+      }
+      const contentType = res.headers.get('Content-Type') || '';
+      if (contentType.includes('application/json')) {
+        lastError = 'Server PDF conversion failed.';
+        continue;
+      }
+      const blob = await res.blob();
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (!isPdfContentType(contentType, bytes)) {
+        lastError = 'Server did not return a PDF file.';
+        continue;
+      }
+      triggerBlobDownload(new Blob([bytes], { type: 'application/pdf' }), params.fileName);
+      return { format: 'pdf', fileName: params.fileName };
+    } catch (err) {
+      if (err instanceof Error) {
+        lastError = err.message;
+      }
+    }
+  }
+
+  throw new Error(
+    lastError ||
+      'PDF download failed. Install LibreOffice or set GOTENBERG_URL on the server (see docker-compose.gotenberg.yml).'
+  );
+}
+
 export async function downloadCertificatePdf(params: {
   pdfUrl: string;
   docxUrl: string;
   fileName: string;
   previewDocxUrl?: string | null;
+  officeDocxUrl?: string | null;
   certificateType?: 'rc' | 'tcc';
+  clientId?: string;
+  chemicalId?: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string | null;
 }): Promise<CertificateDownloadResult> {
-  void params.certificateType;
+  const isRc = params.certificateType === 'rc';
   let serverError: string | undefined;
+
+  const tryRcServerConvert = async (docxUrl: string) =>
+    downloadRcPdfViaServerConvert({
+      docxUrl,
+      fileName: params.fileName,
+      pdfUrl: params.pdfUrl,
+      clientId: params.clientId,
+      chemicalId: params.chemicalId,
+      registrationNumber: params.registrationNumber,
+      issuedDate: params.issuedDate,
+      validatedDate: params.validatedDate,
+      tonnageBand: params.tonnageBand,
+    });
 
   try {
     const pdfRes = await fetch(appendCacheBuster(params.pdfUrl), {
@@ -219,6 +325,9 @@ export async function downloadCertificatePdf(params: {
           error?: string;
         };
         if (body.downloadMode === 'docx' && body.docxUrl) {
+          if (isRc) {
+            return tryRcServerConvert(body.docxUrl);
+          }
           return downloadPdfFromDocxSources([body.docxUrl], params.fileName);
         }
         throw new Error(body.error || 'Certificate download failed.');
@@ -233,6 +342,9 @@ export async function downloadCertificatePdf(params: {
       }
 
       if (isDocxContentType(contentType)) {
+        if (isRc) {
+          return tryRcServerConvert(params.officeDocxUrl || params.previewDocxUrl || params.docxUrl);
+        }
         await convertDocxBlobToPdfAndDownload(blob, params.fileName);
         return { format: 'pdf', fileName: params.fileName };
       }
@@ -246,12 +358,15 @@ export async function downloadCertificatePdf(params: {
     }
   }
 
-  const docxSources = [params.previewDocxUrl, params.docxUrl].filter(
+  const docxSources = [params.officeDocxUrl, params.previewDocxUrl, params.docxUrl].filter(
     (url): url is string => Boolean(url?.trim())
   );
 
   if (docxSources.length > 0) {
     try {
+      if (isRc) {
+        return await tryRcServerConvert(docxSources[0]);
+      }
       return await downloadPdfFromDocxSources(docxSources, params.fileName);
     } catch (err) {
       if (err instanceof Error) {
