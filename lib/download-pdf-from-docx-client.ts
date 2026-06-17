@@ -391,7 +391,15 @@ export async function downloadCertificatePdf(params: {
       if ('kind' in parsed) {
         if (parsed.kind === 'docx') {
           if (isRc) {
-            return tryRcDownload(parsed.docxUrl);
+            try {
+              return await tryRcDownload(parsed.docxUrl);
+            } catch (err) {
+              if (err instanceof Error) {
+                serverError = err.message;
+              }
+              // Fallback to client-side conversion
+              return downloadPdfFromDocxSources([parsed.docxUrl, ...rcDocxSources], params.fileName);
+            }
           }
           return downloadPdfFromDocxSources([parsed.docxUrl], params.fileName);
         }
@@ -414,6 +422,13 @@ export async function downloadCertificatePdf(params: {
     } catch (err) {
       if (err instanceof Error) {
         serverError = err.message;
+      }
+      try {
+        return await downloadPdfFromDocxSources(rcDocxSources, params.fileName);
+      } catch (fallbackErr) {
+        if (fallbackErr instanceof Error) {
+          serverError = fallbackErr.message;
+        }
       }
     }
   }
