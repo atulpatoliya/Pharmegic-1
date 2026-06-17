@@ -6,7 +6,7 @@ services:
     runtime: image
     image:
       url: docker.io/gotenberg/gotenberg:8
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: PORT
