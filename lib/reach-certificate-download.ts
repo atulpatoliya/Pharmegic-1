@@ -25,7 +25,7 @@ export function buildReachCertificatePdfPreviewUrl(params: {
   if (params.issuedDate) search.set('issuedDate', params.issuedDate);
   if (params.validatedDate) search.set('validatedDate', params.validatedDate);
   if (params.tonnageBand) search.set('tonnageBand', params.tonnageBand);
-  return `/api/reach-certificate/pdf?${search.toString()}`;
+  return `/api/reach-certificate/preview/pdf?${search.toString()}`;
 }
 
 export function buildReachCertificateDocxPreviewUrlByClientChemical(params: {

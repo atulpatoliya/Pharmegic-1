@@ -174,8 +174,7 @@ export async function GET(request: NextRequest) {
         issuedDate,
         validatedDate,
         tonnageBand: tonnageBand || undefined,
-      }),
-      { browserPreview: true }
+      })
     );
 
     return docxResponse(docxBuffer, 'reach-certificate-preview.docx');

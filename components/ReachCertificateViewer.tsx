@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import ReachCertificatePdfViewer from '@/components/ReachCertificatePdfViewer';
 
@@ -10,23 +9,14 @@ type ReachCertificateViewerProps = {
   pdfUrl: string;
 };
 
-/** RC: PDF preview from current template; falls back to DOCX if PDF unavailable. */
+/** RC certificates always preview as inline PDF (full EU REACH layout). */
 export default function ReachCertificateViewer({
   certificateType = 'rc',
   docxUrl,
   pdfUrl,
 }: ReachCertificateViewerProps) {
-  const [useDocxFallback, setUseDocxFallback] = useState(false);
-
-  if (certificateType === 'rc' && pdfUrl && !useDocxFallback) {
-    return (
-      <ReachCertificatePdfViewer
-        key={pdfUrl}
-        pdfUrl={pdfUrl}
-        fallbackDocxUrl={docxUrl}
-        onFallback={() => setUseDocxFallback(true)}
-      />
-    );
+  if (certificateType === 'rc' && pdfUrl) {
+    return <ReachCertificatePdfViewer key={pdfUrl} pdfUrl={pdfUrl} />;
   }
 
   return <ReachCertificateDocxViewer key={docxUrl} docxUrl={docxUrl} />;

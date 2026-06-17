@@ -354,6 +354,64 @@ export async function regenerateReachCertificateFile(certId: string) {
   return { success: true as const, fileUrl: publicUrl };
 }
 
+/** Pre-generate pending RC preview PDF (same pipeline as issued certificates). */
+export async function regeneratePendingReachPreviewPdf(
+  clientId: string,
+  chemicalId: string,
+  data: {
+    registrationNumber: string;
+    issuedDate: string;
+    validatedDate: string;
+    tonnageBand?: string | null;
+  }
+): Promise<string | null> {
+  const adminSupabase = createAdminClient();
+
+  const [{ data: client }, { data: chemical }] = await Promise.all([
+    adminSupabase
+      .from('clients')
+      .select('id, company_name, uuid_number, address, city, state, postal_code, country')
+      .eq('id', clientId)
+      .single(),
+    adminSupabase
+      .from('chemicals')
+      .select('id, chemical_name, cas_number, ec_number, tonnage_band')
+      .eq('id', chemicalId)
+      .single(),
+  ]);
+
+  if (!client || !chemical) return null;
+
+  const certNumber = `RC-preview-${chemicalId.slice(0, 8)}`;
+
+  await clearReachCertificateStorageFiles(adminSupabase, certNumber);
+
+  const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
+    registrationNumber: data.registrationNumber.trim() || '—',
+    issuedDate: data.issuedDate,
+    validatedDate: data.validatedDate,
+    tonnageBand: data.tonnageBand || chemical.tonnage_band,
+  });
+
+  if (certFile.format !== 'pdf') return null;
+
+  await ensureCertificatesBucket(adminSupabase);
+  const { error: uploadError } = await adminSupabase.storage
+    .from(CERTIFICATES_BUCKET)
+    .upload(certFile.fileName, certFile.buffer, {
+      contentType: certFile.contentType,
+      upsert: true,
+    });
+
+  if (uploadError) return null;
+
+  const {
+    data: { publicUrl },
+  } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
+
+  return publicUrl;
+}
+
 export async function issueReachCertificateFromPreviewAction(
   clientId: string,
   chemicalId: string,

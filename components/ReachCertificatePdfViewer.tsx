@@ -25,7 +25,9 @@ export default function ReachCertificatePdfViewer({
     const pdfjs = await import('pdfjs-dist');
     pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-    const res = await fetch(url, { credentials: 'same-origin' });
+    const res = await fetch(url, {
+      credentials: url.startsWith('/') ? 'same-origin' : 'omit',
+    });
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new Error(body?.error || 'Failed to load certificate preview.');

@@ -72,6 +72,7 @@ type ReachCertificatePreviewClientProps = {
     cc: string[];
   } | null;
   mailSentHistory: string[];
+  pendingPreviewPdfUrl?: string | null;
 };
 
 function formatEmailList(emails: string[]): string {
@@ -87,6 +88,7 @@ export default function ReachCertificatePreviewClient({
   defaults,
   mailRecipients,
   mailSentHistory,
+  pendingPreviewPdfUrl = null,
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
   const [isIssuing, startIssueTransition] = useTransition();
@@ -101,6 +103,12 @@ export default function ReachCertificatePreviewClient({
   const [issuedDate, setIssuedDate] = useState(defaults.issuedDate);
   const [validatedDate, setValidatedDate] = useState(defaults.validatedDate);
   const [tonnageBand, setTonnageBand] = useState(defaults.tonnageBand || chemical.tonnage_band || '');
+
+  const fieldsMatchDefaults =
+    registrationNumber === defaults.registrationNumber &&
+    issuedDate === defaults.issuedDate &&
+    validatedDate === defaults.validatedDate &&
+    (tonnageBand || '') === (defaults.tonnageBand || chemical.tonnage_band || '');
 
   const docxPreviewUrl = useMemo(() => {
     if (cert) {
@@ -118,7 +126,7 @@ export default function ReachCertificatePreviewClient({
   }, [cert, clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
 
   const pdfPreviewUrl = useMemo(() => {
-    return buildReachCertificatePdfPreviewUrl({
+    const liveUrl = buildReachCertificatePdfPreviewUrl({
       clientId,
       chemicalId,
       registrationNumber: registrationNumber.trim() || '—',
@@ -126,7 +134,24 @@ export default function ReachCertificatePreviewClient({
       validatedDate,
       tonnageBand,
     });
-  }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
+
+    if (isEditing || !fieldsMatchDefaults) return liveUrl;
+    if (cert?.file_url) return cert.file_url;
+    if (isPending && pendingPreviewPdfUrl) return pendingPreviewPdfUrl;
+    return liveUrl;
+  }, [
+    isEditing,
+    fieldsMatchDefaults,
+    cert?.file_url,
+    isPending,
+    pendingPreviewPdfUrl,
+    clientId,
+    chemicalId,
+    registrationNumber,
+    issuedDate,
+    validatedDate,
+    tonnageBand,
+  ]);
 
   const downloadPdfUrl = cert ? buildReachCertificatePdfDownloadUrl(cert.id) : pdfPreviewUrl;
   const downloadDocxUrl = cert
