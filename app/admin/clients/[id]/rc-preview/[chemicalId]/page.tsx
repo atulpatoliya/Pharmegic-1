@@ -95,7 +95,7 @@ export default async function ReachCertificatePreviewPage({
     (requestedCertId && cert && !Array.isArray(cert) && isReachCertificateType(cert) ? cert : null);
 
   if (resolvedCert) {
-    await regenerateReachCertificateFile(resolvedCert.id);
+    await regenerateReachCertificateFile(resolvedCert.id).catch(() => undefined);
   }
 
   const contactEmails = (contacts || []).map((c) => c.email).filter(Boolean);

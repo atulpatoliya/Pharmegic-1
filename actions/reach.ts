@@ -326,32 +326,38 @@ export async function regenerateReachCertificateFile(certId: string) {
 
   const certNumber = cert.certificate_number;
 
-  await clearReachCertificateStorageFiles(adminSupabase, certNumber);
+  try {
+    await clearReachCertificateStorageFiles(adminSupabase, certNumber);
 
-  const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
-    registrationNumber: cert.registration_number,
-    issuedDate: cert.issued_at.split('T')[0],
-    validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),
-    tonnageBand: cert.tonnage_band,
-  });
-
-  await ensureCertificatesBucket(adminSupabase);
-  const { error: uploadError } = await adminSupabase.storage
-    .from(CERTIFICATES_BUCKET)
-    .upload(certFile.fileName, certFile.buffer, {
-      contentType: certFile.contentType,
-      upsert: true,
+    const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
+      registrationNumber: cert.registration_number,
+      issuedDate: cert.issued_at.split('T')[0],
+      validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),
+      tonnageBand: cert.tonnage_band,
     });
 
-  if (uploadError) return { success: false as const, error: uploadError.message };
+    await ensureCertificatesBucket(adminSupabase);
+    const { error: uploadError } = await adminSupabase.storage
+      .from(CERTIFICATES_BUCKET)
+      .upload(certFile.fileName, certFile.buffer, {
+        contentType: certFile.contentType,
+        upsert: true,
+      });
 
-  const {
-    data: { publicUrl },
-  } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
+    if (uploadError) return { success: false as const, error: uploadError.message };
 
-  await adminSupabase.from('certificates').update({ file_url: publicUrl }).eq('id', certId);
+    const {
+      data: { publicUrl },
+    } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
 
-  return { success: true as const, fileUrl: publicUrl };
+    await adminSupabase.from('certificates').update({ file_url: publicUrl }).eq('id', certId);
+
+    return { success: true as const, fileUrl: publicUrl };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Certificate file regeneration failed.';
+    console.warn(`[RC] regenerateReachCertificateFile(${certId}):`, message);
+    return { success: false as const, error: message };
+  }
 }
 
 export async function issueReachCertificateFromPreviewAction(
