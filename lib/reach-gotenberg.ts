@@ -1,12 +1,16 @@
+/** True when running on Vercel serverless (no local Docker/LibreOffice). */
+export function isVercelHosting(): boolean {
+  return process.env.VERCEL === '1' || Boolean(process.env.VERCEL_URL);
+}
+
 /** Candidate Gotenberg base URLs — tried in order until conversion succeeds. */
 export function getGotenbergBaseUrls(): string[] {
-  const candidates = [
-    process.env.GOTENBERG_URL,
-    process.env.GOTENBERG_INTERNAL_URL,
-    'http://127.0.0.1:3001',
-    'http://localhost:3001',
-    'http://gotenberg:3000',
-  ];
+  const candidates = [process.env.GOTENBERG_URL, process.env.GOTENBERG_INTERNAL_URL];
+
+  // Localhost Gotenberg only applies to VPS/Docker — not Vercel serverless.
+  if (!isVercelHosting()) {
+    candidates.push('http://127.0.0.1:3001', 'http://localhost:3001', 'http://gotenberg:3000');
+  }
 
   return [
     ...new Set(
@@ -20,7 +24,11 @@ export function getGotenbergBaseUrls(): string[] {
 export async function convertDocxBufferWithGotenberg(docxBuffer: Buffer): Promise<Buffer> {
   const urls = getGotenbergBaseUrls();
   if (urls.length === 0) {
-    throw new Error('Gotenberg not configured.');
+    throw new Error(
+      isVercelHosting()
+        ? 'Set GOTENBERG_URL in Vercel Environment Variables to your hosted Gotenberg URL (see render-gotenberg.yaml).'
+        : 'Gotenberg not configured.'
+    );
   }
 
   let lastError: Error | null = null;
@@ -65,7 +73,7 @@ export async function isGotenbergReachable(): Promise<boolean> {
   for (const baseUrl of getGotenbergBaseUrls()) {
     try {
       const res = await fetch(`${baseUrl}/health`, {
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(5000),
       });
       if (res.ok) return true;
     } catch {
