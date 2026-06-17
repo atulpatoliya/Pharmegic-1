@@ -77,6 +77,7 @@ interface Client {
   status: 'active' | 'inactive' | 'pending';
   regulatory_registrations?: string[] | null;
   created_at: string;
+  substance_count?: number;
 }
 
 interface ClientsDashboardProps {
@@ -471,8 +472,13 @@ export default function ClientsDashboard({ initialClients, chemicals, adminRole 
                           >
                             {client.company_name}
                           </Link>
+                          <div className="text-[11px] text-slate-400 font-mono tracking-wide">
+                            UUID: {client.uuid_number?.trim() || '—'}
+                          </div>
                           <div className="text-xs text-slate-400 font-medium">
-                            {client.owner_name || client.email}
+                            {(client.substance_count ?? 0) === 1
+                              ? '1 substance'
+                              : `${client.substance_count ?? 0} substances`}
                           </div>
                         </div>
                       </div>

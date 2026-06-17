@@ -248,7 +248,9 @@ export function findReachCertificateYearConflict(
     certificates,
     chemicalId,
     casNumber,
-    registrationNumber
+    registrationNumber,
+    undefined,
+    chemicalName
   ).filter((cert) => !excludeCertId || cert.id !== excludeCertId);
 
   for (const existing of siblings) {
@@ -288,10 +290,15 @@ export function getReachCertsForClientChemical(
     const meta = certLinkedChemicalMeta(cert);
     const certReg = cert.registration_number?.trim().toLowerCase() ?? '';
     const certNo = cert.certificate_number?.trim().toLowerCase() ?? '';
-    if (cas && meta.cas && meta.cas === cas) return true;
-    if (name && meta.name && meta.name === name) return true;
-    if (reg && certReg && certReg === reg) return true;
-    if (certNum && certNo && certNo === certNum) return true;
+    const sameChemical = cert.chemical_id === chemicalId;
+    const sameCas = Boolean(cas && meta.cas && meta.cas === cas);
+    const sameName = Boolean(name && meta.name && meta.name === name);
+
+    if (sameChemical) return true;
+    if (sameCas) return true;
+    if (sameName) return true;
+    if (reg && certReg && certReg === reg && (sameCas || sameName || sameChemical)) return true;
+    if (certNum && certNo && certNo === certNum && (sameChemical || sameCas)) return true;
     return false;
   });
 
@@ -348,7 +355,9 @@ export function findReachCertificatePeriodConflict(
     certificates,
     chemicalId,
     casNumber,
-    registrationNumber
+    registrationNumber,
+    undefined,
+    chemicalName
   ).filter((cert) => !excludeCertId || cert.id !== excludeCertId);
 
   for (const existing of siblings) {

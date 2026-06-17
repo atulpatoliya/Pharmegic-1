@@ -897,15 +897,31 @@ export default function ClientDashboardDetails({
         setModalError('assignChem', 'A certificate has already been issued for this substance in the selected year.');
         return false;
       }
-    } else {
-      if (assignChemData.target_chemical_id !== 'new_substance') {
-        const isYearAlreadyIssued = availableRcYearOptions.every(
-          (opt) => opt.value !== assignChemData.certificate_year
-        );
-        if (isYearAlreadyIssued) {
-          setModalError('assignChem', 'A certificate has already been issued for this substance in the selected year.');
-          return false;
-        }
+    } else if (rcCertFormMode === 'edit' && assignChemData.target_chemical_id !== 'new_substance') {
+      const yearConflict = findReachCertificateYearConflict(
+        (certificates || []) as import('@/lib/reach-certificate').ReachCertificateRecord[],
+        renewChemicalId || assignChemData.target_chemical_id,
+        Number(assignChemData.certificate_year),
+        assignChemData.chemical_name.trim() || 'this substance',
+        assignChemData.cas_number,
+        assignChemData.registration_number
+      );
+      if (yearConflict) {
+        setModalError('assignChem', yearConflict);
+        return false;
+      }
+    } else if (assignChemData.target_chemical_id !== 'new_substance') {
+      const yearConflict = findReachCertificateYearConflict(
+        (certificates || []) as import('@/lib/reach-certificate').ReachCertificateRecord[],
+        assignChemData.target_chemical_id,
+        Number(assignChemData.certificate_year),
+        assignChemData.chemical_name.trim() || 'this substance',
+        assignChemData.cas_number,
+        assignChemData.registration_number
+      );
+      if (yearConflict) {
+        setModalError('assignChem', yearConflict);
+        return false;
       }
     }
     return true;

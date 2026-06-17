@@ -25,7 +25,9 @@ import {
 } from '@/lib/quota';
 import {
   buildReachCertificateDocxPreviewUrl,
+  buildReachCertificateDocxPreviewUrlByClientChemical,
   buildReachCertificatePdfDownloadUrl,
+  buildReachCertificatePdfPreviewUrl,
 } from '@/lib/reach-certificate-download';
 import { canManageAdminRecords } from '@/lib/auth/roles';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
@@ -146,6 +148,34 @@ function resolveClientChemForActions(
     registration_number: cert.registration_number,
     issued_date: cert.issued_at?.slice(0, 10),
     certificate_number: cert.certificate_number,
+  };
+}
+
+function buildPendingReachPreviewUrls(
+  clientId: string,
+  chemicalId: string | null | undefined,
+  cc: ReturnType<typeof findClientChemRow> | undefined,
+  tonnageBand?: string
+) {
+  if (!chemicalId) return null;
+
+  const previewParams = {
+    clientId,
+    chemicalId,
+    registrationNumber: cc?.registration_number?.trim() || undefined,
+    issuedDate: cc?.issued_date?.split?.('T')[0] || undefined,
+    validatedDate: cc?.validity_date?.split?.('T')[0] || undefined,
+    tonnageBand:
+      cc?.tonnage_band && cc.tonnage_band !== 'None'
+        ? cc.tonnage_band
+        : tonnageBand && tonnageBand !== 'None'
+          ? tonnageBand
+          : undefined,
+  };
+
+  return {
+    pdfUrl: buildReachCertificatePdfPreviewUrl(previewParams),
+    docxUrl: buildReachCertificateDocxPreviewUrlByClientChemical(previewParams),
   };
 }
 
@@ -270,6 +300,7 @@ export default function RcCertificatesTable({
       chemicalName: string;
       casNumber: string;
       ecNumber: string;
+      registrationNumber: string;
       tonnageBand: string;
       certs: RcCertificateTableRecord[];
     }[] = [];
@@ -293,6 +324,7 @@ export default function RcCertificatesTable({
           chemicalName: chem?.chemical_name || 'Unknown Substance',
           casNumber: chem?.cas_number || 'N/A',
           ecNumber: chem?.ec_number || 'N/A',
+          registrationNumber: cert.registration_number?.trim() || 'N/A',
           tonnageBand: chem?.tonnage_band || 'None',
           certs: [],
         };
@@ -335,6 +367,7 @@ export default function RcCertificatesTable({
             chemicalName: chem?.chemical_name || 'Unknown Substance',
             casNumber: chem?.cas_number || 'N/A',
             ecNumber: chem?.ec_number || 'N/A',
+            registrationNumber: cc.registration_number?.trim() || 'N/A',
             tonnageBand: cc.tonnage_band || chem?.tonnage_band || 'None',
             certs: [],
           };
@@ -520,7 +553,7 @@ export default function RcCertificatesTable({
                               {group.chemicalName}
                             </span>
                             <span className="text-[11px] text-slate-400 font-mono tracking-wide">
-                              CAS: {group.casNumber} | EC: {group.ecNumber}
+                              CAS: {group.casNumber} | EC: {group.ecNumber} | Reg: {group.registrationNumber}
                             </span>
                             {!hideCompanyColumn && (
                               <div className="mt-2 flex items-center gap-1.5">
@@ -583,18 +616,60 @@ export default function RcCertificatesTable({
                         {/* Actions column */}
                         <td className="px-4 py-3.5 align-middle text-center">
                           <div className="flex justify-center gap-1">
-                            {canManageRc && (
+                            {(() => {
+                              const previewUrls = buildPendingReachPreviewUrls(
+                                group.clientId,
+                                group.chemicalId,
+                                cc,
+                                group.tonnageBand
+                              );
+                              if (!previewUrls) return null;
+                              return (
+                                <CertificatePdfDownloadLink
+                                  pdfUrl={previewUrls.pdfUrl}
+                                  docxUrl={previewUrls.docxUrl}
+                                  fileName={`${group.chemicalName.replace(/\s+/g, '_')}_rc-preview.pdf`}
+                                  title="Download PDF"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </CertificatePdfDownloadLink>
+                              );
+                            })()}
+
+                            {canManageRc && group.chemicalId && (
                               <>
-                                {cc && onEdit && (
+                                <Link
+                                  href={`/admin/clients/${group.clientId}/rc-preview/${group.chemicalId}`}
+                                  title="View certificate"
+                                >
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-teal-700 hover:bg-teal-50">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                                {cc && onEdit ? (
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     className="h-8 w-8 p-0 text-slate-600 hover:bg-slate-100"
-                                    title="Issue Certificate"
+                                    title="Edit substance details"
                                     onClick={() => onEdit(cc, '')}
                                   >
                                     <PenLine className="h-4 w-4" />
                                   </Button>
+                                ) : (
+                                  <Link
+                                    href={`/admin/clients/${group.clientId}`}
+                                    title="Edit on client profile"
+                                  >
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 text-slate-600 hover:bg-slate-100"
+                                    >
+                                      <PenLine className="h-4 w-4" />
+                                    </Button>
+                                  </Link>
                                 )}
                                 {onDelete && (
                                   <Button
@@ -674,7 +749,7 @@ export default function RcCertificatesTable({
                                 {group.chemicalName}
                               </span>
                               <span className="text-[11px] text-slate-400 font-mono tracking-wide">
-                                CAS: {group.casNumber} | EC: {group.ecNumber}
+                                CAS: {group.casNumber} | EC: {group.ecNumber} | Reg: {group.registrationNumber}
                               </span>
                               {!hideCompanyColumn && (
                                 <div className="mt-2 flex items-center gap-1.5">

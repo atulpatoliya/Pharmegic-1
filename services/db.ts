@@ -205,6 +205,27 @@ export async function getClients(
   };
 }
 
+export async function getActiveSubstanceCountsByClient(
+  supabase: SupabaseClient,
+  clientIds: string[]
+): Promise<Record<string, number>> {
+  if (clientIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('client_chemicals')
+    .select('client_id')
+    .in('client_id', clientIds)
+    .eq('status', 'active');
+
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  for (const row of data || []) {
+    counts[row.client_id] = (counts[row.client_id] || 0) + 1;
+  }
+  return counts;
+}
+
 export async function updateClient(
   supabase: SupabaseClient,
   clientId: string,

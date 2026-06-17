@@ -135,6 +135,9 @@ export default function RcCertificatesDashboard({
         description="Manage issue/expiry dates & remaining quota per year | Expired certificates retain quantity for TCC applications using old date."
         extraActions={extraActions}
         exportFilename="rc-certificates"
+        onEdit={(cc) => {
+          router.push(`/admin/clients/${cc.client_id}`);
+        }}
         onDelete={(cert) => {
           const isPending = !cert.id;
           if (isPending) {

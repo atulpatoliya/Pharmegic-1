@@ -28,6 +28,25 @@ export function buildReachCertificatePdfPreviewUrl(params: {
   return `/api/reach-certificate/pdf?${search.toString()}`;
 }
 
+export function buildReachCertificateDocxPreviewUrlByClientChemical(params: {
+  clientId: string;
+  chemicalId: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string;
+}): string {
+  const search = new URLSearchParams({
+    clientId: params.clientId,
+    chemicalId: params.chemicalId,
+  });
+  if (params.registrationNumber) search.set('registrationNumber', params.registrationNumber);
+  if (params.issuedDate) search.set('issuedDate', params.issuedDate);
+  if (params.validatedDate) search.set('validatedDate', params.validatedDate);
+  if (params.tonnageBand) search.set('tonnageBand', params.tonnageBand);
+  return `/api/reach-certificate/docx?${search.toString()}`;
+}
+
 export function resolveReachCertificateDownloadUrl(cert: {
   id: string;
   type?: string | null;
