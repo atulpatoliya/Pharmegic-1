@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { convertDocxBufferWithGotenberg, getGotenbergBaseUrls } from '@/lib/reach-gotenberg';
 import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -152,7 +153,7 @@ const LIBREOFFICE_PATHS = [
 
 /** True when server-side DOCX→PDF conversion is likely available. */
 export function isReachPdfConversionAvailable(): boolean {
-  if (process.env.GOTENBERG_URL?.trim()) return true;
+  if (getGotenbergBaseUrls().length > 0) return true;
   if (process.platform === 'win32') return true;
   for (const bin of LIBREOFFICE_PATHS) {
     if (bin.includes('/') && fs.existsSync(bin)) return true;
@@ -209,25 +210,6 @@ try { $word.Quit() } catch {}
   });
 }
 
-async function convertWithGotenberg(docxBuffer: Buffer): Promise<Buffer> {
-  const baseUrl = process.env.GOTENBERG_URL?.replace(/\/$/, '');
-  if (!baseUrl) throw new Error('Gotenberg not configured.');
-
-  const formData = new FormData();
-  formData.append('files', new Blob([new Uint8Array(docxBuffer)]), 'certificate.docx');
-
-  const res = await fetch(`${baseUrl}/forms/libreoffice/convert`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Gotenberg conversion failed (${res.status}).`);
-  }
-
-  return Buffer.from(await res.arrayBuffer());
-}
-
 export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
   const id = randomUUID();
   const workDir = path.join(tmpdir(), `reach-${id}`);
@@ -237,9 +219,9 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
   fs.writeFileSync(docxPath, docxBuffer);
 
   try {
-    if (process.env.GOTENBERG_URL) {
+    if (getGotenbergBaseUrls().length > 0) {
       try {
-        return await convertWithGotenberg(docxBuffer);
+        return await convertDocxBufferWithGotenberg(docxBuffer);
       } catch {
         // fall through to local converters
       }
@@ -270,7 +252,7 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
     }
 
     throw new Error(
-      'PDF conversion is not available on this server. Install LibreOffice (recommended: apt install libreoffice-writer) or set GOTENBERG_URL for document conversion.'
+      'PDF conversion is not available on this server. On Linux run: sudo bash scripts/setup-pdf-converter.sh OR docker compose -f docker-compose.gotenberg.yml up -d'
     );
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
