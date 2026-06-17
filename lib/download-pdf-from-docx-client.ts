@@ -2,6 +2,7 @@
 
 import { buildReachCertificateConvertPdfUrl } from '@/lib/reach-certificate-download';
 import { renderAsync } from 'docx-preview';
+import { toast } from '@/store/toast';
 
 const DOCX_PREVIEW_CLASS = 'docx';
 
@@ -355,32 +356,54 @@ async function downloadRcPdfViaServerConvert(params: {
   let lastError: string | undefined;
 
   for (const convertUrl of convertUrls) {
-    try {
-      const res = await fetch(appendCacheBuster(convertUrl), {
-        credentials: 'same-origin',
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        lastError = body?.error || RC_PDF_SETUP_MESSAGE;
-        continue;
-      }
-      const contentType = res.headers.get('Content-Type') || '';
-      if (contentType.includes('application/json')) {
-        lastError = RC_PDF_SETUP_MESSAGE;
-        continue;
-      }
-      const blob = await res.blob();
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      if (!isPdfContentType(contentType, bytes)) {
-        lastError = RC_PDF_SETUP_MESSAGE;
-        continue;
-      }
-      triggerBlobDownload(new Blob([bytes], { type: 'application/pdf' }), params.fileName);
-      return { format: 'pdf', fileName: params.fileName };
-    } catch (err) {
-      if (err instanceof Error) {
-        lastError = err.message;
+    let retries = 3;
+    let waitMs = 6000;
+    
+    while (retries >= 0) {
+      try {
+        const res = await fetch(appendCacheBuster(convertUrl), {
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+
+        if (res.status === 503 && retries > 0) {
+          toast.info('Gotenberg PDF converter is starting up... please wait.', 6000);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          retries--;
+          continue;
+        }
+
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          lastError = body?.error || RC_PDF_SETUP_MESSAGE;
+          break; // break retry loop to try next URL candidate
+        }
+
+        const contentType = res.headers.get('Content-Type') || '';
+        if (contentType.includes('application/json')) {
+          lastError = RC_PDF_SETUP_MESSAGE;
+          break;
+        }
+
+        const blob = await res.blob();
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        if (!isPdfContentType(contentType, bytes)) {
+          lastError = RC_PDF_SETUP_MESSAGE;
+          break;
+        }
+
+        triggerBlobDownload(new Blob([bytes], { type: 'application/pdf' }), params.fileName);
+        return { format: 'pdf', fileName: params.fileName };
+      } catch (err) {
+        if (err instanceof Error) {
+          lastError = err.message;
+        }
+        if (retries > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          retries--;
+          continue;
+        }
+        break;
       }
     }
   }
