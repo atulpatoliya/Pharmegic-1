@@ -1,23 +1,9 @@
-export type CertificateTemplateKey = 'template_1' | 'template_2';
+/** Active EU REACH RC certificate template (only design). */
+export const RC_TEMPLATE_KEY = 'template_2' as const;
+export type RcTemplateKey = typeof RC_TEMPLATE_KEY;
 
-export const RC_TEMPLATE_OPTIONS: { value: CertificateTemplateKey; label: string; description: string }[] = [
-  {
-    value: 'template_1',
-    label: 'Template 1',
-    description: 'Current REACH certificate layout (CT_2026).',
-  },
-  {
-    value: 'template_2',
-    label: 'Template 2',
-    description: 'EU REACH Registration Certificate layout.',
-  },
-];
-
-export function normalizeCertificateTemplateKey(
-  value: string | null | undefined
-): CertificateTemplateKey {
-  return value === 'template_2' ? 'template_2' : 'template_1';
-}
+/** TCC certificates use a separate template key in the database. */
+export type TccTemplateKey = 'template_1';
 
 export type CertificateBrandingFields = {
   logo: string | null;

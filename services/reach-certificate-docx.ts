@@ -5,18 +5,22 @@ import { promisify } from 'util';
 import { randomUUID } from 'crypto';
 import { tmpdir } from 'os';
 import PizZip from 'pizzip';
-import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 
 const execFileAsync = promisify(execFile);
 
-const TEMPLATE_PATHS: Record<CertificateTemplateKey, string> = {
-  template_1: path.join(process.cwd(), 'templates', 'CT_2026.docx'),
-  template_2: path.join(process.cwd(), 'templates', 'CT_2026_v2.docx'),
-};
-const BROWSER_PREVIEW_TEMPLATE_PATHS: Partial<Record<CertificateTemplateKey, string>> = {
-  template_2: path.join(process.cwd(), 'templates', 'CT_2026_v2_preview.docx'),
-};
-const FALLBACK_TEMPLATE_PATH = path.join(process.cwd(), 'CT_Draftr.docx');
+const RC_TEMPLATE_PATH = path.join(process.cwd(), 'templates', 'CT_2026_v2.docx');
+const RC_BROWSER_PREVIEW_TEMPLATE_PATH = path.join(
+  process.cwd(),
+  'templates',
+  'CT_2026_v2_preview.docx'
+);
+/** Bundled sample PDF for admin Settings when live conversion is unavailable. */
+export const BUNDLED_RC_PREVIEW_PDF = path.join(
+  process.cwd(),
+  'public',
+  'previews',
+  'rc-template-2-sample.pdf'
+);
 
 export type ReachCertificateDocxData = {
   companyName: string;
@@ -42,14 +46,14 @@ export function escapeReachXml(text: string): string {
     .replace(/'/g, '&apos;');
 }
 
-/** Format as DD.MM.YYYY matching the original CT_2026 certificate. */
+/** Format as DD.MM.YYYY (used by TCC certificates). */
 export function formatReachCertDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
   if (!year || !month || !day) return dateStr;
   return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
 }
 
-/** Format as "1 January 2026" for EU REACH template. */
+/** Format as "1 January 2026" for EU REACH certificate. */
 export function formatReachCertDateLong(dateStr: string): string {
   const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
   if (!year || !month || !day) return dateStr;
@@ -62,7 +66,7 @@ export function formatReachCertDateLong(dateStr: string): string {
   });
 }
 
-/** EU REACH template 2: "Street, City: Postal," on one line; country on the next. */
+/** EU REACH: "Street, City: Postal," on one line; country on the next. */
 export function buildEuReachAddressLine1(client: {
   address?: string | null;
   city?: string | null;
@@ -108,40 +112,17 @@ export function buildReachAddressLines(client: {
   };
 }
 
-function resolveTemplatePath(
-  templateKey: CertificateTemplateKey = 'template_1',
-  browserPreview = false
-): string {
-  if (browserPreview && templateKey === 'template_2') {
-    const previewPath = BROWSER_PREVIEW_TEMPLATE_PATHS.template_2;
-    if (previewPath && fs.existsSync(previewPath)) return previewPath;
+function resolveTemplatePath(browserPreview = false): string {
+  if (browserPreview && fs.existsSync(RC_BROWSER_PREVIEW_TEMPLATE_PATH)) {
+    return RC_BROWSER_PREVIEW_TEMPLATE_PATH;
   }
-
-  const preferred = TEMPLATE_PATHS[templateKey];
-  if (fs.existsSync(preferred)) return preferred;
-  if (templateKey === 'template_2' && fs.existsSync(TEMPLATE_PATHS.template_1)) {
-    return TEMPLATE_PATHS.template_1;
-  }
-  if (fs.existsSync(FALLBACK_TEMPLATE_PATH)) return FALLBACK_TEMPLATE_PATH;
-  if (templateKey === 'template_2') {
-    throw new Error(
-      'EU REACH certificate template not found. Copy EU REACH REGISTRATION CERTIFICATE.docx to templates/CT_EU_REACH_v2.docx and run: node scripts/prepare-reach-template-v2.mjs'
-    );
-  }
+  if (fs.existsSync(RC_TEMPLATE_PATH)) return RC_TEMPLATE_PATH;
   throw new Error(
-    'REACH certificate template not found. Place CT_Draftr.docx in project root and run: node scripts/prepare-reach-template.mjs'
+    'EU REACH certificate template not found. Copy EU REACH REGISTRATION CERTIFICATE.docx to templates/CT_EU_REACH_v2.docx and run: node scripts/prepare-reach-template-v2.mjs'
   );
 }
 
-function buildPlaceholderMap(
-  data: ReachCertificateDocxData,
-  templateKey: CertificateTemplateKey
-): Record<string, string> {
-  const issuedDate =
-    templateKey === 'template_2' ? formatReachCertDateLong(data.issuedDate) : data.issuedDate;
-  const validatedDate =
-    templateKey === 'template_2' ? formatReachCertDateLong(data.validatedDate) : data.validatedDate;
-
+function buildPlaceholderMap(data: ReachCertificateDocxData): Record<string, string> {
   return {
     '{{COMPANY_NAME}}': escapeReachXml(data.companyName),
     '{{ADDR_LINE1}}': escapeReachXml(data.addressLine1),
@@ -153,72 +134,27 @@ function buildPlaceholderMap(
     '{{REGISTRATION_NUMBER}}': escapeReachXml(data.registrationNumber),
     '{{TONNAGE_BAND}}': escapeReachXml(data.tonnageBand),
     '{{UUID_NUMBER}}': escapeReachXml(data.uuidNumber),
-    '{{ISSUED_DATE}}': escapeReachXml(issuedDate),
-    '{{VALIDATED_DATE}}': escapeReachXml(validatedDate),
+    '{{ISSUED_DATE}}': escapeReachXml(formatReachCertDateLong(data.issuedDate)),
+    '{{VALIDATED_DATE}}': escapeReachXml(formatReachCertDateLong(data.validatedDate)),
   };
 }
 
-function applyPlaceholders(
-  xml: string,
-  data: ReachCertificateDocxData,
-  templateKey: CertificateTemplateKey
-): string {
-  const map = buildPlaceholderMap(data, templateKey);
-
+function applyPlaceholders(xml: string, data: ReachCertificateDocxData): string {
+  const map = buildPlaceholderMap(data);
   let result = xml;
   for (const [key, value] of Object.entries(map)) {
     result = result.split(key).join(value);
   }
-
-  if (templateKey !== 'template_1') {
-    return result;
-  }
-
-  const legacyMap: Record<string, string> = {
-    'Fairchem Organics Limited': escapeReachXml(data.companyName),
-    '253/P and 312, Village Chekhala,': escapeReachXml(data.addressLine1),
-    'Sanand – Kadi Highway, Taluka SANAND,': escapeReachXml(data.addressLine2),
-    'Dist. AHMEDABAD\u00a0\u2013 382 115, INDIA': `Dist. ${escapeReachXml(data.addressLine3)}`,
-    'Fatty acids, C18-unsatd, dimers': escapeReachXml(data.chemicalName),
-    '500-148-0': escapeReachXml(data.ecNumber),
-    '61788-89-4': escapeReachXml(data.casNumber),
-    '01-2119493908-18-0028': escapeReachXml(data.registrationNumber),
-    '10-100 tpa': escapeReachXml(data.tonnageBand),
-    'ECHA-334d8d7b-4b93-40d9-b1f3-25494dc492d6': escapeReachXml(data.uuidNumber),
-  };
-  for (const [key, value] of Object.entries(legacyMap)) {
-    result = result.split(key).join(value);
-  }
-
-  const issuedSample =
-    /<w:r w:rsidR="007957B7"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"\/><w:sz w:val="20"\/><w:szCs w:val="20"\/><\/w:rPr><w:t>01<\/w:t><\/w:r><w:r w:rsidR="00D86250"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"\/><w:sz w:val="20"\/><w:szCs w:val="20"\/><\/w:rPr><w:t>\.<\/w:t><\/w:r><w:r w:rsidR="007957B7"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"\/><w:sz w:val="20"\/><w:szCs w:val="20"\/><\/w:rPr><w:t>01<\/w:t><\/w:r><w:r w:rsidR="00F22E86"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"\/><w:sz w:val="20"\/><w:szCs w:val="20"\/><\/w:rPr><w:t>\.202<\/w:t><\/w:r><w:r w:rsidR="007957B7"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"\/><w:sz w:val="20"\/><w:szCs w:val="20"\/><\/w:rPr><w:t>6<\/w:t><\/w:r>/;
-  if (issuedSample.test(result)) {
-    result = result.replace(
-      issuedSample,
-      `<w:r w:rsidR="007957B7"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeReachXml(data.issuedDate)}</w:t></w:r>`
-    );
-  }
-
-  const validatedSample =
-    /<w:r w:rsidR="0014606D"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"\/><w:sz w:val="20"\/><w:szCs w:val="20"\/><\/w:rPr><w:t>31\.12\.202<\/w:t><\/w:r><w:r w:rsidR="007957B7"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"\/><w:sz w:val="20"\/><w:szCs w:val="20"\/><\/w:rPr><w:t>6<\/w:t><\/w:r>/;
-  if (validatedSample.test(result)) {
-    result = result.replace(
-      validatedSample,
-      `<w:r w:rsidR="0014606D"><w:rPr><w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeReachXml(data.validatedDate)}</w:t></w:r>`
-    );
-  }
-
   return result;
 }
 
 export function generateReachCertificateDocx(
   data: ReachCertificateDocxData,
-  templateKey: CertificateTemplateKey = 'template_1',
   options?: { browserPreview?: boolean }
 ): Buffer {
-  const templatePath = resolveTemplatePath(templateKey, options?.browserPreview === true);
+  const templatePath = resolveTemplatePath(options?.browserPreview === true);
   const zip = new PizZip(fs.readFileSync(templatePath));
-  const xml = applyPlaceholders(zip.files['word/document.xml'].asText(), data, templateKey);
+  const xml = applyPlaceholders(zip.files['word/document.xml'].asText(), data);
   zip.file('word/document.xml', xml);
   return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 }

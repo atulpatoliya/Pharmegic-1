@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import fs from 'fs';
 import { getSession } from '@/lib/auth/session';
-import { normalizeCertificateTemplateKey } from '@/lib/certificate-template-config';
 import { getRcTemplatePreviewSample } from '@/lib/certificate-template-preview-data';
 import { buildReachDocxData } from '@/lib/reach-pdf-data';
-import { getActiveRcTemplateKey } from '@/services/db';
 import {
+  BUNDLED_RC_PREVIEW_PDF,
   convertReachDocxToPdf,
   generateReachCertificateDocx,
 } from '@/services/reach-certificate-docx';
@@ -20,28 +19,29 @@ function pdfResponse(buffer: Buffer, fileName: string) {
   });
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const session = await getSession();
   if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const templateParam = searchParams.get('templateKey');
-  const adminSupabase = createAdminClient();
-  const templateKey = templateParam
-    ? normalizeCertificateTemplateKey(templateParam)
-    : await getActiveRcTemplateKey(adminSupabase);
-
   try {
-    const sample = getRcTemplatePreviewSample(templateKey);
+    const sample = getRcTemplatePreviewSample();
     const docxBuffer = generateReachCertificateDocx(
-      buildReachDocxData(sample.client, sample.chemical, sample.options, templateKey),
-      templateKey
+      buildReachDocxData(sample.client, sample.chemical, sample.options)
     );
-    const pdfBuffer = await convertReachDocxToPdf(docxBuffer);
 
-    return pdfResponse(pdfBuffer, `rc-template-${templateKey}-preview.pdf`);
+    try {
+      const pdfBuffer = await convertReachDocxToPdf(docxBuffer);
+      return pdfResponse(pdfBuffer, 'rc-template-preview.pdf');
+    } catch {
+      if (fs.existsSync(BUNDLED_RC_PREVIEW_PDF)) {
+        return pdfResponse(fs.readFileSync(BUNDLED_RC_PREVIEW_PDF), 'rc-template-preview.pdf');
+      }
+      throw new Error(
+        'PDF conversion is not available on this server. Install LibreOffice, set GOTENBERG_URL, or run: node scripts/generate-rc-template-preview-pdf.mjs'
+      );
+    }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'RC template PDF preview failed.';
     return NextResponse.json({ error: message }, { status: 503 });

@@ -9,7 +9,6 @@ import {
   loadCertificateMailSentHistory,
   REACH_MAIL_LOG_ACTIONS,
 } from '@/lib/certificate-mail-history';
-import { getActiveRcTemplateKey } from '@/services/db';
 
 export const revalidate = 0;
 
@@ -112,8 +111,6 @@ export default async function ReachCertificatePreviewPage({
       })
     : null;
 
-  const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
-
   const defaultYearPeriod = getDefaultReachPeriodForYear(new Date().getFullYear());
   const defaults = {
     registrationNumber:
@@ -147,7 +144,6 @@ export default async function ReachCertificatePreviewPage({
       defaults={defaults}
       mailRecipients={mailRecipients}
       mailSentHistory={mailSentHistory}
-      rcTemplateKey={rcTemplateKey}
     />
   );
 }

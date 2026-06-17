@@ -1,12 +1,10 @@
 import {
   buildEuReachAddressLine1,
   buildReachAddressLines,
-  formatReachCertDate,
   generateReachCertificateDocx,
   convertReachDocxToPdf,
   type ReachCertificateDocxData,
 } from '@/services/reach-certificate-docx';
-import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 
 const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -26,31 +24,24 @@ export function buildReachDocxData(
     issuedDate: string;
     validatedDate: string;
     tonnageBand?: string | null;
-  },
-  templateKey: CertificateTemplateKey = 'template_1'
+  }
 ): ReachCertificateDocxData {
   const address = buildReachAddressLines(client);
   const issuedIso = options.issuedDate.split('T')[0];
   const validatedIso = options.validatedDate.split('T')[0];
   return {
     companyName: client.company_name,
-    addressLine1:
-      templateKey === 'template_2' ? buildEuReachAddressLine1(client) : address.line1,
+    addressLine1: buildEuReachAddressLine1(client),
     addressLine2: address.line2,
-    addressLine3:
-      templateKey === 'template_2'
-        ? client.country?.trim() || '—'
-        : address.line3,
+    addressLine3: client.country?.trim() || '—',
     chemicalName: chemical.chemical_name,
     ecNumber: chemical.ec_number || '—',
     casNumber: chemical.cas_number,
     registrationNumber: options.registrationNumber.trim(),
     tonnageBand: options.tonnageBand || chemical.tonnage_band || '—',
     uuidNumber: client.uuid_number || '—',
-    issuedDate:
-      templateKey === 'template_2' ? issuedIso : formatReachCertDate(issuedIso),
-    validatedDate:
-      templateKey === 'template_2' ? validatedIso : formatReachCertDate(validatedIso),
+    issuedDate: issuedIso,
+    validatedDate: validatedIso,
   };
 }
 
@@ -79,13 +70,9 @@ export async function generateReachPdfForClientChemical(
     issuedDate: string;
     validatedDate: string;
     tonnageBand?: string | null;
-  },
-  templateKey: CertificateTemplateKey = 'template_1'
+  }
 ): Promise<Buffer> {
-  const docxBuffer = generateReachCertificateDocx(
-    buildReachDocxData(client, chemical, options, templateKey),
-    templateKey
-  );
+  const docxBuffer = generateReachCertificateDocx(buildReachDocxData(client, chemical, options));
   return convertReachDocxToPdf(docxBuffer);
 }
 
@@ -99,13 +86,9 @@ export async function buildReachCertificateStoredFile(
     issuedDate: string;
     validatedDate: string;
     tonnageBand?: string | null;
-  },
-  templateKey: CertificateTemplateKey = 'template_1'
+  }
 ): Promise<ReachCertificateStoredFile> {
-  const docxBuffer = generateReachCertificateDocx(
-    buildReachDocxData(client, chemical, options, templateKey),
-    templateKey
-  );
+  const docxBuffer = generateReachCertificateDocx(buildReachDocxData(client, chemical, options));
 
   try {
     const pdfBuffer = await convertReachDocxToPdf(docxBuffer);

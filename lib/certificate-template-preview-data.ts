@@ -1,32 +1,7 @@
-import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 import type { ReachPdfChemical, ReachPdfSource } from '@/lib/reach-pdf-data';
 import type { TccCertificateDocxData } from '@/services/tcc-certificate-docx';
 
-const RC_TEMPLATE_1_PREVIEW_SAMPLE = {
-  client: {
-    company_name: 'Example Pharma Ltd',
-    address: 'C-1/394, Phase II, G.I.D.C. Estate, Vatva',
-    city: 'Ahmedabad',
-    state: 'Gujarat',
-    postal_code: '382445',
-    country: 'India',
-    uuid_number: 'ECHA-00000000-0000-4000-8000-000000000001',
-  },
-  chemical: {
-    chemical_name: 'Ethylene Glycol Monoethyl Ether',
-    cas_number: '110-80-2',
-    ec_number: '203-787-0',
-    tonnage_band: '10-100 tpa',
-  },
-  options: {
-    registrationNumber: '01-2119493908-18-0028',
-    issuedDate: '2026-01-01',
-    validatedDate: '2026-12-31',
-    tonnageBand: '10-100 tpa',
-  },
-} as const;
-
-const RC_TEMPLATE_2_PREVIEW_SAMPLE = {
+const RC_PREVIEW_SAMPLE = {
   client: {
     company_name: 'Example Pharma Ltd',
     address: '123 Industrial Estate, Sample Road',
@@ -50,9 +25,7 @@ const RC_TEMPLATE_2_PREVIEW_SAMPLE = {
   },
 } as const;
 
-export function getRcTemplatePreviewSample(
-  templateKey: CertificateTemplateKey = 'template_1'
-): {
+export function getRcTemplatePreviewSample(): {
   client: ReachPdfSource;
   chemical: ReachPdfChemical;
   options: {
@@ -62,13 +35,10 @@ export function getRcTemplatePreviewSample(
     tonnageBand: string;
   };
 } {
-  const sample =
-    templateKey === 'template_2' ? RC_TEMPLATE_2_PREVIEW_SAMPLE : RC_TEMPLATE_1_PREVIEW_SAMPLE;
-
   return {
-    client: { ...sample.client },
-    chemical: { ...sample.chemical },
-    options: { ...sample.options },
+    client: { ...RC_PREVIEW_SAMPLE.client },
+    chemical: { ...RC_PREVIEW_SAMPLE.chemical },
+    options: { ...RC_PREVIEW_SAMPLE.options },
   };
 }
 

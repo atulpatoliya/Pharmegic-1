@@ -27,7 +27,6 @@ import {
   PenLine,
 } from 'lucide-react';
 import ReachCertificateViewer from '@/components/ReachCertificateViewer';
-import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
@@ -73,7 +72,6 @@ type ReachCertificatePreviewClientProps = {
     cc: string[];
   } | null;
   mailSentHistory: string[];
-  rcTemplateKey?: CertificateTemplateKey;
 };
 
 function formatEmailList(emails: string[]): string {
@@ -89,7 +87,6 @@ export default function ReachCertificatePreviewClient({
   defaults,
   mailRecipients,
   mailSentHistory,
-  rcTemplateKey = 'template_1',
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
   const [isIssuing, startIssueTransition] = useTransition();
@@ -395,11 +392,10 @@ export default function ReachCertificatePreviewClient({
           <h3 className="text-sm font-bold text-slate-800">REACH Compliance Certificate (CT-2026)</h3>
         </div>
         <ReachCertificateViewer
-          key={rcTemplateKey === 'template_2' ? pdfPreviewUrl : docxPreviewUrl}
-          templateKey={rcTemplateKey}
+          key={pdfPreviewUrl}
+          certificateType="rc"
           docxUrl={docxPreviewUrl}
           pdfUrl={pdfPreviewUrl}
-          preferPdf={rcTemplateKey === 'template_2'}
         />
       </div>
 

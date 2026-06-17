@@ -8,7 +8,6 @@ import {
   REACH_CERTIFICATE_TYPE,
 } from '@/lib/reach-certificate';
 import { resolveReachCertificatePdfBuffer } from '@/lib/reach-certificate-pdf';
-import { getActiveRcTemplateKey } from '@/services/db';
 
 function pdfResponse(buffer: Buffer, fileName: string) {
   return new NextResponse(new Uint8Array(buffer), {
@@ -89,7 +88,6 @@ export async function GET(request: NextRequest) {
       : getLastDateOfYear();
 
     try {
-      const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
       const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
         certificateNumber: cert.certificate_number,
         registrationNumber: cert.registration_number?.trim() || '—',
@@ -98,7 +96,6 @@ export async function GET(request: NextRequest) {
         client: clientRecord,
         chemical: chemicalRecord,
         tonnageBand: cert.tonnage_band,
-        templateKey: rcTemplateKey,
       });
 
       return pdfResponse(pdfBuffer, `${cert.certificate_number}.pdf`);
@@ -179,7 +176,6 @@ export async function GET(request: NextRequest) {
   const certNumber = existingCert?.certificate_number || `RC-preview-${chemicalId.slice(0, 8)}`;
 
   try {
-    const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
     const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
       certificateNumber: certNumber,
       registrationNumber,
@@ -188,7 +184,6 @@ export async function GET(request: NextRequest) {
       client,
       chemical,
       tonnageBand,
-      templateKey: rcTemplateKey,
     });
 
     return pdfResponse(pdfBuffer, `${certNumber}.pdf`);

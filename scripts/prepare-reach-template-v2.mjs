@@ -157,3 +157,4 @@ previewZip.file('word/document.xml', flattenForBrowserPreview(xml));
 fs.writeFileSync(previewTarget, previewZip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }));
 const previewDrawings = (flattenForBrowserPreview(xml).match(/<w:drawing>/g) || []).length;
 console.log(`Browser preview template written to ${previewTarget} (drawings=${previewDrawings})`);
+console.log('Run: node scripts/generate-rc-template-preview-pdf.mjs  (admin Settings PDF preview)');

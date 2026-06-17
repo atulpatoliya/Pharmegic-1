@@ -17,10 +17,9 @@ import {
 import { updateTemplateAction } from '@/actions/templates';
 import { CertificateTemplateSettingsPanel } from '@/components/CertificateTemplateSettingsPanel';
 import {
-  normalizeCertificateTemplateKey,
   resolveRcBranding,
   resolveTccBranding,
-  type CertificateTemplateKey,
+  RC_TEMPLATE_KEY,
   type TemplateSettingsRecord,
 } from '@/lib/certificate-template-config';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
@@ -95,9 +94,6 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     bcc_emails: initialSettings?.bcc_emails || '',
   });
 
-  const [rcTemplateKey, setRcTemplateKey] = useState<CertificateTemplateKey>(
-    normalizeCertificateTemplateKey(initialTemplate?.rc_template_key)
-  );
   const [rcAccentColor, setRcAccentColor] = useState(rcDefaults.accent_color);
   const [rcFooterText, setRcFooterText] = useState(
     rcDefaults.footer_text ||
@@ -182,7 +178,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     }
     startRcTemplateTransition(async () => {
       const res = await updateTemplateAction(initialTemplate.id, {
-        rc_template_key: rcTemplateKey,
+        rc_template_key: RC_TEMPLATE_KEY,
         rc_logo: rcLogo,
         rc_signature_image: rcSignature,
         rc_accent_color: rcAccentColor,
@@ -256,7 +252,6 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
   };
 
   const handleResetRcTemplate = () => {
-    setRcTemplateKey('template_1');
     setRcAccentColor('#064e3b');
     setRcFooterText('Pharmegic Healthcare Compliance Division. For verification, scan the QR code.');
     setRcLogo(null);
@@ -521,11 +516,8 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
           {activeTab === 'rc-template' && (
             <CertificateTemplateSettingsPanel
               title="RC Certificate Template"
-              description="Choose the active REACH certificate design and manage logo, signature, and theme colors."
+              description="Manage EU REACH certificate branding, logo, signature, and theme colors."
               certificateType="rc"
-              showTemplatePicker
-              templateKey={rcTemplateKey}
-              onTemplateKeyChange={setRcTemplateKey}
               accentColor={rcAccentColor}
               onAccentColorChange={setRcAccentColor}
               footerText={rcFooterText}

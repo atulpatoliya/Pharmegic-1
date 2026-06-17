@@ -11,7 +11,6 @@ import {
   convertReachDocxToPdf,
   generateReachCertificateDocx,
 } from '@/services/reach-certificate-docx';
-import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 
 type ReachCertPdfInput = {
   certificateNumber: string;
@@ -21,7 +20,6 @@ type ReachCertPdfInput = {
   client: ReachPdfSource;
   chemical: ReachPdfChemical;
   tonnageBand?: string | null;
-  templateKey?: CertificateTemplateKey;
 };
 
 const PDF_CONTENT_TYPE = 'application/pdf';
@@ -63,20 +61,13 @@ function cachePdfToStorage(
 }
 
 function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
-  const templateKey = input.templateKey ?? 'template_1';
   return generateReachCertificateDocx(
-    buildReachDocxData(
-      input.client,
-      input.chemical,
-      {
-        registrationNumber: input.registrationNumber,
-        issuedDate: input.issuedDate,
-        validatedDate: input.validatedDate,
-        tonnageBand: input.tonnageBand,
-      },
-      templateKey
-    ),
-    templateKey
+    buildReachDocxData(input.client, input.chemical, {
+      registrationNumber: input.registrationNumber,
+      issuedDate: input.issuedDate,
+      validatedDate: input.validatedDate,
+      tonnageBand: input.tonnageBand,
+    })
   );
 }
 

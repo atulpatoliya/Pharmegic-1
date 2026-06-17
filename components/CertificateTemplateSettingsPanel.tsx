@@ -6,10 +6,6 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ReachCertificateViewer from '@/components/ReachCertificateViewer';
 import {
-  RC_TEMPLATE_OPTIONS,
-  type CertificateTemplateKey,
-} from '@/lib/certificate-template-config';
-import {
   Palette,
   Upload,
   RefreshCw,
@@ -21,9 +17,6 @@ type CertificateTemplateSettingsPanelProps = {
   title: string;
   description: string;
   certificateType: 'rc' | 'tcc';
-  showTemplatePicker?: boolean;
-  templateKey?: CertificateTemplateKey;
-  onTemplateKeyChange?: (value: CertificateTemplateKey) => void;
   accentColor: string;
   onAccentColorChange: (value: string) => void;
   footerText: string;
@@ -42,9 +35,6 @@ export function CertificateTemplateSettingsPanel({
   title,
   description,
   certificateType,
-  showTemplatePicker = false,
-  templateKey = 'template_1',
-  onTemplateKeyChange,
   accentColor,
   onAccentColorChange,
   footerText,
@@ -60,19 +50,17 @@ export function CertificateTemplateSettingsPanel({
 }: CertificateTemplateSettingsPanelProps) {
   const previewDocxUrl = useMemo(() => {
     if (certificateType === 'rc') {
-      const params = new URLSearchParams({ templateKey });
-      return `/api/certificate-template/rc-preview?${params.toString()}`;
+      return '/api/certificate-template/rc-preview';
     }
     return '/api/certificate-template/tcc-preview';
-  }, [certificateType, templateKey]);
+  }, [certificateType]);
 
   const previewPdfUrl = useMemo(() => {
     if (certificateType === 'rc') {
-      const params = new URLSearchParams({ templateKey });
-      return `/api/certificate-template/rc-preview/pdf?${params.toString()}`;
+      return '/api/certificate-template/rc-preview/pdf';
     }
     return '';
-  }, [certificateType, templateKey]);
+  }, [certificateType]);
 
   return (
     <div className="grid gap-8 grid-cols-1 lg:grid-cols-5">
@@ -86,46 +74,6 @@ export function CertificateTemplateSettingsPanel({
             <CardDescription>{description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {showTemplatePicker && onTemplateKeyChange && (
-              <div className="space-y-3">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                  Active Certificate Design
-                </label>
-                <div className="grid gap-3">
-                  {RC_TEMPLATE_OPTIONS.map((option) => {
-                    const active = templateKey === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => onTemplateKeyChange(option.value)}
-                        className={`rounded-xl border p-4 text-left transition-all ${
-                          active
-                            ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-100'
-                            : 'border-slate-200 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-bold text-slate-800">{option.label}</p>
-                            <p className="text-xs text-slate-500 mt-1">{option.description}</p>
-                          </div>
-                          <span
-                            className={`h-4 w-4 rounded-full border-2 shrink-0 ${
-                              active ? 'border-teal-700 bg-teal-700' : 'border-slate-300'
-                            }`}
-                          />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Preview updates instantly. Save to apply this design to new RC certificates.
-                </p>
-              </div>
-            )}
-
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
                 Theme Accent Color
@@ -248,16 +196,17 @@ export function CertificateTemplateSettingsPanel({
             <Sparkles className="h-4 w-4 text-emerald-500 animate-pulse" /> Live Certificate Preview
           </h2>
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-            {certificateType === 'rc' ? 'Example data shown' : 'Same layout as print / PDF'}
+            {certificateType === 'rc'
+              ? 'Example data · same layout as print / PDF'
+              : 'Same layout as print / PDF'}
           </span>
         </div>
         <div className="w-full border border-slate-200/80 rounded-xl shadow-xs overflow-hidden bg-white">
           <ReachCertificateViewer
-            key={previewDocxUrl}
-            templateKey={certificateType === 'rc' ? templateKey : 'template_1'}
+            key={certificateType === 'rc' ? previewPdfUrl : previewDocxUrl}
+            certificateType={certificateType}
             docxUrl={previewDocxUrl}
             pdfUrl={previewPdfUrl}
-            preferPdf={false}
           />
         </div>
       </div>

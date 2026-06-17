@@ -8,7 +8,6 @@ import { appendMailSentHistory } from '@/lib/certificate-mail-history';
 import { buildRcSmtpConfig } from '@/lib/certificate-smtp-settings';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
-import { getActiveRcTemplateKey } from '@/services/db';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
 import { getTonnageBandMaxQuota } from '@/lib/quota';
@@ -165,14 +164,12 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   const expiryDate = new Date(validatedDate);
   const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
   const certNumber = `RC-${issueDate.getFullYear()}-${randStr}`;
-  const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
-
   const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
     registrationNumber: registrationNumber.trim(),
     issuedDate,
     validatedDate,
     tonnageBand: tonnageBand || chemical.tonnage_band,
-  }, rcTemplateKey);
+  });
 
   await ensureCertificatesBucket(adminSupabase);
   const { error: uploadError } = await adminSupabase.storage
@@ -326,13 +323,12 @@ export async function regenerateReachCertificateFile(certId: string) {
     return { success: false as const, error: 'Missing certificate data for regeneration.' };
   }
 
-  const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
   const certFile = await buildReachCertificateStoredFile(client, chemical, cert.certificate_number, {
     registrationNumber: cert.registration_number,
     issuedDate: cert.issued_at.split('T')[0],
     validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),
     tonnageBand: cert.tonnage_band,
-  }, rcTemplateKey);
+  });
 
   await ensureCertificatesBucket(adminSupabase);
   const { error: uploadError } = await adminSupabase.storage
@@ -859,7 +855,6 @@ async function downloadReachCertificateAttachment(
     ? cert.expires_at.split('T')[0]
     : getLastDateOfYear();
 
-  const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
   const certFile = await resolveReachCertificateDownloadFile(adminSupabase, {
     certificateNumber: cert.certificate_number,
     registrationNumber: cert.registration_number?.trim() || '—',
@@ -867,7 +862,6 @@ async function downloadReachCertificateAttachment(
     validatedDate,
     client: cert.clients,
     chemical: cert.chemicals,
-    templateKey: rcTemplateKey,
   });
 
   return {

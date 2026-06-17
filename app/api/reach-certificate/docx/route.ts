@@ -5,7 +5,6 @@ import {
   generateReachCertificateDocx,
 } from '@/services/reach-certificate-docx';
 import { buildReachDocxData } from '@/lib/reach-pdf-data';
-import { getActiveRcTemplateKey } from '@/services/db';
 import { getLastDateOfYear, getTodayDateString, isReachCertificateType, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 
 function docxResponse(buffer: Buffer, fileName: string) {
@@ -84,21 +83,13 @@ export async function GET(request: NextRequest) {
       : getLastDateOfYear();
 
     try {
-      const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
       const docxBuffer = generateReachCertificateDocx(
-        buildReachDocxData(
-          clientRecord,
-          chemicalRecord,
-          {
-            registrationNumber: cert.registration_number?.trim() || '—',
-            issuedDate,
-            validatedDate,
-            tonnageBand: cert.tonnage_band || chemicalRecord.tonnage_band,
-          },
-          rcTemplateKey
-        ),
-        rcTemplateKey,
-        { browserPreview: rcTemplateKey === 'template_2' }
+        buildReachDocxData(clientRecord, chemicalRecord, {
+          registrationNumber: cert.registration_number?.trim() || '—',
+          issuedDate,
+          validatedDate,
+          tonnageBand: cert.tonnage_band || chemicalRecord.tonnage_band,
+        })
       );
 
       return docxResponse(docxBuffer, `${cert.certificate_number}.docx`);
@@ -177,21 +168,14 @@ export async function GET(request: NextRequest) {
     chemical.tonnage_band;
 
   try {
-    const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
     const docxBuffer = generateReachCertificateDocx(
-      buildReachDocxData(
-        client,
-        chemical,
-        {
-          registrationNumber,
-          issuedDate,
-          validatedDate,
-          tonnageBand: tonnageBand || undefined,
-        },
-        rcTemplateKey
-      ),
-      rcTemplateKey,
-      { browserPreview: rcTemplateKey === 'template_2' }
+      buildReachDocxData(client, chemical, {
+        registrationNumber,
+        issuedDate,
+        validatedDate,
+        tonnageBand: tonnageBand || undefined,
+      }),
+      { browserPreview: true }
     );
 
     return docxResponse(docxBuffer, 'reach-certificate-preview.docx');

@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
-import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
+import type { RcTemplateKey, TccTemplateKey } from '@/lib/certificate-template-config';
 
 export async function updateTemplateAction(
   templateId: string,
@@ -12,8 +12,8 @@ export async function updateTemplateAction(
     signature_image?: string | null;
     accent_color?: string;
     footer_text?: string | null;
-    rc_template_key?: CertificateTemplateKey;
-    tcc_template_key?: CertificateTemplateKey;
+    rc_template_key?: RcTemplateKey;
+    tcc_template_key?: TccTemplateKey;
     rc_logo?: string | null;
     rc_signature_image?: string | null;
     rc_accent_color?: string;
