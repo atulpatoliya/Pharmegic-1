@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import ReachCertificatePreviewClient from '@/components/ReachCertificatePreviewClient';
 import { getLastDateOfYear, getTodayDateString, isReachCertificateType, getDefaultReachPeriodForYear } from '@/lib/reach-certificate';
-import { regenerateReachCertificateFile, regeneratePendingReachPreviewPdf } from '@/actions/reach';
+import { regenerateReachCertificateFile, ensurePendingReachPreviewAssets } from '@/actions/reach';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import {
   loadCertificateMailSentHistory,
@@ -125,9 +125,9 @@ export default async function ReachCertificatePreviewPage({
     tonnageBand: resolvedCert?.tonnage_band || chemical.tonnage_band || '',
   };
 
-  const pendingPreviewPdfUrl = resolvedCert
+  const pendingPreviewAssets = resolvedCert
     ? null
-    : await regeneratePendingReachPreviewPdf(clientId, chemicalId, defaults);
+    : await ensurePendingReachPreviewAssets(clientId, chemicalId, defaults);
 
   return (
     <ReachCertificatePreviewClient
@@ -148,7 +148,7 @@ export default async function ReachCertificatePreviewPage({
       defaults={defaults}
       mailRecipients={mailRecipients}
       mailSentHistory={mailSentHistory}
-      pendingPreviewPdfUrl={pendingPreviewPdfUrl}
+      pendingPreviewAssets={pendingPreviewAssets}
     />
   );
 }

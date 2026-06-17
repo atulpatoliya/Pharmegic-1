@@ -6,7 +6,7 @@ import {
   getTodayDateString,
   REACH_CERTIFICATE_TYPE,
 } from '@/lib/reach-certificate';
-import { resolveReachCertificatePdfBuffer } from '@/lib/reach-certificate-pdf';
+import { resolveReachCertificatePreview } from '@/lib/reach-certificate-preview';
 
 function inlinePdfResponse(buffer: Buffer, fileName: string) {
   return new NextResponse(new Uint8Array(buffer), {
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
   const certNumber = existingCert?.certificate_number || `RC-preview-${chemicalId.slice(0, 8)}`;
 
   try {
-    const pdfBuffer = await resolveReachCertificatePdfBuffer(adminSupabase, {
+    const result = await resolveReachCertificatePreview(adminSupabase, {
       certificateNumber: certNumber,
       registrationNumber,
       issuedDate,
@@ -102,7 +102,14 @@ export async function GET(request: NextRequest) {
       tonnageBand,
     });
 
-    return inlinePdfResponse(pdfBuffer, `${certNumber}.pdf`);
+    if (result.mode === 'pdf') {
+      return inlinePdfResponse(result.buffer, result.fileName);
+    }
+
+    return NextResponse.json({
+      previewMode: 'docx',
+      docxUrl: result.docxUrl,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Certificate PDF preview failed.';
     return NextResponse.json({ error: message }, { status: 503 });

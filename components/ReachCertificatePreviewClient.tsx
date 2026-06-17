@@ -72,7 +72,7 @@ type ReachCertificatePreviewClientProps = {
     cc: string[];
   } | null;
   mailSentHistory: string[];
-  pendingPreviewPdfUrl?: string | null;
+  pendingPreviewAssets?: { pdfUrl: string | null; docxUrl: string | null } | null;
 };
 
 function formatEmailList(emails: string[]): string {
@@ -88,7 +88,7 @@ export default function ReachCertificatePreviewClient({
   defaults,
   mailRecipients,
   mailSentHistory,
-  pendingPreviewPdfUrl = null,
+  pendingPreviewAssets = null,
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
   const [isIssuing, startIssueTransition] = useTransition();
@@ -137,14 +137,14 @@ export default function ReachCertificatePreviewClient({
 
     if (isEditing || !fieldsMatchDefaults) return liveUrl;
     if (cert?.file_url) return cert.file_url;
-    if (isPending && pendingPreviewPdfUrl) return pendingPreviewPdfUrl;
+    if (isPending && pendingPreviewAssets?.pdfUrl) return pendingPreviewAssets.pdfUrl;
     return liveUrl;
   }, [
     isEditing,
     fieldsMatchDefaults,
     cert?.file_url,
     isPending,
-    pendingPreviewPdfUrl,
+    pendingPreviewAssets?.pdfUrl,
     clientId,
     chemicalId,
     registrationNumber,
@@ -412,6 +412,16 @@ export default function ReachCertificatePreviewClient({
           certificateType="rc"
           docxUrl={docxPreviewUrl}
           pdfUrl={pdfPreviewUrl}
+          directPdfUrl={
+            fieldsMatchDefaults && !isEditing
+              ? cert?.file_url ?? pendingPreviewAssets?.pdfUrl ?? null
+              : null
+          }
+          directDocxUrl={
+            fieldsMatchDefaults && !isEditing && !cert?.file_url && !pendingPreviewAssets?.pdfUrl
+              ? pendingPreviewAssets?.docxUrl ?? null
+              : null
+          }
         />
       </div>
 

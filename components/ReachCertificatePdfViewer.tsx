@@ -4,41 +4,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ReachCertificatePdfViewerProps = {
   pdfUrl: string;
-  fallbackDocxUrl?: string;
-  onFallback?: () => void;
+  fallbackPdfUrl?: string | null;
+  onDocxPreview?: (docxUrl: string) => void;
 };
 
 export default function ReachCertificatePdfViewer({
   pdfUrl,
-  fallbackDocxUrl,
-  onFallback,
+  fallbackPdfUrl,
+  onDocxPreview,
 }: ReachCertificatePdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const handleFallback = useCallback(() => {
-    onFallback?.();
-  }, [onFallback]);
-
-  const renderPdf = useCallback(async (url: string, container: HTMLDivElement) => {
+  const renderPdfBuffer = useCallback(async (data: ArrayBuffer, container: HTMLDivElement) => {
     const pdfjs = await import('pdfjs-dist');
     pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-    const res = await fetch(url, {
-      credentials: url.startsWith('/') ? 'same-origin' : 'omit',
-    });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(body?.error || 'Failed to load certificate preview.');
-    }
-
-    const contentType = res.headers.get('Content-Type') || '';
-    if (!contentType.includes('application/pdf')) {
-      throw new Error('Certificate preview is not available as PDF.');
-    }
-
-    const data = await res.arrayBuffer();
     const pdf = await pdfjs.getDocument({ data }).promise;
 
     container.innerHTML = '';
@@ -66,6 +48,39 @@ export default function ReachCertificatePdfViewer({
     }
   }, []);
 
+  const loadUrl = useCallback(
+    async (url: string, container: HTMLDivElement): Promise<'pdf' | 'docx' | 'failed'> => {
+      const res = await fetch(url, {
+        credentials: url.startsWith('/') ? 'same-origin' : 'omit',
+      });
+
+      const contentType = res.headers.get('Content-Type') || '';
+
+      if (contentType.includes('application/json')) {
+        const body = (await res.json()) as { previewMode?: string; docxUrl?: string; error?: string };
+        if (body.previewMode === 'docx' && body.docxUrl) {
+          onDocxPreview?.(body.docxUrl);
+          return 'docx';
+        }
+        throw new Error(body.error || 'Failed to load certificate preview.');
+      }
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || 'Failed to load certificate preview.');
+      }
+
+      if (!contentType.includes('application/pdf')) {
+        throw new Error('Certificate preview is not available as PDF.');
+      }
+
+      const data = await res.arrayBuffer();
+      await renderPdfBuffer(data, container);
+      return 'pdf';
+    },
+    [onDocxPreview, renderPdfBuffer]
+  );
+
   useEffect(() => {
     let cancelled = false;
     const container = containerRef.current;
@@ -77,16 +92,27 @@ export default function ReachCertificatePdfViewer({
       container.innerHTML = '';
 
       try {
-        await renderPdf(pdfUrl, container);
+        const result = await loadUrl(pdfUrl, container);
+        if (result === 'docx') return;
+
+        if (!cancelled) setLoading(false);
       } catch (err: unknown) {
         if (cancelled) return;
-        if (fallbackDocxUrl && onFallback) {
-          handleFallback();
-          return;
+
+        if (fallbackPdfUrl && fallbackPdfUrl !== pdfUrl) {
+          try {
+            container.innerHTML = '';
+            const fallbackResult = await loadUrl(fallbackPdfUrl, container);
+            if (fallbackResult === 'docx') return;
+            if (!cancelled) setLoading(false);
+            return;
+          } catch {
+            // fall through to error
+          }
         }
+
         setError(err instanceof Error ? err.message : 'Certificate preview failed.');
-      } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
 
@@ -95,7 +121,7 @@ export default function ReachCertificatePdfViewer({
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl, fallbackDocxUrl, onFallback, handleFallback, renderPdf]);
+  }, [pdfUrl, fallbackPdfUrl, loadUrl]);
 
   return (
     <div className="relative min-h-[820px] bg-slate-100 overflow-auto">
