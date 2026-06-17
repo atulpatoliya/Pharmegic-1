@@ -151,14 +151,17 @@ const LIBREOFFICE_PATHS = [
   'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
 ];
 
-/** True when server-side DOCX→PDF conversion is likely available. */
-export function isReachPdfConversionAvailable(): boolean {
-  if (getGotenbergBaseUrls().length > 0) return true;
+export function isLibreOfficeInstalled(): boolean {
   if (process.platform === 'win32') return true;
   for (const bin of LIBREOFFICE_PATHS) {
     if (bin.includes('/') && fs.existsSync(bin)) return true;
   }
   return false;
+}
+
+/** Sync hint only — use resolveReachPdfConversionStatus() for an accurate live check. */
+export function isReachPdfConversionAvailable(): boolean {
+  return isLibreOfficeInstalled() || getGotenbergBaseUrls().length > 0;
 }
 
 async function convertWithLibreOfficeCli(docxPath: string, outDir: string): Promise<string> {
