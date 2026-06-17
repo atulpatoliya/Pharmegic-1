@@ -11,7 +11,8 @@
     "import:clients:dry": "node scripts/import-clients-from-excel.js --dry-run",
     "prepare:eu-reach": "node scripts/prepare-eu-reach-template.mjs && node scripts/generate-eu-reach-preview-pdf.mjs",
     "gotenberg:up": "docker compose -f docker-compose.gotenberg.yml up -d",
-    "setup:pdf": "bash scripts/setup-pdf-converter.sh"
+    "setup:pdf": "bash scripts/setup-pdf-converter.sh",
+    "setup:live-pdf": "bash scripts/setup-live-pdf.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
