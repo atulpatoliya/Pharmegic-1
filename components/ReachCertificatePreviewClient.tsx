@@ -115,9 +115,6 @@ export default function ReachCertificatePreviewClient({
   }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
 
   const pdfPreviewUrl = useMemo(() => {
-    if (cert) {
-      return buildReachCertificatePdfDownloadUrl(cert.id);
-    }
     return buildReachCertificatePdfPreviewUrl({
       clientId,
       chemicalId,
@@ -126,18 +123,9 @@ export default function ReachCertificatePreviewClient({
       validatedDate,
       tonnageBand,
     });
-  }, [cert, clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
+  }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
 
-  const downloadPdfUrl = cert
-    ? buildReachCertificatePdfDownloadUrl(cert.id)
-    : buildReachCertificatePdfPreviewUrl({
-        clientId,
-        chemicalId,
-        registrationNumber: registrationNumber.trim() || '—',
-        issuedDate,
-        validatedDate,
-        tonnageBand,
-      });
+  const downloadPdfUrl = cert ? buildReachCertificatePdfDownloadUrl(cert.id) : pdfPreviewUrl;
   const downloadDocxUrl = cert
     ? buildReachCertificateDocxPreviewUrl(cert.id)
     : docxPreviewUrl;
@@ -250,7 +238,7 @@ export default function ReachCertificatePreviewClient({
               )}
             </h1>
             <p className="text-sm text-slate-500 font-medium">
-              {client.company_name} · {chemical.chemical_name} — CT-2026 template preview
+              {client.company_name} · {chemical.chemical_name} — EU REACH certificate preview
             </p>
           </div>
         </div>
@@ -389,7 +377,7 @@ export default function ReachCertificatePreviewClient({
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 p-4 border-b border-slate-100">
           <FileText className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-bold text-slate-800">REACH Compliance Certificate (CT-2026)</h3>
+          <h3 className="text-sm font-bold text-slate-800">EU REACH Registration Certificate</h3>
         </div>
         <ReachCertificateViewer
           key={pdfPreviewUrl}

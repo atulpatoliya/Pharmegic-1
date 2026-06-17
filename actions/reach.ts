@@ -323,7 +323,14 @@ export async function regenerateReachCertificateFile(certId: string) {
     return { success: false as const, error: 'Missing certificate data for regeneration.' };
   }
 
-  const certFile = await buildReachCertificateStoredFile(client, chemical, cert.certificate_number, {
+  const certNumber = cert.certificate_number;
+
+  // Remove legacy Template 1 files so preview/download cannot serve stale PDFs.
+  await adminSupabase.storage
+    .from(CERTIFICATES_BUCKET)
+    .remove([`${certNumber}.pdf`, `${certNumber}.docx`]);
+
+  const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
     registrationNumber: cert.registration_number,
     issuedDate: cert.issued_at.split('T')[0],
     validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),

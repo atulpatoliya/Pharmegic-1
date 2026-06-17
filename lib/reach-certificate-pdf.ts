@@ -33,15 +33,6 @@ export type ReachCertificateDownloadFile = {
   format: 'pdf' | 'docx';
 };
 
-async function downloadStorageFile(
-  supabase: SupabaseClient,
-  fileName: string
-): Promise<Buffer | null> {
-  const { data, error } = await supabase.storage.from(CERTIFICATES_BUCKET).download(fileName);
-  if (error || !data) return null;
-  return Buffer.from(await data.arrayBuffer());
-}
-
 function cachePdfToStorage(
   supabase: SupabaseClient,
   certificateNumber: string,
@@ -76,61 +67,16 @@ async function tryConvertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Resolves the best available RC certificate file for download/email.
- * Prefers a freshly generated PDF from the current template, then stored PDF,
- * then DOCX fallbacks when PDF conversion is unavailable on the server.
+ * Always builds from the current EU REACH template.
+ * Never serves stale files from storage (old Template 1 PDFs/DOCXs).
  */
 export async function resolveReachCertificateDownloadFile(
   supabase: SupabaseClient,
   input: ReachCertPdfInput
 ): Promise<ReachCertificateDownloadFile> {
   const certNumber = input.certificateNumber;
-
-  // 1. Fresh PDF from current template
-  try {
-    const docxBuffer = buildFreshReachDocx(input);
-    const pdfBuffer = await tryConvertDocxToPdf(docxBuffer);
-    cachePdfToStorage(supabase, certNumber, pdfBuffer);
-    return {
-      buffer: pdfBuffer,
-      contentType: PDF_CONTENT_TYPE,
-      fileName: `${certNumber}.pdf`,
-      format: 'pdf',
-    };
-  } catch {
-    // Converter unavailable — try stored files.
-  }
-
-  // 2. Stored PDF
-  const storedPdf = await downloadStorageFile(supabase, `${certNumber}.pdf`);
-  if (storedPdf) {
-    return {
-      buffer: storedPdf,
-      contentType: PDF_CONTENT_TYPE,
-      fileName: `${certNumber}.pdf`,
-      format: 'pdf',
-    };
-  }
-
-  // 3. Stored DOCX → convert if possible
-  const storedDocx = await downloadStorageFile(supabase, `${certNumber}.docx`);
-  if (storedDocx) {
-    try {
-      const pdfBuffer = await tryConvertDocxToPdf(storedDocx);
-      cachePdfToStorage(supabase, certNumber, pdfBuffer);
-      return {
-        buffer: pdfBuffer,
-        contentType: PDF_CONTENT_TYPE,
-        fileName: `${certNumber}.pdf`,
-        format: 'pdf',
-      };
-    } catch {
-      // Fall through to fresh DOCX from template.
-    }
-  }
-
-  // 4. Fresh DOCX from template (always available without LibreOffice)
   const freshDocx = buildFreshReachDocx(input);
+
   try {
     const pdfBuffer = await tryConvertDocxToPdf(freshDocx);
     cachePdfToStorage(supabase, certNumber, pdfBuffer);
