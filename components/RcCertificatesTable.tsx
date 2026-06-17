@@ -173,6 +173,7 @@ function buildPendingReachPreviewUrls(
   };
 
   return {
+    ...previewParams,
     pdfUrl: buildReachCertificatePdfDownloadUrlByClientChemical(previewParams),
     docxUrl: buildReachCertificateDocxPreviewUrlByClientChemical(previewParams),
   };
@@ -638,8 +639,15 @@ export default function RcCertificatesTable({
                                 <CertificatePdfDownloadLink
                                   pdfUrl={previewUrls.pdfUrl}
                                   docxUrl={previewUrls.docxUrl}
+                                  previewDocxUrl={previewUrls.docxUrl}
                                   fileName={`${group.chemicalName.replace(/\s+/g, '_')}_rc-preview.pdf`}
                                   certificateType="rc"
+                                  clientId={previewUrls.clientId}
+                                  chemicalId={previewUrls.chemicalId ?? undefined}
+                                  registrationNumber={previewUrls.registrationNumber}
+                                  issuedDate={previewUrls.issuedDate}
+                                  validatedDate={previewUrls.validatedDate}
+                                  tonnageBand={previewUrls.tonnageBand}
                                   title="Download PDF"
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                                 >
@@ -868,8 +876,15 @@ export default function RcCertificatesTable({
                             <CertificatePdfDownloadLink
                               pdfUrl={buildReachCertificatePdfDownloadUrl(cert.id)}
                               docxUrl={buildReachCertificateDocxPreviewUrl(cert.id)}
+                              previewDocxUrl={buildReachCertificateDocxPreviewUrl(cert.id)}
                               fileName={`${cert.certificate_number || 'rc-certificate'}.pdf`}
                               certificateType="rc"
+                              clientId={cert.client_id}
+                              chemicalId={cert.chemical_id ?? undefined}
+                              registrationNumber={cert.registration_number || undefined}
+                              issuedDate={cert.issued_at?.split('T')[0]}
+                              validatedDate={cert.expires_at?.split('T')[0]}
+                              tonnageBand={cert.tonnage_band}
                               title="Download PDF"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                             >
