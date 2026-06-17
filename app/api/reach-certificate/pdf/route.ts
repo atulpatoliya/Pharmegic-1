@@ -5,6 +5,7 @@ import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf
 import {
   loadReachCertificateInputByCertificateId,
   loadReachCertificateInputByClientChemical,
+  parseReachTonnageBandParam,
 } from '@/lib/reach-certificate-api-input';
 
 function attachmentResponse(buffer: Buffer, fileName: string, contentType: string) {
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     registrationNumber: searchParams.get('registrationNumber'),
     issuedDate: searchParams.get('issuedDate'),
     validatedDate: searchParams.get('validatedDate'),
-    tonnageBand: searchParams.get('tonnageBand'),
+    tonnageBand: parseReachTonnageBandParam(searchParams),
   });
 
   if (!input) {

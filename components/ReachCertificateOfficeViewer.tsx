@@ -4,7 +4,7 @@ type ReachCertificateOfficeViewerProps = {
   docxUrl: string;
 };
 
-/** Renders full Word layout via Microsoft Office Online when server PDF conversion is unavailable. */
+/** Full Word layout via Microsoft Office Online — matches EU_REACH_CERTIFICATE.docx exactly. */
 export default function ReachCertificateOfficeViewer({ docxUrl }: ReachCertificateOfficeViewerProps) {
   const embedUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docxUrl)}`;
 

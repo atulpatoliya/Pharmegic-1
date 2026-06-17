@@ -33,7 +33,7 @@ export function buildReachCertificatePdfDownloadUrlByClientChemical(params: {
   registrationNumber?: string;
   issuedDate?: string;
   validatedDate?: string;
-  tonnageBand?: string;
+  tonnageBand?: string | null;
 }): string {
   const search = new URLSearchParams({
     clientId: params.clientId,
@@ -42,7 +42,9 @@ export function buildReachCertificatePdfDownloadUrlByClientChemical(params: {
   if (params.registrationNumber) search.set('registrationNumber', params.registrationNumber);
   if (params.issuedDate) search.set('issuedDate', params.issuedDate);
   if (params.validatedDate) search.set('validatedDate', params.validatedDate);
-  if (params.tonnageBand) search.set('tonnageBand', params.tonnageBand);
+  if (params.tonnageBand !== undefined && params.tonnageBand !== null) {
+    search.set('tonnageBand', params.tonnageBand);
+  }
   return `/api/reach-certificate/pdf?${search.toString()}`;
 }
 
@@ -52,7 +54,7 @@ export function buildReachCertificateDocxPreviewUrlByClientChemical(params: {
   registrationNumber?: string;
   issuedDate?: string;
   validatedDate?: string;
-  tonnageBand?: string;
+  tonnageBand?: string | null;
 }): string {
   const search = new URLSearchParams({
     clientId: params.clientId,
@@ -61,7 +63,9 @@ export function buildReachCertificateDocxPreviewUrlByClientChemical(params: {
   if (params.registrationNumber) search.set('registrationNumber', params.registrationNumber);
   if (params.issuedDate) search.set('issuedDate', params.issuedDate);
   if (params.validatedDate) search.set('validatedDate', params.validatedDate);
-  if (params.tonnageBand) search.set('tonnageBand', params.tonnageBand);
+  if (params.tonnageBand !== undefined && params.tonnageBand !== null) {
+    search.set('tonnageBand', params.tonnageBand);
+  }
   return `/api/reach-certificate/docx?${search.toString()}`;
 }
 

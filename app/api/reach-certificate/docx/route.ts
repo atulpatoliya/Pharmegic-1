@@ -162,10 +162,9 @@ export async function GET(request: NextRequest) {
       ? existingCert.expires_at.split('T')[0]
       : clientChem.validity_date?.split('T')[0] || getLastDateOfYear());
 
-  const tonnageBand =
-    searchParams.get('tonnageBand')?.trim() ||
-    existingCert?.tonnage_band ||
-    chemical.tonnage_band;
+  const tonnageBand = searchParams.has('tonnageBand')
+    ? searchParams.get('tonnageBand')?.trim() || null
+    : existingCert?.tonnage_band ?? chemical.tonnage_band ?? null;
 
   try {
     const certNumber = `RC-preview-${chemicalId.slice(0, 8)}`;
@@ -175,7 +174,7 @@ export async function GET(request: NextRequest) {
         registrationNumber,
         issuedDate,
         validatedDate,
-        tonnageBand: tonnageBand || undefined,
+        tonnageBand,
       })
     );
 

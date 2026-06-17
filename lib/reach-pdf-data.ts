@@ -5,6 +5,7 @@ import {
   convertReachDocxToPdf,
   type ReachCertificateDocxData,
 } from '@/services/reach-certificate-docx';
+import { normalizeReachDisplayValue, resolveReachTonnageBand } from '@/lib/reach-certificate-fields';
 
 export type ReachCertificateStoredFile = {
   buffer: Buffer;
@@ -26,17 +27,18 @@ export function buildReachDocxData(
   const address = buildReachAddressLines(client);
   const issuedIso = options.issuedDate.split('T')[0];
   const validatedIso = options.validatedDate.split('T')[0];
+  const tonnage = resolveReachTonnageBand(options.tonnageBand, chemical.tonnage_band);
   return {
-    companyName: client.company_name,
+    companyName: normalizeReachDisplayValue(client.company_name),
     addressLine1: buildEuReachAddressLine1(client),
-    addressLine2: address.line2,
-    addressLine3: client.country?.trim() || '—',
-    chemicalName: chemical.chemical_name,
-    ecNumber: chemical.ec_number || '—',
-    casNumber: chemical.cas_number,
-    registrationNumber: options.registrationNumber.trim(),
-    tonnageBand: options.tonnageBand || chemical.tonnage_band || '—',
-    uuidNumber: client.uuid_number || '—',
+    addressLine2: normalizeReachDisplayValue(address.line2),
+    addressLine3: normalizeReachDisplayValue(client.country),
+    chemicalName: normalizeReachDisplayValue(chemical.chemical_name),
+    ecNumber: normalizeReachDisplayValue(chemical.ec_number),
+    casNumber: normalizeReachDisplayValue(chemical.cas_number),
+    registrationNumber: normalizeReachDisplayValue(options.registrationNumber),
+    tonnageBand: normalizeReachDisplayValue(tonnage),
+    uuidNumber: normalizeReachDisplayValue(client.uuid_number),
     issuedDate: issuedIso,
     validatedDate: validatedIso,
   };

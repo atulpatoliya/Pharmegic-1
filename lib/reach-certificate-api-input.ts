@@ -137,7 +137,9 @@ export async function loadReachCertificateInputByClientChemical(
       : clientChem.validity_date?.split('T')[0] || getLastDateOfYear());
 
   const tonnageBand =
-    params.tonnageBand?.trim() || existingCert?.tonnage_band || chemical.tonnage_band;
+    params.tonnageBand !== undefined && params.tonnageBand !== null
+      ? params.tonnageBand.trim() || null
+      : existingCert?.tonnage_band ?? chemical.tonnage_band ?? null;
 
   const certNumber = existingCert?.certificate_number || `RC-preview-${chemicalId.slice(0, 8)}`;
 
@@ -156,4 +158,12 @@ export async function loadReachCertificateInputByClientChemical(
 function unwrapRelation<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+export function parseReachTonnageBandParam(
+  searchParams: URLSearchParams
+): string | null | undefined {
+  if (!searchParams.has('tonnageBand')) return undefined;
+  const raw = searchParams.get('tonnageBand');
+  return raw?.trim() ? raw.trim() : null;
 }

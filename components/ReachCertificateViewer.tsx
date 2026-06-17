@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import ReachCertificateOfficeViewer from '@/components/ReachCertificateOfficeViewer';
 import ReachCertificatePdfViewer from '@/components/ReachCertificatePdfViewer';
 
 type ReachCertificateViewerProps = {
@@ -11,24 +12,32 @@ type ReachCertificateViewerProps = {
 };
 
 /**
- * RC: server PDF when available (exact print layout); falls back to DOCX preview on live
- * servers without LibreOffice/Gotenberg — same approach as TCC.
+ * RC: server PDF (exact layout) → Office Online embed (exact Word file on live) → DOCX preview last resort.
+ * TCC: in-app DOCX preview.
  */
 export default function ReachCertificateViewer({
   certificateType = 'rc',
   docxUrl,
   pdfUrl,
 }: ReachCertificateViewerProps) {
+  const [officeDocxUrl, setOfficeDocxUrl] = useState<string | null>(null);
   const [useDocxFallback, setUseDocxFallback] = useState(false);
 
-  if (certificateType === 'rc' && pdfUrl && !useDocxFallback) {
-    return (
-      <ReachCertificatePdfViewer
-        key={pdfUrl}
-        pdfUrl={pdfUrl}
-        onUnavailable={() => setUseDocxFallback(true)}
-      />
-    );
+  if (certificateType === 'rc') {
+    if (officeDocxUrl) {
+      return <ReachCertificateOfficeViewer key={officeDocxUrl} docxUrl={officeDocxUrl} />;
+    }
+
+    if (pdfUrl && !useDocxFallback) {
+      return (
+        <ReachCertificatePdfViewer
+          key={pdfUrl}
+          pdfUrl={pdfUrl}
+          onOfficeDocxUrl={setOfficeDocxUrl}
+          onUnavailable={() => setUseDocxFallback(true)}
+        />
+      );
+    }
   }
 
   return <ReachCertificateDocxViewer key={docxUrl} docxUrl={docxUrl} />;

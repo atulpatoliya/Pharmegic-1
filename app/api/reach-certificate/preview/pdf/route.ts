@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
-import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
+import { resolveReachCertificatePreview } from '@/lib/reach-certificate-preview';
 import {
   loadReachCertificateInputByCertificateId,
   loadReachCertificateInputByClientChemical,
+  parseReachTonnageBandParam,
 } from '@/lib/reach-certificate-api-input';
 
 function inlinePdfResponse(buffer: Buffer, fileName: string) {
@@ -18,7 +19,7 @@ function inlinePdfResponse(buffer: Buffer, fileName: string) {
   });
 }
 
-/** EU REACH preview — PDF from EU_REACH_CERTIFICATE.docx (same as print/download). */
+/** EU REACH preview — PDF when possible; else public DOCX URL for exact Word layout embed. */
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -42,8 +43,14 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
-      return inlinePdfResponse(file.buffer, file.fileName);
+      const result = await resolveReachCertificatePreview(adminSupabase, input);
+      if (result.mode === 'pdf') {
+        return inlinePdfResponse(result.buffer, result.fileName);
+      }
+      return NextResponse.json({
+        previewMode: 'docx',
+        docxUrl: result.docxUrl,
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Certificate PDF preview failed.';
       return NextResponse.json({ error: message }, { status: 503 });
@@ -70,7 +77,7 @@ export async function GET(request: NextRequest) {
     registrationNumber: searchParams.get('registrationNumber'),
     issuedDate: searchParams.get('issuedDate'),
     validatedDate: searchParams.get('validatedDate'),
-    tonnageBand: searchParams.get('tonnageBand'),
+    tonnageBand: parseReachTonnageBandParam(searchParams),
   });
 
   if (!input) {
@@ -78,8 +85,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
-    return inlinePdfResponse(file.buffer, file.fileName);
+    const result = await resolveReachCertificatePreview(adminSupabase, input);
+
+    if (result.mode === 'pdf') {
+      return inlinePdfResponse(result.buffer, result.fileName);
+    }
+
+    return NextResponse.json({
+      previewMode: 'docx',
+      docxUrl: result.docxUrl,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Certificate PDF preview failed.';
     return NextResponse.json({ error: message }, { status: 503 });
