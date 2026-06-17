@@ -30,10 +30,7 @@ export function CertificatePdfDownloadLink({
 
     setLoading(true);
     try {
-      const result = await downloadCertificatePdf({ pdfUrl, docxUrl, fileName });
-      if (result.format === 'docx') {
-        toast.success('Downloaded Word file (full layout). Open in Word and use Save as PDF if needed.');
-      }
+      await downloadCertificatePdf({ pdfUrl, docxUrl, fileName });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'PDF download failed.';
       toast.error(message);

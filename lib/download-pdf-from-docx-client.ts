@@ -166,9 +166,8 @@ export async function downloadCertificatePdf(params: {
       }
 
       if (isDocxContentType(contentType)) {
-        const docxName = params.fileName.replace(/\.pdf$/i, '.docx');
-        triggerBlobDownload(blob, docxName);
-        return { format: 'docx', fileName: docxName };
+        await convertDocxBlobToPdfAndDownload(blob, params.fileName);
+        return { format: 'pdf', fileName: params.fileName };
       }
     } else {
       const body = (await pdfRes.json().catch(() => null)) as { error?: string } | null;
@@ -187,7 +186,6 @@ export async function downloadCertificatePdf(params: {
   }
 
   const docxBlob = await docxRes.blob();
-  const docxName = params.fileName.replace(/\.pdf$/i, '.docx');
-  triggerBlobDownload(docxBlob, docxName);
-  return { format: 'docx', fileName: docxName };
+  await convertDocxBlobToPdfAndDownload(docxBlob, params.fileName);
+  return { format: 'pdf', fileName: params.fileName };
 }

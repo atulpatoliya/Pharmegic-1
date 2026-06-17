@@ -11,6 +11,7 @@ import {
   convertReachDocxToPdf,
   generateReachCertificateDocx,
 } from '@/services/reach-certificate-docx';
+import { downloadReachCertificateFile } from '@/lib/reach-certificate-storage';
 
 type ReachCertPdfInput = {
   certificateNumber: string;
@@ -76,6 +77,7 @@ export async function resolveReachCertificateDownloadFile(
 ): Promise<ReachCertificateDownloadFile> {
   const certNumber = input.certificateNumber;
   const freshDocx = buildFreshReachDocx(input);
+  const pdfFileName = `${certNumber}.pdf`;
 
   try {
     const pdfBuffer = await tryConvertDocxToPdf(freshDocx);
@@ -83,17 +85,27 @@ export async function resolveReachCertificateDownloadFile(
     return {
       buffer: pdfBuffer,
       contentType: PDF_CONTENT_TYPE,
-      fileName: `${certNumber}.pdf`,
+      fileName: pdfFileName,
       format: 'pdf',
     };
   } catch {
-    return {
-      buffer: freshDocx,
-      contentType: DOCX_CONTENT_TYPE,
-      fileName: `${certNumber}.docx`,
-      format: 'docx',
-    };
+    const storedPdf = await downloadReachCertificateFile(supabase, pdfFileName);
+    if (storedPdf) {
+      return {
+        buffer: storedPdf,
+        contentType: PDF_CONTENT_TYPE,
+        fileName: pdfFileName,
+        format: 'pdf',
+      };
+    }
   }
+
+  return {
+    buffer: freshDocx,
+    contentType: DOCX_CONTENT_TYPE,
+    fileName: `${certNumber}.docx`,
+    format: 'docx',
+  };
 }
 
 /** Returns a PDF buffer when possible; throws if only DOCX can be produced. */
