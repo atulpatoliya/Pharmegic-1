@@ -4,12 +4,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ReachCertificatePdfViewerProps = {
   pdfUrl: string;
+  fallbackDocxUrl?: string;
+  onFallback?: () => void;
 };
 
-export default function ReachCertificatePdfViewer({ pdfUrl }: ReachCertificatePdfViewerProps) {
+export default function ReachCertificatePdfViewer({
+  pdfUrl,
+  fallbackDocxUrl,
+  onFallback,
+}: ReachCertificatePdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleFallback = useCallback(() => {
+    onFallback?.();
+  }, [onFallback]);
 
   const renderPdf = useCallback(async (url: string, container: HTMLDivElement) => {
     const pdfjs = await import('pdfjs-dist');
@@ -67,9 +77,12 @@ export default function ReachCertificatePdfViewer({ pdfUrl }: ReachCertificatePd
       try {
         await renderPdf(pdfUrl, container);
       } catch (err: unknown) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Certificate preview failed.');
+        if (cancelled) return;
+        if (fallbackDocxUrl && onFallback) {
+          handleFallback();
+          return;
         }
+        setError(err instanceof Error ? err.message : 'Certificate preview failed.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -80,7 +93,7 @@ export default function ReachCertificatePdfViewer({ pdfUrl }: ReachCertificatePd
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl, renderPdf]);
+  }, [pdfUrl, fallbackDocxUrl, onFallback, handleFallback, renderPdf]);
 
   return (
     <div className="relative min-h-[820px] bg-slate-100 overflow-auto">

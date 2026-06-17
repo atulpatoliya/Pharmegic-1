@@ -399,6 +399,7 @@ export default function ReachCertificatePreviewClient({
           templateKey={rcTemplateKey}
           docxUrl={docxPreviewUrl}
           pdfUrl={pdfPreviewUrl}
+          preferPdf={rcTemplateKey === 'template_2'}
         />
       </div>
 

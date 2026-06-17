@@ -13,6 +13,9 @@ const TEMPLATE_PATHS: Record<CertificateTemplateKey, string> = {
   template_1: path.join(process.cwd(), 'templates', 'CT_2026.docx'),
   template_2: path.join(process.cwd(), 'templates', 'CT_2026_v2.docx'),
 };
+const BROWSER_PREVIEW_TEMPLATE_PATHS: Partial<Record<CertificateTemplateKey, string>> = {
+  template_2: path.join(process.cwd(), 'templates', 'CT_2026_v2_preview.docx'),
+};
 const FALLBACK_TEMPLATE_PATH = path.join(process.cwd(), 'CT_Draftr.docx');
 
 export type ReachCertificateDocxData = {
@@ -105,7 +108,15 @@ export function buildReachAddressLines(client: {
   };
 }
 
-function resolveTemplatePath(templateKey: CertificateTemplateKey = 'template_1'): string {
+function resolveTemplatePath(
+  templateKey: CertificateTemplateKey = 'template_1',
+  browserPreview = false
+): string {
+  if (browserPreview && templateKey === 'template_2') {
+    const previewPath = BROWSER_PREVIEW_TEMPLATE_PATHS.template_2;
+    if (previewPath && fs.existsSync(previewPath)) return previewPath;
+  }
+
   const preferred = TEMPLATE_PATHS[templateKey];
   if (fs.existsSync(preferred)) return preferred;
   if (templateKey === 'template_2' && fs.existsSync(TEMPLATE_PATHS.template_1)) {
@@ -202,9 +213,10 @@ function applyPlaceholders(
 
 export function generateReachCertificateDocx(
   data: ReachCertificateDocxData,
-  templateKey: CertificateTemplateKey = 'template_1'
+  templateKey: CertificateTemplateKey = 'template_1',
+  options?: { browserPreview?: boolean }
 ): Buffer {
-  const templatePath = resolveTemplatePath(templateKey);
+  const templatePath = resolveTemplatePath(templateKey, options?.browserPreview === true);
   const zip = new PizZip(fs.readFileSync(templatePath));
   const xml = applyPlaceholders(zip.files['word/document.xml'].asText(), data, templateKey);
   zip.file('word/document.xml', xml);
@@ -220,6 +232,16 @@ const LIBREOFFICE_PATHS = [
   'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
   'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
 ];
+
+/** True when server-side DOCX→PDF conversion is likely available. */
+export function isReachPdfConversionAvailable(): boolean {
+  if (process.env.GOTENBERG_URL?.trim()) return true;
+  if (process.platform === 'win32') return true;
+  for (const bin of LIBREOFFICE_PATHS) {
+    if (bin.includes('/') && fs.existsSync(bin)) return true;
+  }
+  return false;
+}
 
 async function convertWithLibreOfficeCli(docxPath: string, outDir: string): Promise<string> {
   let lastError: Error | null = null;

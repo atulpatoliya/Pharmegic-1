@@ -248,19 +248,16 @@ export function CertificateTemplateSettingsPanel({
             <Sparkles className="h-4 w-4 text-emerald-500 animate-pulse" /> Live Certificate Preview
           </h2>
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-            {certificateType === 'rc'
-              ? templateKey === 'template_2'
-                ? 'Example data · same as print/PDF'
-                : 'Example data shown'
-              : 'Same layout as print / PDF'}
+            {certificateType === 'rc' ? 'Example data shown' : 'Same layout as print / PDF'}
           </span>
         </div>
         <div className="w-full border border-slate-200/80 rounded-xl shadow-xs overflow-hidden bg-white">
           <ReachCertificateViewer
-            key={templateKey === 'template_2' ? previewPdfUrl : previewDocxUrl}
+            key={previewDocxUrl}
             templateKey={certificateType === 'rc' ? templateKey : 'template_1'}
             docxUrl={previewDocxUrl}
             pdfUrl={previewPdfUrl}
+            preferPdf={false}
           />
         </div>
       </div>

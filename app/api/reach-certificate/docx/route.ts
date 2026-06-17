@@ -97,7 +97,8 @@ export async function GET(request: NextRequest) {
           },
           rcTemplateKey
         ),
-        rcTemplateKey
+        rcTemplateKey,
+        { browserPreview: rcTemplateKey === 'template_2' }
       );
 
       return docxResponse(docxBuffer, `${cert.certificate_number}.docx`);
@@ -189,7 +190,8 @@ export async function GET(request: NextRequest) {
         },
         rcTemplateKey
       ),
-      rcTemplateKey
+      rcTemplateKey,
+      { browserPreview: rcTemplateKey === 'template_2' }
     );
 
     return docxResponse(docxBuffer, 'reach-certificate-preview.docx');
