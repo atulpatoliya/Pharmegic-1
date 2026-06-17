@@ -343,6 +343,29 @@ ALTER TABLE public.client_chemicals ADD COLUMN IF NOT EXISTS registration_number
 ALTER TABLE public.client_chemicals ADD COLUMN IF NOT EXISTS issued_date DATE;
 ALTER TABLE public.client_chemicals ADD COLUMN IF NOT EXISTS certificate_number TEXT;
 
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS rc_template_key TEXT DEFAULT 'template_1';
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS tcc_template_key TEXT DEFAULT 'template_1';
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS rc_logo TEXT;
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS rc_signature_image TEXT;
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS rc_accent_color TEXT DEFAULT '#064e3b';
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS rc_footer_text TEXT;
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS tcc_logo TEXT;
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS tcc_signature_image TEXT;
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS tcc_accent_color TEXT DEFAULT '#064e3b';
+ALTER TABLE public.templates ADD COLUMN IF NOT EXISTS tcc_footer_text TEXT;
+
+UPDATE public.templates
+SET
+  rc_logo = COALESCE(rc_logo, logo),
+  rc_signature_image = COALESCE(rc_signature_image, signature_image),
+  rc_accent_color = COALESCE(rc_accent_color, accent_color),
+  rc_footer_text = COALESCE(rc_footer_text, footer_text),
+  tcc_logo = COALESCE(tcc_logo, logo),
+  tcc_signature_image = COALESCE(tcc_signature_image, signature_image),
+  tcc_accent_color = COALESCE(tcc_accent_color, accent_color),
+  tcc_footer_text = COALESCE(tcc_footer_text, footer_text)
+WHERE logo IS NOT NULL OR signature_image IS NOT NULL OR accent_color IS NOT NULL OR footer_text IS NOT NULL;
+
 -- Allow trashed status on client_chemicals (existing DBs may have old constraint)
 ALTER TABLE public.client_chemicals DROP CONSTRAINT IF EXISTS client_chemicals_status_check;
 ALTER TABLE public.client_chemicals

@@ -3,9 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import {
   generateReachCertificateDocx,
-  buildReachAddressLines,
-  formatReachCertDate,
 } from '@/services/reach-certificate-docx';
+import { buildReachDocxData } from '@/lib/reach-pdf-data';
+import { getActiveRcTemplateKey } from '@/services/db';
 import { getLastDateOfYear, getTodayDateString, isReachCertificateType, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 
 function docxResponse(buffer: Buffer, fileName: string) {
@@ -84,21 +84,21 @@ export async function GET(request: NextRequest) {
       : getLastDateOfYear();
 
     try {
-      const address = buildReachAddressLines(clientRecord);
-      const docxBuffer = generateReachCertificateDocx({
-        companyName: clientRecord.company_name,
-        addressLine1: address.line1,
-        addressLine2: address.line2,
-        addressLine3: address.line3,
-        chemicalName: chemicalRecord.chemical_name,
-        ecNumber: chemicalRecord.ec_number || '—',
-        casNumber: chemicalRecord.cas_number,
-        registrationNumber: cert.registration_number?.trim() || '—',
-        tonnageBand: cert.tonnage_band || chemicalRecord.tonnage_band || '—',
-        uuidNumber: clientRecord.uuid_number || '—',
-        issuedDate: formatReachCertDate(issuedDate),
-        validatedDate: formatReachCertDate(validatedDate),
-      });
+      const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
+      const docxBuffer = generateReachCertificateDocx(
+        buildReachDocxData(
+          clientRecord,
+          chemicalRecord,
+          {
+            registrationNumber: cert.registration_number?.trim() || '—',
+            issuedDate,
+            validatedDate,
+            tonnageBand: cert.tonnage_band || chemicalRecord.tonnage_band,
+          },
+          rcTemplateKey
+        ),
+        rcTemplateKey
+      );
 
       return docxResponse(docxBuffer, `${cert.certificate_number}.docx`);
     } catch (err: unknown) {
@@ -176,21 +176,21 @@ export async function GET(request: NextRequest) {
     chemical.tonnage_band;
 
   try {
-    const address = buildReachAddressLines(client);
-    const docxBuffer = generateReachCertificateDocx({
-      companyName: client.company_name,
-      addressLine1: address.line1,
-      addressLine2: address.line2,
-      addressLine3: address.line3,
-      chemicalName: chemical.chemical_name,
-      ecNumber: chemical.ec_number || '—',
-      casNumber: chemical.cas_number,
-      registrationNumber,
-      tonnageBand: tonnageBand || '—',
-      uuidNumber: client.uuid_number || '—',
-      issuedDate: formatReachCertDate(issuedDate),
-      validatedDate: formatReachCertDate(validatedDate),
-    });
+    const rcTemplateKey = await getActiveRcTemplateKey(adminSupabase);
+    const docxBuffer = generateReachCertificateDocx(
+      buildReachDocxData(
+        client,
+        chemical,
+        {
+          registrationNumber,
+          issuedDate,
+          validatedDate,
+          tonnageBand: tonnageBand || undefined,
+        },
+        rcTemplateKey
+      ),
+      rcTemplateKey
+    );
 
     return docxResponse(docxBuffer, 'reach-certificate-preview.docx');
   } catch (err: unknown) {

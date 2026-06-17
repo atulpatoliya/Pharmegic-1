@@ -594,6 +594,11 @@ export async function getActiveTemplate(supabase: SupabaseClient) {
   return data;
 }
 
+export async function getActiveRcTemplateKey(supabase: SupabaseClient) {
+  const template = await getActiveTemplate(supabase);
+  return template?.rc_template_key === 'template_2' ? 'template_2' : 'template_1';
+}
+
 export async function updateTemplate(supabase: SupabaseClient, id: string, data: Record<string, unknown>) {
   const { error } = await supabase
     .from('templates')

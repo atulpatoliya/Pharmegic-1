@@ -15,25 +15,28 @@ import {
   type CertificateSmtpFormData,
 } from '@/lib/certificate-smtp-settings';
 import { updateTemplateAction } from '@/actions/templates';
+import { CertificateTemplateSettingsPanel } from '@/components/CertificateTemplateSettingsPanel';
+import {
+  normalizeCertificateTemplateKey,
+  resolveRcBranding,
+  resolveTccBranding,
+  type CertificateTemplateKey,
+  type TemplateSettingsRecord,
+} from '@/lib/certificate-template-config';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { toast } from '@/store/toast';
 import {
   User,
-  Settings,
   ShieldAlert,
-  Upload,
-  RefreshCw,
-  Sparkles,
-  QrCode,
   Lock,
   Mail,
   Palette,
-  Image as ImageIcon,
   FileSignature,
   ShieldCheck,
   Bell,
+  FileText,
 } from 'lucide-react';
 
 interface SettingsData {
@@ -59,13 +62,7 @@ interface SettingsData {
   tcc_application_notification_emails?: string | null;
 }
 
-interface TemplateData {
-  id: string;
-  logo: string | null;
-  accent_color: string;
-  footer_text: string | null;
-  signature_image: string | null;
-}
+interface TemplateData extends TemplateSettingsRecord {}
 
 interface SettingsDashboardProps {
   initialSettings: SettingsData | null;
@@ -74,15 +71,19 @@ interface SettingsDashboardProps {
 
 export default function SettingsDashboard({ initialSettings, initialTemplate }: SettingsDashboardProps) {
   const router = useRouter();
+  const rcDefaults = resolveRcBranding(initialTemplate);
+  const tccDefaults = resolveTccBranding(initialTemplate);
+
   const [isProfilePending, startProfileTransition] = useTransition();
-  const [isBrandingPending, startBrandingTransition] = useTransition();
+  const [isRcTemplatePending, startRcTemplateTransition] = useTransition();
+  const [isTccTemplatePending, startTccTemplateTransition] = useTransition();
   const [isAuthPending, startAuthTransition] = useTransition();
   const [isTccSmtpPending, startTccSmtpTransition] = useTransition();
   const [isRcSmtpPending, startRcSmtpTransition] = useTransition();
   const [isNotificationPending, startNotificationTransition] = useTransition();
 
   const [activeTab, setActiveTab] = useState<
-    'profile' | 'branding' | 'security' | 'smtp-tcc' | 'smtp-rc' | 'notification-email'
+    'profile' | 'rc-template' | 'tcc-template' | 'security' | 'smtp-tcc' | 'smtp-rc' | 'notification-email'
   >('profile');
 
   // 1. Profile Settings State
@@ -94,11 +95,24 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     bcc_emails: initialSettings?.bcc_emails || '',
   });
 
-  // 2. Branding Settings State
-  const [accentColor, setAccentColor] = useState(initialTemplate?.accent_color || '#064e3b');
-  const [footerText, setFooterText] = useState(initialTemplate?.footer_text || '');
-  const [logo, setLogo] = useState<string | null>(initialTemplate?.logo || null);
-  const [signature, setSignature] = useState<string | null>(initialTemplate?.signature_image || null);
+  const [rcTemplateKey, setRcTemplateKey] = useState<CertificateTemplateKey>(
+    normalizeCertificateTemplateKey(initialTemplate?.rc_template_key)
+  );
+  const [rcAccentColor, setRcAccentColor] = useState(rcDefaults.accent_color);
+  const [rcFooterText, setRcFooterText] = useState(
+    rcDefaults.footer_text ||
+      'Pharmegic Healthcare Compliance Division. For verification, scan the QR code.'
+  );
+  const [rcLogo, setRcLogo] = useState<string | null>(rcDefaults.logo);
+  const [rcSignature, setRcSignature] = useState<string | null>(rcDefaults.signature_image);
+
+  const [tccAccentColor, setTccAccentColor] = useState(tccDefaults.accent_color);
+  const [tccFooterText, setTccFooterText] = useState(
+    tccDefaults.footer_text ||
+      'Pharmegic Healthcare Compliance Division. For verification, scan the QR code.'
+  );
+  const [tccLogo, setTccLogo] = useState<string | null>(tccDefaults.logo);
+  const [tccSignature, setTccSignature] = useState<string | null>(tccDefaults.signature_image);
 
   // 3. Security State
   const [emailUpdate, setEmailUpdate] = useState('');
@@ -115,8 +129,11 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     initialSettings?.tcc_application_notification_emails || ''
   );
 
-  // Image Upload Handler (Base64 conversion)
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'logo' | 'signature',
+    scope: 'rc' | 'tcc'
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -128,10 +145,13 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        if (type === 'logo') {
-          setLogo(reader.result);
+        if (scope === 'rc') {
+          if (type === 'logo') setRcLogo(reader.result);
+          else setRcSignature(reader.result);
+        } else if (type === 'logo') {
+          setTccLogo(reader.result);
         } else {
-          setSignature(reader.result);
+          setTccSignature(reader.result);
         }
         toast.success(`${type === 'logo' ? 'Logo' : 'Signature'} loaded to preview.`);
       }
@@ -155,23 +175,46 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     });
   };
 
-  const handleSaveBranding = () => {
+  const handleSaveRcTemplate = () => {
     if (!initialTemplate?.id) {
-      toast.error('Branding template record not initialized in database.');
+      toast.error('RC template record not initialized in database.');
       return;
     }
-    startBrandingTransition(async () => {
+    startRcTemplateTransition(async () => {
       const res = await updateTemplateAction(initialTemplate.id, {
-        logo,
-        signature_image: signature,
-        accent_color: accentColor,
-        footer_text: footerText,
+        rc_template_key: rcTemplateKey,
+        rc_logo: rcLogo,
+        rc_signature_image: rcSignature,
+        rc_accent_color: rcAccentColor,
+        rc_footer_text: rcFooterText,
       });
       if (res.success) {
-        toast.success(res.message || 'Branding settings updated.');
+        toast.success(res.message || 'RC template settings updated.');
         router.refresh();
       } else {
-        toast.error(res.error || 'Failed to update templates.');
+        toast.error(res.error || 'Failed to update RC template.');
+      }
+    });
+  };
+
+  const handleSaveTccTemplate = () => {
+    if (!initialTemplate?.id) {
+      toast.error('TCC template record not initialized in database.');
+      return;
+    }
+    startTccTemplateTransition(async () => {
+      const res = await updateTemplateAction(initialTemplate.id, {
+        tcc_template_key: 'template_1',
+        tcc_logo: tccLogo,
+        tcc_signature_image: tccSignature,
+        tcc_accent_color: tccAccentColor,
+        tcc_footer_text: tccFooterText,
+      });
+      if (res.success) {
+        toast.success(res.message || 'TCC template settings updated.');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to update TCC template.');
       }
     });
   };
@@ -212,12 +255,21 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
     });
   };
 
-  const handleResetBranding = () => {
-    setAccentColor('#064e3b');
-    setFooterText('Pharmegic Healthcare Compliance Division. For verification, scan the QR code.');
-    setLogo(null);
-    setSignature(null);
-    toast.info('Branding inputs reset to default template.');
+  const handleResetRcTemplate = () => {
+    setRcTemplateKey('template_1');
+    setRcAccentColor('#064e3b');
+    setRcFooterText('Pharmegic Healthcare Compliance Division. For verification, scan the QR code.');
+    setRcLogo(null);
+    setRcSignature(null);
+    toast.info('RC template inputs reset to defaults.');
+  };
+
+  const handleResetTccTemplate = () => {
+    setTccAccentColor('#064e3b');
+    setTccFooterText('Pharmegic Healthcare Compliance Division. For verification, scan the QR code.');
+    setTccLogo(null);
+    setTccSignature(null);
+    toast.info('TCC template inputs reset to defaults.');
   };
 
   const handleSaveTccSmtp = () => {
@@ -328,7 +380,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
       <div>
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Portal Configuration Settings</h1>
         <p className="text-sm text-slate-500 font-medium">
-          Manage admin profile, branding templates, signature files, security credentials, and compliance alerts.
+          Manage admin profile, RC/TCC certificate templates, security credentials, and compliance alerts.
         </p>
       </div>
 
@@ -347,15 +399,26 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
             Profile Settings
           </button>
           <button
-            onClick={() => setActiveTab('branding')}
+            onClick={() => setActiveTab('rc-template')}
             className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
-              activeTab === 'branding'
+              activeTab === 'rc-template'
+                ? 'bg-primary text-white'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <FileText className="h-4.5 w-4.5" />
+            RC Template
+          </button>
+          <button
+            onClick={() => setActiveTab('tcc-template')}
+            className={`flex shrink-0 md:shrink items-center gap-2.5 px-4 py-3 rounded-lg text-sm font-bold text-left cursor-pointer transition-all whitespace-nowrap md:whitespace-normal ${
+              activeTab === 'tcc-template'
                 ? 'bg-primary text-white'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
             <Palette className="h-4.5 w-4.5" />
-            Branding Templates
+            TCC Template
           </button>
           <button
             onClick={() => setActiveTab('security')}
@@ -455,217 +518,47 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
             </Card>
           )}
 
-          {/* TAB 2: BRANDING & TEMPLATES */}
-          {activeTab === 'branding' && (
-            <div className="grid gap-8 grid-cols-1 lg:grid-cols-5">
-              {/* Form Config */}
-              <div className="lg:col-span-2 space-y-6">
-                <Card className="border-slate-100 shadow-xs">
-                  <CardHeader>
-                    <div className="flex items-center gap-2 text-primary">
-                      <Palette className="h-5 w-5" />
-                      <CardTitle>Certificate Settings</CardTitle>
-                    </div>
-                    <CardDescription>Setup PDF logos, signatory images, and theme colors.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Accent Color */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                        Theme Accent Color
-                      </label>
-                      <div className="flex gap-3 items-center">
-                        <input
-                          type="color"
-                          value={accentColor}
-                          onChange={(e) => setAccentColor(e.target.value)}
-                          className="h-10 w-12 rounded-lg border border-slate-200 cursor-pointer p-0.5"
-                        />
-                        <Input
-                          value={accentColor}
-                          onChange={(e) => setAccentColor(e.target.value)}
-                          className="flex-1 font-mono text-sm"
-                        />
-                      </div>
-                    </div>
+          {activeTab === 'rc-template' && (
+            <CertificateTemplateSettingsPanel
+              title="RC Certificate Template"
+              description="Choose the active REACH certificate design and manage logo, signature, and theme colors."
+              certificateType="rc"
+              showTemplatePicker
+              templateKey={rcTemplateKey}
+              onTemplateKeyChange={setRcTemplateKey}
+              accentColor={rcAccentColor}
+              onAccentColorChange={setRcAccentColor}
+              footerText={rcFooterText}
+              onFooterTextChange={setRcFooterText}
+              logo={rcLogo}
+              signature={rcSignature}
+              onFileChange={(event, type) => handleFileChange(event, type, 'rc')}
+              onClearLogo={() => setRcLogo(null)}
+              onClearSignature={() => setRcSignature(null)}
+              onSave={handleSaveRcTemplate}
+              onReset={handleResetRcTemplate}
+              isPending={isRcTemplatePending}
+            />
+          )}
 
-                    {/* Logo */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                        PDF Header Logo
-                      </label>
-                      <div className="border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-lg p-4 text-center cursor-pointer relative transition-colors bg-slate-50/50">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, 'logo')}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <div className="flex flex-col items-center justify-center gap-1">
-                          <Upload className="h-5 w-5 text-slate-400" />
-                          <span className="text-xs font-bold text-slate-600">Upload Header Logo</span>
-                          <span className="text-[10px] text-slate-400 font-semibold">Max 2MB (PNG/JPG/SVG)</span>
-                        </div>
-                      </div>
-                      {logo && (
-                        <div className="flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-lg">
-                          <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                            <ImageIcon className="h-3.5 w-3.5" /> Logo loaded
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setLogo(null)}
-                            className="h-7 text-rose-500 border-rose-100 hover:bg-rose-50 px-2 cursor-pointer"
-                          >
-                            Clear
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Signature */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                        Compliance Signatory Signature
-                      </label>
-                      <div className="border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-lg p-4 text-center cursor-pointer relative transition-colors bg-slate-50/50">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, 'signature')}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <div className="flex flex-col items-center justify-center gap-1">
-                          <Upload className="h-5 w-5 text-slate-400" />
-                          <span className="text-xs font-bold text-slate-600">Upload Signature File</span>
-                          <span className="text-[10px] text-slate-400 font-semibold">Max 2MB (Transparent PNG recommended)</span>
-                        </div>
-                      </div>
-                      {signature && (
-                        <div className="flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-lg">
-                          <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                            <ImageIcon className="h-3.5 w-3.5" /> Signature loaded
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSignature(null)}
-                            className="h-7 text-rose-500 border-rose-100 hover:bg-rose-50 px-2 cursor-pointer"
-                          >
-                            Clear
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Footer legal text */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                        Footer Verification Notice
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={footerText}
-                        onChange={(e) => setFooterText(e.target.value)}
-                        className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-medium text-slate-700"
-                        placeholder="Pharmegic Healthcare Compliance Registry..."
-                      />
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleResetBranding}
-                        disabled={isBrandingPending}
-                      >
-                        <RefreshCw className="h-4 w-4 mr-1.5" /> Reset Defaults
-                      </Button>
-                      <Button onClick={handleSaveBranding} isLoading={isBrandingPending} disabled={isBrandingPending}>
-                        Save Template
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Preview mock */}
-              <div className="lg:col-span-3 space-y-4">
-                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-emerald-500 animate-pulse" /> Live Certificate Preview
-                </h2>
-                <div className="w-full bg-slate-100 border border-slate-200/50 rounded-xl p-6 shadow-xs flex items-center justify-center">
-                  <div className="bg-white border-4 p-6 w-full max-w-[420px] aspect-[1/1.414] shadow-lg flex flex-col justify-between" style={{ borderColor: accentColor }}>
-                    <div className="text-center border-b pb-3 mb-3" style={{ borderColor: accentColor }}>
-                      {logo ? (
-                        <img src={logo} alt="Logo" className="max-h-10 max-w-[120px] mx-auto mb-1.5 object-contain" />
-                      ) : (
-                        <h3 className="font-black tracking-wider text-xs mb-0.5" style={{ color: accentColor }}>
-                          PHARMEGIC HEALTHCARE
-                        </h3>
-                      )}
-                      <h4 className="text-[10px] font-extrabold tracking-widest" style={{ color: accentColor }}>
-                        TONNAGE COMPLIANCE CERTIFICATE
-                      </h4>
-                    </div>
-
-                    <div className="text-right text-[7px] text-slate-400 font-bold mb-3">
-                      CERTIFICATE REGISTRATION NO.
-                      <div className="text-[9px] text-slate-800 font-black">TCC-2026-X8F9A</div>
-                    </div>
-
-                    <div className="text-[8px] text-slate-600 leading-relaxed text-justify mb-3">
-                      This document certifies that the chemical substance specified below has been officially registered and
-                      authorized for export compliance in accordance with safety standards.
-                    </div>
-
-                    <div className="bg-slate-50 border rounded-lg p-2.5 space-y-0.5 text-[7px] text-slate-600 font-semibold mb-3">
-                      <div className="flex justify-between border-b pb-0.5">
-                        <span className="text-slate-400">Authorized Holder:</span>
-                        <span className="text-slate-800">Acme Pharmaceutical Corp</span>
-                      </div>
-                      <div className="flex justify-between border-b pb-0.5">
-                        <span className="text-slate-400">Chemical Name:</span>
-                        <span className="text-slate-800">Ethylene Glycol Monoethyl Ether</span>
-                      </div>
-                      <div className="flex justify-between border-b pb-0.5">
-                        <span className="text-slate-400">CAS Number:</span>
-                        <span className="text-slate-800">110-80-5</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Quantity Limit:</span>
-                        <span className="text-slate-800">25.00 Metric Tons (MT)</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-end border-t pt-3">
-                      <div className="border p-0.5 bg-white rounded-md">
-                        <QrCode className="h-8 w-8 text-slate-800" />
-                      </div>
-                      
-                      <div className="text-center w-28">
-                        {signature ? (
-                          <img src={signature} alt="Signature" className="max-h-7 max-w-[80px] mx-auto mb-0.5 object-contain" />
-                        ) : (
-                          <div className="h-6" />
-                        )}
-                        <div className="border-t border-slate-300 pt-0.5 text-[7px] font-bold text-slate-800 leading-tight">
-                          Compliance Director
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-center text-[5px] text-slate-400 font-semibold mt-3">
-                      {footerText || 'Pharmegic Healthcare Compliance Registry.'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {activeTab === 'tcc-template' && (
+            <CertificateTemplateSettingsPanel
+              title="TCC Certificate Template"
+              description="Manage Tonnage Compliance Certificate branding, logo, signature, and theme colors."
+              certificateType="tcc"
+              accentColor={tccAccentColor}
+              onAccentColorChange={setTccAccentColor}
+              footerText={tccFooterText}
+              onFooterTextChange={setTccFooterText}
+              logo={tccLogo}
+              signature={tccSignature}
+              onFileChange={(event, type) => handleFileChange(event, type, 'tcc')}
+              onClearLogo={() => setTccLogo(null)}
+              onClearSignature={() => setTccSignature(null)}
+              onSave={handleSaveTccTemplate}
+              onReset={handleResetTccTemplate}
+              isPending={isTccTemplatePending}
+            />
           )}
 
           {/* TAB 3: SECURITY & AUTH */}

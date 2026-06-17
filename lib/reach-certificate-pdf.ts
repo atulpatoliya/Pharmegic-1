@@ -1,17 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   buildReachCertificateStoredFile,
+  buildReachDocxData,
   generateReachPdfForClientChemical,
   type ReachPdfChemical,
   type ReachPdfSource,
 } from '@/lib/reach-pdf-data';
 import { CERTIFICATES_BUCKET } from '@/lib/storage';
 import {
-  buildReachAddressLines,
   convertReachDocxToPdf,
-  formatReachCertDate,
   generateReachCertificateDocx,
 } from '@/services/reach-certificate-docx';
+import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 
 type ReachCertPdfInput = {
   certificateNumber: string;
@@ -21,6 +21,7 @@ type ReachCertPdfInput = {
   client: ReachPdfSource;
   chemical: ReachPdfChemical;
   tonnageBand?: string | null;
+  templateKey?: CertificateTemplateKey;
 };
 
 const PDF_CONTENT_TYPE = 'application/pdf';
@@ -62,21 +63,21 @@ function cachePdfToStorage(
 }
 
 function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
-  const address = buildReachAddressLines(input.client);
-  return generateReachCertificateDocx({
-    companyName: input.client.company_name,
-    addressLine1: address.line1,
-    addressLine2: address.line2,
-    addressLine3: address.line3,
-    chemicalName: input.chemical.chemical_name,
-    ecNumber: input.chemical.ec_number || '—',
-    casNumber: input.chemical.cas_number,
-    registrationNumber: input.registrationNumber.trim(),
-    tonnageBand: input.tonnageBand || input.chemical.tonnage_band || '—',
-    uuidNumber: input.client.uuid_number || '—',
-    issuedDate: formatReachCertDate(input.issuedDate),
-    validatedDate: formatReachCertDate(input.validatedDate),
-  });
+  const templateKey = input.templateKey ?? 'template_1';
+  return generateReachCertificateDocx(
+    buildReachDocxData(
+      input.client,
+      input.chemical,
+      {
+        registrationNumber: input.registrationNumber,
+        issuedDate: input.issuedDate,
+        validatedDate: input.validatedDate,
+        tonnageBand: input.tonnageBand,
+      },
+      templateKey
+    ),
+    templateKey
+  );
 }
 
 async function tryConvertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {

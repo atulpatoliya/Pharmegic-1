@@ -3,13 +3,27 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 
-export async function updateTemplateAction(templateId: string, data: {
-  logo?: string | null;
-  signature_image?: string | null;
-  accent_color: string;
-  footer_text: string;
-}) {
+export async function updateTemplateAction(
+  templateId: string,
+  data: {
+    logo?: string | null;
+    signature_image?: string | null;
+    accent_color?: string;
+    footer_text?: string | null;
+    rc_template_key?: CertificateTemplateKey;
+    tcc_template_key?: CertificateTemplateKey;
+    rc_logo?: string | null;
+    rc_signature_image?: string | null;
+    rc_accent_color?: string;
+    rc_footer_text?: string | null;
+    tcc_logo?: string | null;
+    tcc_signature_image?: string | null;
+    tcc_accent_color?: string;
+    tcc_footer_text?: string | null;
+  }
+) {
   const session = await getSession();
   if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
     return { success: false, error: 'Unauthorized.' };
