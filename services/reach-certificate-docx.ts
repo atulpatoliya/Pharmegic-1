@@ -59,6 +59,31 @@ export function formatReachCertDateLong(dateStr: string): string {
   });
 }
 
+/** EU REACH template 2: "Street, City: Postal," on one line; country on the next. */
+export function buildEuReachAddressLine1(client: {
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+}): string {
+  const street = client.address?.trim();
+  const city = client.city?.trim();
+  const postal = client.postal_code?.trim();
+
+  const parts: string[] = [];
+  if (street) parts.push(street);
+
+  if (city && postal) {
+    parts.push(`${city}: ${postal}`);
+  } else if (city) {
+    parts.push(city);
+  } else if (postal) {
+    parts.push(postal);
+  }
+
+  if (parts.length === 0) return '—';
+  return `${parts.join(', ')},`;
+}
+
 export function buildReachAddressLines(client: {
   address?: string | null;
   city?: string | null;

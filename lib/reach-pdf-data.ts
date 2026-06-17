@@ -1,4 +1,5 @@
 import {
+  buildEuReachAddressLine1,
   buildReachAddressLines,
   formatReachCertDate,
   generateReachCertificateDocx,
@@ -33,11 +34,12 @@ export function buildReachDocxData(
   const validatedIso = options.validatedDate.split('T')[0];
   return {
     companyName: client.company_name,
-    addressLine1: address.line1,
+    addressLine1:
+      templateKey === 'template_2' ? buildEuReachAddressLine1(client) : address.line1,
     addressLine2: address.line2,
     addressLine3:
       templateKey === 'template_2'
-        ? client.country?.trim() || address.line3
+        ? client.country?.trim() || '—'
         : address.line3,
     chemicalName: chemical.chemical_name,
     ecNumber: chemical.ec_number || '—',

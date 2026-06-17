@@ -26,7 +26,7 @@ import {
   CheckCircle2,
   PenLine,
 } from 'lucide-react';
-import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import ReachCertificateViewer from '@/components/ReachCertificateViewer';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
@@ -113,6 +113,20 @@ export default function ReachCertificatePreviewClient({
     });
     return `/api/reach-certificate/docx?${params.toString()}`;
   }, [clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
+
+  const pdfPreviewUrl = useMemo(() => {
+    if (cert) {
+      return buildReachCertificatePdfDownloadUrl(cert.id);
+    }
+    return buildReachCertificatePdfPreviewUrl({
+      clientId,
+      chemicalId,
+      registrationNumber: registrationNumber.trim() || '—',
+      issuedDate,
+      validatedDate,
+      tonnageBand,
+    });
+  }, [cert, clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
 
   const downloadPdfUrl = cert
     ? buildReachCertificatePdfDownloadUrl(cert.id)
@@ -377,7 +391,12 @@ export default function ReachCertificatePreviewClient({
           <FileText className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold text-slate-800">REACH Compliance Certificate (CT-2026)</h3>
         </div>
-        <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
+        <ReachCertificateViewer
+          key={pdfPreviewUrl}
+          docxUrl={docxPreviewUrl}
+          pdfUrl={pdfPreviewUrl}
+          preferPdf
+        />
       </div>
 
       {isPending && (

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import ReachCertificateViewer from '@/components/ReachCertificateViewer';
 import {
   RC_TEMPLATE_OPTIONS,
   type CertificateTemplateKey,
@@ -64,6 +64,14 @@ export function CertificateTemplateSettingsPanel({
       return `/api/certificate-template/rc-preview?${params.toString()}`;
     }
     return '/api/certificate-template/tcc-preview';
+  }, [certificateType, templateKey]);
+
+  const previewPdfUrl = useMemo(() => {
+    if (certificateType === 'rc' && templateKey === 'template_2') {
+      const params = new URLSearchParams({ templateKey });
+      return `/api/certificate-template/rc-preview/pdf?${params.toString()}`;
+    }
+    return undefined;
   }, [certificateType, templateKey]);
 
   return (
@@ -244,7 +252,12 @@ export function CertificateTemplateSettingsPanel({
           </span>
         </div>
         <div className="w-full border border-slate-200/80 rounded-xl shadow-xs overflow-hidden bg-white">
-          <ReachCertificateDocxViewer key={previewDocxUrl} docxUrl={previewDocxUrl} />
+          <ReachCertificateViewer
+            key={previewPdfUrl ?? previewDocxUrl}
+            docxUrl={previewDocxUrl}
+            pdfUrl={previewPdfUrl}
+            preferPdf={templateKey === 'template_2'}
+          />
         </div>
       </div>
     </div>
