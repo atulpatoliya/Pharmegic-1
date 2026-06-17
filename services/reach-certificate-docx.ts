@@ -112,6 +112,11 @@ function resolveTemplatePath(templateKey: CertificateTemplateKey = 'template_1')
     return TEMPLATE_PATHS.template_1;
   }
   if (fs.existsSync(FALLBACK_TEMPLATE_PATH)) return FALLBACK_TEMPLATE_PATH;
+  if (templateKey === 'template_2') {
+    throw new Error(
+      'EU REACH certificate template not found. Copy EU REACH REGISTRATION CERTIFICATE.docx to templates/CT_EU_REACH_v2.docx and run: node scripts/prepare-reach-template-v2.mjs'
+    );
+  }
   throw new Error(
     'REACH certificate template not found. Place CT_Draftr.docx in project root and run: node scripts/prepare-reach-template.mjs'
   );
@@ -201,8 +206,8 @@ export function generateReachCertificateDocx(
 ): Buffer {
   const templatePath = resolveTemplatePath(templateKey);
   const zip = new PizZip(fs.readFileSync(templatePath));
-  const xml = zip.files['word/document.xml'].asText();
-  zip.file('word/document.xml', applyPlaceholders(xml, data, templateKey));
+  const xml = applyPlaceholders(zip.files['word/document.xml'].asText(), data, templateKey);
+  zip.file('word/document.xml', xml);
   return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 

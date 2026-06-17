@@ -1,31 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import ReachCertificatePdfViewer from '@/components/ReachCertificatePdfViewer';
 
 type ReachCertificateViewerProps = {
+  templateKey?: CertificateTemplateKey;
   docxUrl: string;
-  pdfUrl?: string;
-  preferPdf?: boolean;
+  pdfUrl: string;
 };
 
+/** Template 1: DOCX preview. Template 2: server PDF (matches Word/print layout). */
 export default function ReachCertificateViewer({
+  templateKey = 'template_1',
   docxUrl,
   pdfUrl,
-  preferPdf = false,
 }: ReachCertificateViewerProps) {
-  const [useDocxFallback, setUseDocxFallback] = useState(false);
-
-  if (preferPdf && pdfUrl && !useDocxFallback) {
-    return (
-      <ReachCertificatePdfViewer
-        key={pdfUrl}
-        pdfUrl={pdfUrl}
-        fallbackDocxUrl={docxUrl}
-        onFallback={() => setUseDocxFallback(true)}
-      />
-    );
+  if (templateKey === 'template_2') {
+    return <ReachCertificatePdfViewer key={pdfUrl} pdfUrl={pdfUrl} />;
   }
 
   return <ReachCertificateDocxViewer key={docxUrl} docxUrl={docxUrl} />;

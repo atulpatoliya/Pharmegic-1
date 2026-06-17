@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     : await getActiveRcTemplateKey(adminSupabase);
 
   try {
-    const sample = getRcTemplatePreviewSample();
+    const sample = getRcTemplatePreviewSample(templateKey);
     const docxBuffer = generateReachCertificateDocx(
       buildReachDocxData(sample.client, sample.chemical, sample.options, templateKey),
       templateKey

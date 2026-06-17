@@ -1,7 +1,58 @@
+import type { CertificateTemplateKey } from '@/lib/certificate-template-config';
 import type { ReachPdfChemical, ReachPdfSource } from '@/lib/reach-pdf-data';
 import type { TccCertificateDocxData } from '@/services/tcc-certificate-docx';
 
-export function getRcTemplatePreviewSample(): {
+const RC_TEMPLATE_1_PREVIEW_SAMPLE = {
+  client: {
+    company_name: 'Example Pharma Ltd',
+    address: 'C-1/394, Phase II, G.I.D.C. Estate, Vatva',
+    city: 'Ahmedabad',
+    state: 'Gujarat',
+    postal_code: '382445',
+    country: 'India',
+    uuid_number: 'ECHA-00000000-0000-4000-8000-000000000001',
+  },
+  chemical: {
+    chemical_name: 'Ethylene Glycol Monoethyl Ether',
+    cas_number: '110-80-2',
+    ec_number: '203-787-0',
+    tonnage_band: '10-100 tpa',
+  },
+  options: {
+    registrationNumber: '01-2119493908-18-0028',
+    issuedDate: '2026-01-01',
+    validatedDate: '2026-12-31',
+    tonnageBand: '10-100 tpa',
+  },
+} as const;
+
+const RC_TEMPLATE_2_PREVIEW_SAMPLE = {
+  client: {
+    company_name: 'Example Pharma Ltd',
+    address: '123 Industrial Estate, Sample Road',
+    city: 'Ahmedabad',
+    state: 'Gujarat',
+    postal_code: '382445',
+    country: 'India',
+    uuid_number: 'ECHA-00000000-0000-4000-8000-000000000002',
+  },
+  chemical: {
+    chemical_name: 'Example Chemical Substance',
+    cas_number: '000-00-0',
+    ec_number: '000-000-0',
+    tonnage_band: '10–100 tpa',
+  },
+  options: {
+    registrationNumber: '01-2119000000-00-0000',
+    issuedDate: '2026-01-01',
+    validatedDate: '2026-12-31',
+    tonnageBand: '10–100 tpa',
+  },
+} as const;
+
+export function getRcTemplatePreviewSample(
+  templateKey: CertificateTemplateKey = 'template_1'
+): {
   client: ReachPdfSource;
   chemical: ReachPdfChemical;
   options: {
@@ -11,28 +62,13 @@ export function getRcTemplatePreviewSample(): {
     tonnageBand: string;
   };
 } {
+  const sample =
+    templateKey === 'template_2' ? RC_TEMPLATE_2_PREVIEW_SAMPLE : RC_TEMPLATE_1_PREVIEW_SAMPLE;
+
   return {
-    client: {
-      company_name: 'Ami Pharma',
-      address: 'C-1/394, Phase II, G.I.D.C. Estate, Vatva',
-      city: 'Ahmedabad',
-      state: 'Gujarat',
-      postal_code: '382445',
-      country: 'India',
-      uuid_number: 'ECHA-ac4a5f61-f070-4d66-9703-96b2190cb5ba',
-    },
-    chemical: {
-      chemical_name: '29H,31H-phthalocyaninato(2-)-N29,N30,N31,N32 copper',
-      cas_number: '147-14-8',
-      ec_number: '205-685-1',
-      tonnage_band: '10–100 tpa',
-    },
-    options: {
-      registrationNumber: '01-2119458771-32-0109',
-      issuedDate: '2026-01-01',
-      validatedDate: '2026-12-31',
-      tonnageBand: '10–100 tpa',
-    },
+    client: { ...sample.client },
+    chemical: { ...sample.chemical },
+    options: { ...sample.options },
   };
 }
 
@@ -49,7 +85,7 @@ export function getTccTemplatePreviewSample(): TccCertificateDocxData {
     casNumber: '110-80-2',
     registrationNumber: '01-2119493908-18-0028',
     tonnageBand: '10-100 tpa',
-    uuidNumber: 'ECHA-ac4a5f61-f070-4d66-9703-96b2190cb5ba',
+    uuidNumber: 'ECHA-00000000-0000-4000-8000-000000000001',
     euImporterName: 'EU Importer GmbH',
     euImporterAddr1: 'Industriestrasse 12',
     euImporterAddr2: '60329 Frankfurt',

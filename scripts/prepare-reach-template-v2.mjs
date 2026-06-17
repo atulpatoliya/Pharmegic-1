@@ -1,5 +1,10 @@
 /**
  * Converts EU REACH REGISTRATION CERTIFICATE.docx sample values into merge placeholders.
+ * Preserves the original Word layout (text boxes, floating tables, images).
+ *
+ * Source: templates/CT_EU_REACH_v2.docx
+ * Output: templates/CT_2026_v2.docx
+ *
  * Run: node scripts/prepare-reach-template-v2.mjs
  */
 import fs from 'fs';
@@ -12,6 +17,7 @@ const target = path.join(root, 'templates', 'CT_2026_v2.docx');
 
 if (!fs.existsSync(source)) {
   console.error('templates/CT_EU_REACH_v2.docx not found.');
+  console.error('Copy EU REACH REGISTRATION CERTIFICATE.docx to templates/CT_EU_REACH_v2.docx');
   process.exit(1);
 }
 
@@ -32,7 +38,6 @@ for (const [from, to] of textReplacements) {
   xml = xml.split(from).join(to);
 }
 
-// Company name split across runs: Ami + Pharma
 const companyPattern =
   /<w:t xml:space="preserve">Ami <\/w:t><\/w:r><w:r[^>]*><w:rPr>[\s\S]*?<\/w:rPr><w:t>Pharma<\/w:t>/g;
 if (companyPattern.test(xml)) {
@@ -41,7 +46,6 @@ if (companyPattern.test(xml)) {
   console.warn('Warning: split company name pattern not found');
 }
 
-// CAS split: 147-14- + 8
 const casPattern =
   /<w:t>147-14-<\/w:t><\/w:r><w:r[^>]*><w:rPr>[\s\S]*?<\/w:rPr><w:t>8<\/w:t>/g;
 if (casPattern.test(xml)) {
@@ -50,7 +54,6 @@ if (casPattern.test(xml)) {
   console.warn('Warning: split CAS pattern not found');
 }
 
-// EC split: 205-685- + 1
 const ecPattern =
   /<w:t>205-685-<\/w:t><\/w:r><w:r[^>]*><w:rPr>[\s\S]*?<\/w:rPr><w:t>1<\/w:t>/g;
 if (ecPattern.test(xml)) {
@@ -59,7 +62,6 @@ if (ecPattern.test(xml)) {
   console.warn('Warning: split EC pattern not found');
 }
 
-// UUID split across runs
 const uuidPattern =
   /<w:t>ECHA-ac4a5f61-f070-4d66-9703-<\/w:t><\/w:r><w:r[^>]*><w:rPr>[\s\S]*?<\/w:rPr><w:t>96b2190cb5ba<\/w:t>/g;
 if (uuidPattern.test(xml)) {
@@ -68,7 +70,6 @@ if (uuidPattern.test(xml)) {
   console.warn('Warning: split UUID pattern not found');
 }
 
-// Chemical name split across runs
 const chemicalPattern =
   /<w:t xml:space="preserve">29H,31H-phthalocyaninato\(2-\)-N29,N30,N31,N32 <\/w:t><\/w:r><w:r[^>]*><w:rPr>[\s\S]*?<\/w:rPr><w:t>copper<\/w:t>/g;
 if (chemicalPattern.test(xml)) {
@@ -77,7 +78,6 @@ if (chemicalPattern.test(xml)) {
   console.warn('Warning: split chemical name pattern not found');
 }
 
-// Tonnage band split across runs
 const tonnagePattern =
   /<w:t xml:space="preserve">10–100 <\/w:t><\/w:r><w:r[^>]*><w:rPr>[\s\S]*?<\/w:rPr><w:t>tpa<\/w:t>/g;
 if (tonnagePattern.test(xml)) {
@@ -89,6 +89,30 @@ if (tonnagePattern.test(xml)) {
 if (xml.includes('>India<')) {
   xml = xml.split('>India<').join('>{{ADDR_LINE3}}<');
 }
+
+const placeholders = [
+  '{{COMPANY_NAME}}',
+  '{{ADDR_LINE1}}',
+  '{{ADDR_LINE3}}',
+  '{{CHEMICAL_NAME}}',
+  '{{CAS_NUMBER}}',
+  '{{EC_NUMBER}}',
+  '{{TONNAGE_BAND}}',
+  '{{REGISTRATION_NUMBER}}',
+  '{{UUID_NUMBER}}',
+  '{{ISSUED_DATE}}',
+  '{{VALIDATED_DATE}}',
+];
+
+for (const ph of placeholders) {
+  if (!xml.includes(ph)) {
+    console.warn(`Warning: missing placeholder in output: ${ph}`);
+  }
+}
+
+const drawings = (xml.match(/<w:drawing>/g) || []).length;
+const tblp = (xml.match(/<w:tblpPr/g) || []).length;
+console.log(`Layout preserved: drawings=${drawings}, floatingTables=${tblp}`);
 
 zip.file('word/document.xml', xml);
 fs.writeFileSync(target, zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }));
