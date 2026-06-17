@@ -31,7 +31,7 @@ export type TccCertificateDownloadFile = {
   buffer: Buffer;
   contentType: string;
   fileName: string;
-  format: 'pdf' | 'docx';
+  format: 'pdf';
 };
 
 async function downloadStorageFile(
@@ -143,26 +143,18 @@ export async function resolveTccCertificateDownloadFile(
       format: 'pdf',
     };
   } catch {
-    return {
-      buffer: freshDocx,
-      contentType: DOCX_CONTENT_TYPE,
-      fileName: `${certNumber}.docx`,
-      format: 'docx',
-    };
+    throw new Error(
+      'PDF conversion is not available on this server. Install LibreOffice (recommended: apt install libreoffice-writer) or set GOTENBERG_URL for document conversion.'
+    );
   }
 }
 
-/** Returns a PDF buffer when possible; throws if only DOCX can be produced. */
+/** Returns a PDF buffer; throws if conversion is unavailable. */
 export async function resolveTccCertificatePdfBuffer(
   supabase: SupabaseClient,
   input: TccCertPdfInput
 ): Promise<Buffer> {
   const file = await resolveTccCertificateDownloadFile(supabase, input);
-  if (file.format !== 'pdf') {
-    throw new Error(
-      'PDF conversion is not available on this server. Install LibreOffice (recommended: apt install libreoffice-writer) or set GOTENBERG_URL for document conversion.'
-    );
-  }
   return file.buffer;
 }
 

@@ -34,18 +34,13 @@ export function CertificatePdfDownloadLink({
 
     setLoading(true);
     try {
-      const result = await downloadCertificatePdf({
+      await downloadCertificatePdf({
         pdfUrl,
         docxUrl,
         fileName,
         previewDocxUrl,
         certificateType,
       });
-      if (result.format === 'docx') {
-        toast.success(
-          'Downloaded Word file (same layout as preview). For PDF on the server, enable Gotenberg/LibreOffice.'
-        );
-      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'PDF download failed.';
       toast.error(message);

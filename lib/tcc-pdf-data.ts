@@ -10,14 +10,11 @@ import { buildReachAddressLines } from '@/services/reach-certificate-docx';
 import { getTodayDateString } from '@/lib/reach-certificate';
 import { splitEuImporterAddress } from '@/lib/tcc-eu-importer';
 
-const DOCX_CONTENT_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
 export type TccCertificateStoredFile = {
   buffer: Buffer;
   fileName: string;
   contentType: string;
-  format: 'pdf' | 'docx';
+  format: 'pdf';
 };
 
 export type TccPdfClient = {
@@ -122,23 +119,13 @@ export async function buildTccCertificateStoredFile(
   }
 ): Promise<TccCertificateStoredFile> {
   const docxBuffer = generateTccCertificateDocx(buildTccDocxData(input));
-
-  try {
-    const pdfBuffer = await convertTccDocxToPdf(docxBuffer);
-    return {
-      buffer: pdfBuffer,
-      fileName: `${input.certNumber}.pdf`,
-      contentType: 'application/pdf',
-      format: 'pdf',
-    };
-  } catch {
-    return {
-      buffer: docxBuffer,
-      fileName: `${input.certNumber}.docx`,
-      contentType: DOCX_CONTENT_TYPE,
-      format: 'docx',
-    };
-  }
+  const pdfBuffer = await convertTccDocxToPdf(docxBuffer);
+  return {
+    buffer: pdfBuffer,
+    fileName: `${input.certNumber}.pdf`,
+    contentType: 'application/pdf',
+    format: 'pdf',
+  };
 }
 
 export async function generateTccPdfForApplication(

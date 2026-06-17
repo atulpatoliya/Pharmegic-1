@@ -895,6 +895,7 @@ async function downloadReachCertificateAttachment(
     registration_number: string | null;
     issued_at: string;
     expires_at: string | null;
+    tonnage_band?: string | null;
     clients: {
       company_name: string;
       uuid_number?: string | null;
@@ -924,6 +925,7 @@ async function downloadReachCertificateAttachment(
     validatedDate,
     client: cert.clients,
     chemical: cert.chemicals,
+    tonnageBand: cert.tonnage_band,
   });
 
   return {

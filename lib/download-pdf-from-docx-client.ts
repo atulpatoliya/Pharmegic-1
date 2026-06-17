@@ -16,20 +16,6 @@ function triggerBlobDownload(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-async function downloadDocxFromUrl(docxUrl: string, fileName: string): Promise<CertificateDownloadResult> {
-  const res = await fetch(appendCacheBuster(docxUrl), {
-    credentials: docxUrl.startsWith('/') ? 'same-origin' : 'omit',
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error || 'Failed to load certificate document.');
-  }
-  const docxName = fileName.replace(/\.pdf$/i, '.docx');
-  triggerBlobDownload(await res.blob(), docxName);
-  return { format: 'docx', fileName: docxName };
-}
-
 function findDocxWrapper(host: HTMLElement): HTMLElement | null {
   return (
     host.querySelector(`.${DOCX_PREVIEW_CLASS}-wrapper`) ??
@@ -154,8 +140,20 @@ function isDocxContentType(contentType: string) {
   );
 }
 
+function isPdfContentType(contentType: string, bytes: Uint8Array) {
+  return (
+    contentType.includes('application/pdf') ||
+    contentType.includes('application/octet-stream') ||
+    (bytes.length >= 4 &&
+      bytes[0] === 0x25 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x44 &&
+      bytes[3] === 0x46)
+  );
+}
+
 export type CertificateDownloadResult = {
-  format: 'pdf' | 'docx';
+  format: 'pdf';
   fileName: string;
 };
 
@@ -164,15 +162,46 @@ function appendCacheBuster(url: string): string {
   return `${url}${separator}_=${Date.now()}`;
 }
 
+async function fetchDocxBlob(docxUrl: string): Promise<Blob> {
+  const res = await fetch(appendCacheBuster(docxUrl), {
+    credentials: docxUrl.startsWith('/') ? 'same-origin' : 'omit',
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error || 'Failed to load certificate document.');
+  }
+  return res.blob();
+}
+
+async function downloadPdfFromDocxSources(
+  docxUrls: string[],
+  fileName: string
+): Promise<CertificateDownloadResult> {
+  let lastError: string | undefined;
+
+  for (const docxUrl of docxUrls) {
+    try {
+      await convertDocxBlobToPdfAndDownload(await fetchDocxBlob(docxUrl), fileName);
+      return { format: 'pdf', fileName };
+    } catch (err) {
+      if (err instanceof Error) {
+        lastError = err.message;
+      }
+    }
+  }
+
+  throw new Error(lastError || 'Failed to generate certificate PDF.');
+}
+
 export async function downloadCertificatePdf(params: {
   pdfUrl: string;
   docxUrl: string;
   fileName: string;
-  /** Same public DOCX URL shown in Office Online preview (full layout). */
   previewDocxUrl?: string | null;
-  /** RC certificates must not use browser DOCX→PDF (broken layout on live). */
   certificateType?: 'rc' | 'tcc';
 }): Promise<CertificateDownloadResult> {
+  void params.certificateType;
   let serverError: string | undefined;
 
   try {
@@ -187,28 +216,23 @@ export async function downloadCertificatePdf(params: {
         const body = (await pdfRes.json()) as {
           downloadMode?: string;
           docxUrl?: string;
-          fileName?: string;
           error?: string;
         };
         if (body.downloadMode === 'docx' && body.docxUrl) {
-          return downloadDocxFromUrl(body.docxUrl, body.fileName || params.fileName);
+          return downloadPdfFromDocxSources([body.docxUrl], params.fileName);
         }
         throw new Error(body.error || 'Certificate download failed.');
       }
 
       const blob = await pdfRes.blob();
+      const bytes = new Uint8Array(await blob.arrayBuffer());
 
-      if (contentType.includes('application/pdf')) {
-        triggerBlobDownload(blob, params.fileName);
+      if (isPdfContentType(contentType, bytes)) {
+        triggerBlobDownload(new Blob([bytes], { type: 'application/pdf' }), params.fileName);
         return { format: 'pdf', fileName: params.fileName };
       }
 
       if (isDocxContentType(contentType)) {
-        if (params.certificateType === 'rc') {
-          const docxName = params.fileName.replace(/\.pdf$/i, '.docx');
-          triggerBlobDownload(blob, docxName);
-          return { format: 'docx', fileName: docxName };
-        }
         await convertDocxBlobToPdfAndDownload(blob, params.fileName);
         return { format: 'pdf', fileName: params.fileName };
       }
@@ -226,42 +250,18 @@ export async function downloadCertificatePdf(params: {
     (url): url is string => Boolean(url?.trim())
   );
 
-  if (params.certificateType === 'rc') {
-    for (const docxUrl of docxSources) {
-      try {
-        return await downloadDocxFromUrl(docxUrl, params.fileName);
-      } catch (err) {
-        if (err instanceof Error) {
-          serverError = err.message;
-        }
-      }
-    }
-    throw new Error(
-      serverError ||
-        'PDF conversion is not available on this server. Install LibreOffice or set GOTENBERG_URL, or download the Word file.'
-    );
-  }
-
-  let lastError = serverError;
-  for (const docxUrl of docxSources) {
+  if (docxSources.length > 0) {
     try {
-      const docxRes = await fetch(appendCacheBuster(docxUrl), {
-        credentials: docxUrl.startsWith('/') ? 'same-origin' : 'omit',
-        cache: 'no-store',
-      });
-      if (!docxRes.ok) {
-        const body = (await docxRes.json().catch(() => null)) as { error?: string } | null;
-        lastError = body?.error || serverError;
-        continue;
-      }
-      await convertDocxBlobToPdfAndDownload(await docxRes.blob(), params.fileName);
-      return { format: 'pdf', fileName: params.fileName };
+      return await downloadPdfFromDocxSources(docxSources, params.fileName);
     } catch (err) {
       if (err instanceof Error) {
-        lastError = err.message;
+        serverError = err.message;
       }
     }
   }
 
-  throw new Error(lastError || 'Failed to load certificate document.');
+  throw new Error(
+    serverError ||
+      'PDF download failed. Ensure LibreOffice or GOTENBERG_URL is configured on the server.'
+  );
 }

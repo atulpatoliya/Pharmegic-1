@@ -6,14 +6,11 @@ import {
   type ReachCertificateDocxData,
 } from '@/services/reach-certificate-docx';
 
-const DOCX_CONTENT_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
 export type ReachCertificateStoredFile = {
   buffer: Buffer;
   fileName: string;
   contentType: string;
-  format: 'pdf' | 'docx';
+  format: 'pdf';
 };
 
 export function buildReachDocxData(
@@ -76,7 +73,7 @@ export async function generateReachPdfForClientChemical(
   return convertReachDocxToPdf(docxBuffer);
 }
 
-/** Build certificate file for storage — PDF when converter available, otherwise DOCX. */
+/** Build certificate PDF for storage — requires server-side DOCX→PDF converter. */
 export async function buildReachCertificateStoredFile(
   client: ReachPdfSource,
   chemical: ReachPdfChemical,
@@ -90,20 +87,11 @@ export async function buildReachCertificateStoredFile(
 ): Promise<ReachCertificateStoredFile> {
   const docxBuffer = generateReachCertificateDocx(buildReachDocxData(client, chemical, options));
 
-  try {
-    const pdfBuffer = await convertReachDocxToPdf(docxBuffer);
-    return {
-      buffer: pdfBuffer,
-      fileName: `${certNumber}.pdf`,
-      contentType: 'application/pdf',
-      format: 'pdf',
-    };
-  } catch {
-    return {
-      buffer: docxBuffer,
-      fileName: `${certNumber}.docx`,
-      contentType: DOCX_CONTENT_TYPE,
-      format: 'docx',
-    };
-  }
+  const pdfBuffer = await convertReachDocxToPdf(docxBuffer);
+  return {
+    buffer: pdfBuffer,
+    fileName: `${certNumber}.pdf`,
+    contentType: 'application/pdf',
+    format: 'pdf',
+  };
 }

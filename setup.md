@@ -101,7 +101,7 @@ const { data, error } = await supabase.auth.signUp({
 
 Certificate **preview** works in the browser (DOCX template). **PDF download** and **email attachments** require DOCX→PDF conversion on the server.
 
-If PDF download shows a JSON error or downloads `.docx` instead of `.pdf`, the production server is missing a converter — complete one of the options below and redeploy/restart.
+All certificate **downloads** return `.pdf` only. The production server must have a DOCX→PDF converter (Gotenberg or LibreOffice).
 
 ### Option A — LibreOffice (recommended on Linux/VPS)
 

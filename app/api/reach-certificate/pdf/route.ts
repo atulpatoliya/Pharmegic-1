@@ -42,19 +42,10 @@ export async function GET(request: NextRequest) {
 
     try {
       const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
-
-      if (file.format === 'pdf') {
-        return attachmentResponse(file.buffer, file.fileName, file.contentType);
-      }
-
-      return NextResponse.json({
-        downloadMode: 'docx',
-        docxUrl: file.docxUrl,
-        fileName: file.fileName,
-      });
+      return attachmentResponse(file.buffer, file.fileName, file.contentType);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Certificate download failed.';
-      return NextResponse.json({ error: message }, { status: 500 });
+      return NextResponse.json({ error: message }, { status: 503 });
     }
   }
 
@@ -87,18 +78,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
-
-    if (file.format === 'pdf') {
-      return attachmentResponse(file.buffer, file.fileName, file.contentType);
-    }
-
-    return NextResponse.json({
-      downloadMode: 'docx',
-      docxUrl: file.docxUrl,
-      fileName: file.fileName,
-    });
+    return attachmentResponse(file.buffer, file.fileName, file.contentType);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Certificate download failed.';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 503 });
   }
 }
