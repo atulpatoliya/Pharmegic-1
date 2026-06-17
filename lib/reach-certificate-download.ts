@@ -17,6 +17,20 @@ export function buildReachCertificatePdfPreviewUrl(params: {
   validatedDate?: string;
   tonnageBand?: string;
 }): string {
+  return buildReachCertificatePdfDownloadUrlByClientChemical(params).replace(
+    '/api/reach-certificate/pdf?',
+    '/api/reach-certificate/preview/pdf?'
+  );
+}
+
+export function buildReachCertificatePdfDownloadUrlByClientChemical(params: {
+  clientId: string;
+  chemicalId: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string;
+}): string {
   const search = new URLSearchParams({
     clientId: params.clientId,
     chemicalId: params.chemicalId,
@@ -25,7 +39,7 @@ export function buildReachCertificatePdfPreviewUrl(params: {
   if (params.issuedDate) search.set('issuedDate', params.issuedDate);
   if (params.validatedDate) search.set('validatedDate', params.validatedDate);
   if (params.tonnageBand) search.set('tonnageBand', params.tonnageBand);
-  return `/api/reach-certificate/preview/pdf?${search.toString()}`;
+  return `/api/reach-certificate/pdf?${search.toString()}`;
 }
 
 export function buildReachCertificateDocxPreviewUrlByClientChemical(params: {

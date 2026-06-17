@@ -141,11 +141,16 @@ function isDocxContentType(contentType: string) {
   );
 }
 
+export type CertificateDownloadResult = {
+  format: 'pdf' | 'docx';
+  fileName: string;
+};
+
 export async function downloadCertificatePdf(params: {
   pdfUrl: string;
   docxUrl: string;
   fileName: string;
-}): Promise<void> {
+}): Promise<CertificateDownloadResult> {
   let serverError: string | undefined;
 
   try {
@@ -157,12 +162,13 @@ export async function downloadCertificatePdf(params: {
 
       if (contentType.includes('application/pdf')) {
         triggerBlobDownload(blob, params.fileName);
-        return;
+        return { format: 'pdf', fileName: params.fileName };
       }
 
       if (isDocxContentType(contentType)) {
-        await convertDocxBlobToPdfAndDownload(blob, params.fileName);
-        return;
+        const docxName = params.fileName.replace(/\.pdf$/i, '.docx');
+        triggerBlobDownload(blob, docxName);
+        return { format: 'docx', fileName: docxName };
       }
     } else {
       const body = (await pdfRes.json().catch(() => null)) as { error?: string } | null;
@@ -174,5 +180,14 @@ export async function downloadCertificatePdf(params: {
     }
   }
 
-  await downloadPdfFromDocxUrl(params.docxUrl, params.fileName);
+  const docxRes = await fetch(params.docxUrl, { credentials: 'same-origin' });
+  if (!docxRes.ok) {
+    const body = (await docxRes.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(serverError || body?.error || 'Failed to load certificate document.');
+  }
+
+  const docxBlob = await docxRes.blob();
+  const docxName = params.fileName.replace(/\.pdf$/i, '.docx');
+  triggerBlobDownload(docxBlob, docxName);
+  return { format: 'docx', fileName: docxName };
 }

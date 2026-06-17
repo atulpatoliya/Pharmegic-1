@@ -30,6 +30,7 @@ import ReachCertificateViewer from '@/components/ReachCertificateViewer';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
+  buildReachCertificatePdfDownloadUrlByClientChemical,
   buildReachCertificatePdfPreviewUrl,
 } from '@/lib/reach-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
@@ -153,7 +154,16 @@ export default function ReachCertificatePreviewClient({
     tonnageBand,
   ]);
 
-  const downloadPdfUrl = cert ? buildReachCertificatePdfDownloadUrl(cert.id) : pdfPreviewUrl;
+  const downloadPdfUrl = cert
+    ? buildReachCertificatePdfDownloadUrl(cert.id)
+    : buildReachCertificatePdfDownloadUrlByClientChemical({
+        clientId,
+        chemicalId,
+        registrationNumber: registrationNumber.trim() || '—',
+        issuedDate,
+        validatedDate,
+        tonnageBand,
+      });
   const downloadDocxUrl = cert
     ? buildReachCertificateDocxPreviewUrl(cert.id)
     : docxPreviewUrl;
