@@ -23,7 +23,7 @@ export default function ReachCertificateDocxViewer({ docxUrl }: ReachCertificate
       container.innerHTML = '';
 
       try {
-        const res = await fetch(docxUrl);
+        const res = await fetch(docxUrl, { cache: 'no-store' });
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null;
           throw new Error(body?.error || 'Failed to load certificate preview.');

@@ -26,9 +26,10 @@ import {
   CheckCircle2,
   PenLine,
 } from 'lucide-react';
-import ReachCertificateViewer from '@/components/ReachCertificateViewer';
+import ReachCertificatePdfViewer from '@/components/ReachCertificatePdfViewer';
 import {
   buildReachCertificateDocxPreviewUrl,
+  buildReachCertificateDocxPreviewUrlByClientChemical,
   buildReachCertificatePdfDownloadUrl,
   buildReachCertificatePdfDownloadUrlByClientChemical,
   buildReachCertificatePdfPreviewUrl,
@@ -74,7 +75,6 @@ type ReachCertificatePreviewClientProps = {
     cc: string[];
   } | null;
   mailSentHistory: string[];
-  pendingPreviewAssets?: { pdfUrl: string | null; docxUrl: string | null } | null;
 };
 
 function formatEmailList(emails: string[]): string {
@@ -90,7 +90,6 @@ export default function ReachCertificatePreviewClient({
   defaults,
   mailRecipients,
   mailSentHistory,
-  pendingPreviewAssets = null,
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
   const [isIssuing, startIssueTransition] = useTransition();
@@ -105,9 +104,7 @@ export default function ReachCertificatePreviewClient({
   const [issuedDate, setIssuedDate] = useState(defaults.issuedDate);
   const [validatedDate, setValidatedDate] = useState(defaults.validatedDate);
   const [tonnageBand, setTonnageBand] = useState(defaults.tonnageBand || chemical.tonnage_band || '');
-  const [livePreviewDocxUrl, setLivePreviewDocxUrl] = useState<string | null>(
-    pendingPreviewAssets?.docxUrl ?? null
-  );
+  const [previewVersion, setPreviewVersion] = useState(0);
 
   const fieldsMatchDefaults =
     registrationNumber === defaults.registrationNumber &&
@@ -116,43 +113,18 @@ export default function ReachCertificatePreviewClient({
     (tonnageBand || '') === (defaults.tonnageBand || chemical.tonnage_band || '');
 
   const docxPreviewUrl = useMemo(() => {
-    if (cert) {
-      return buildReachCertificateDocxPreviewUrl(cert.id);
+    if (cert && !isEditing && fieldsMatchDefaults) {
+      return `${buildReachCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`;
     }
-    const params = new URLSearchParams({
+
+    return `${buildReachCertificateDocxPreviewUrlByClientChemical({
       clientId,
       chemicalId,
       registrationNumber: registrationNumber.trim() || '—',
       issuedDate,
       validatedDate,
       tonnageBand,
-    });
-    return `/api/reach-certificate/docx?${params.toString()}`;
-  }, [cert, clientId, chemicalId, registrationNumber, issuedDate, validatedDate, tonnageBand]);
-
-  const pdfPreviewUrl = useMemo(() => {
-    if (cert) {
-      if (isEditing || !fieldsMatchDefaults) {
-        return buildReachCertificatePdfPreviewUrl({
-          clientId,
-          chemicalId,
-          registrationNumber: registrationNumber.trim() || '—',
-          issuedDate,
-          validatedDate,
-          tonnageBand,
-        });
-      }
-      return buildReachCertificatePdfPreviewUrlByCertificateId(cert.id);
-    }
-
-    return buildReachCertificatePdfPreviewUrl({
-      clientId,
-      chemicalId,
-      registrationNumber: registrationNumber.trim() || '—',
-      issuedDate,
-      validatedDate,
-      tonnageBand,
-    });
+    })}&v=${previewVersion}`;
   }, [
     cert,
     isEditing,
@@ -163,6 +135,33 @@ export default function ReachCertificatePreviewClient({
     issuedDate,
     validatedDate,
     tonnageBand,
+    previewVersion,
+  ]);
+
+  const pdfPreviewUrl = useMemo(() => {
+    if (cert && !isEditing && fieldsMatchDefaults) {
+      return `${buildReachCertificatePdfPreviewUrlByCertificateId(cert.id)}&v=${previewVersion}`;
+    }
+
+    return `${buildReachCertificatePdfPreviewUrl({
+      clientId,
+      chemicalId,
+      registrationNumber: registrationNumber.trim() || '—',
+      issuedDate,
+      validatedDate,
+      tonnageBand,
+    })}&v=${previewVersion}`;
+  }, [
+    cert,
+    isEditing,
+    fieldsMatchDefaults,
+    clientId,
+    chemicalId,
+    registrationNumber,
+    issuedDate,
+    validatedDate,
+    tonnageBand,
+    previewVersion,
   ]);
 
   const downloadPdfUrl = cert
@@ -175,10 +174,7 @@ export default function ReachCertificatePreviewClient({
         validatedDate,
         tonnageBand,
       });
-  const downloadDocxUrl = cert
-    ? buildReachCertificateDocxPreviewUrl(cert.id)
-    : docxPreviewUrl;
-  const downloadPreviewDocxUrl = livePreviewDocxUrl ?? pendingPreviewAssets?.docxUrl ?? null;
+  const downloadDocxUrl = docxPreviewUrl;
   const downloadFileName = cert
     ? `${cert.certificate_number}.pdf`
     : `RC-preview-${chemicalId.slice(0, 8)}.pdf`;
@@ -207,6 +203,7 @@ export default function ReachCertificatePreviewClient({
       if (res.success) {
         toast.success(res.message || 'RC Certificate updated.');
         setIsEditing(false);
+        setPreviewVersion((v) => v + 1);
         router.refresh();
       } else {
         toast.error(res.error || 'Failed to update RC certificate.');
@@ -297,7 +294,7 @@ export default function ReachCertificatePreviewClient({
           <CertificatePdfDownloadLink
             pdfUrl={downloadPdfUrl}
             docxUrl={downloadDocxUrl}
-            previewDocxUrl={downloadPreviewDocxUrl}
+            previewDocxUrl={downloadDocxUrl}
             fileName={downloadFileName}
             certificateType="rc"
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-60"
@@ -431,14 +428,7 @@ export default function ReachCertificatePreviewClient({
           <FileText className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold text-slate-800">EU REACH Registration Certificate</h3>
         </div>
-        <ReachCertificateViewer
-          key={pdfPreviewUrl}
-          certificateType="rc"
-          docxUrl={docxPreviewUrl}
-          pdfUrl={pdfPreviewUrl}
-          directDocxUrl={livePreviewDocxUrl ?? pendingPreviewAssets?.docxUrl ?? null}
-          onPreviewDocxUrl={setLivePreviewDocxUrl}
-        />
+        <ReachCertificatePdfViewer key={pdfPreviewUrl} pdfUrl={pdfPreviewUrl} />
       </div>
 
       {isPending && (

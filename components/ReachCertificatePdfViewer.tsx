@@ -4,15 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ReachCertificatePdfViewerProps = {
   pdfUrl: string;
-  fallbackPdfUrl?: string | null;
-  onDocxPreview?: (docxUrl: string) => void;
 };
 
-export default function ReachCertificatePdfViewer({
-  pdfUrl,
-  fallbackPdfUrl,
-  onDocxPreview,
-}: ReachCertificatePdfViewerProps) {
+/** Renders server-generated PDF — exact match to EU_REACH_CERTIFICATE.docx print output. */
+export default function ReachCertificatePdfViewer({ pdfUrl }: ReachCertificatePdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,61 +43,6 @@ export default function ReachCertificatePdfViewer({
     }
   }, []);
 
-  const loadUrl = useCallback(
-    async (url: string, container: HTMLDivElement): Promise<'pdf' | 'docx' | 'failed'> => {
-      const fetchUrl = url.includes('?') ? `${url}&_=${Date.now()}` : `${url}?_=${Date.now()}`;
-      const res = await fetch(fetchUrl, {
-        credentials: url.startsWith('/') ? 'same-origin' : 'omit',
-        cache: 'no-store',
-      });
-
-      const contentType = res.headers.get('Content-Type') || '';
-
-      if (contentType.includes('application/json')) {
-        const body = (await res.json()) as { previewMode?: string; docxUrl?: string; error?: string };
-        if (body.previewMode === 'docx' && body.docxUrl) {
-          onDocxPreview?.(body.docxUrl);
-          return 'docx';
-        }
-        throw new Error(body.error || 'Failed to load certificate preview.');
-      }
-
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || 'Failed to load certificate preview.');
-      }
-
-      const data = await res.arrayBuffer();
-      const bytes = new Uint8Array(data);
-      const looksLikePdf =
-        contentType.includes('application/pdf') ||
-        contentType.includes('application/octet-stream') ||
-        (bytes.length >= 4 &&
-          bytes[0] === 0x25 &&
-          bytes[1] === 0x50 &&
-          bytes[2] === 0x44 &&
-          bytes[3] === 0x46);
-
-      if (looksLikePdf) {
-        await renderPdfBuffer(data, container);
-        return 'pdf';
-      }
-
-      const looksLikeDocx =
-        contentType.includes('wordprocessingml') ||
-        contentType.includes('officedocument') ||
-        (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b);
-
-      if (looksLikeDocx && url.startsWith('http')) {
-        onDocxPreview?.(url);
-        return 'docx';
-      }
-
-      throw new Error('Certificate preview is not available as PDF.');
-    },
-    [onDocxPreview, renderPdfBuffer]
-  );
-
   useEffect(() => {
     let cancelled = false;
     const container = containerRef.current;
@@ -114,27 +54,42 @@ export default function ReachCertificatePdfViewer({
       container.innerHTML = '';
 
       try {
-        const result = await loadUrl(pdfUrl, container);
-        if (result === 'docx') return;
+        const fetchUrl = pdfUrl.includes('?') ? `${pdfUrl}&_=${Date.now()}` : `${pdfUrl}?_=${Date.now()}`;
+        const res = await fetch(fetchUrl, { credentials: 'same-origin', cache: 'no-store' });
+        const contentType = res.headers.get('Content-Type') || '';
 
-        if (!cancelled) setLoading(false);
-      } catch (err: unknown) {
-        if (cancelled) return;
-
-        if (fallbackPdfUrl && fallbackPdfUrl !== pdfUrl) {
-          try {
-            container.innerHTML = '';
-            const fallbackResult = await loadUrl(fallbackPdfUrl, container);
-            if (fallbackResult === 'docx') return;
-            if (!cancelled) setLoading(false);
-            return;
-          } catch {
-            // fall through to error
-          }
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error || 'Failed to load certificate preview.');
         }
 
-        setError(err instanceof Error ? err.message : 'Certificate preview failed.');
-        setLoading(false);
+        if (contentType.includes('application/json')) {
+          const body = (await res.json()) as { error?: string };
+          throw new Error(body.error || 'Certificate PDF preview is not available.');
+        }
+
+        const data = await res.arrayBuffer();
+        const bytes = new Uint8Array(data);
+        const looksLikePdf =
+          contentType.includes('application/pdf') ||
+          contentType.includes('application/octet-stream') ||
+          (bytes.length >= 4 &&
+            bytes[0] === 0x25 &&
+            bytes[1] === 0x50 &&
+            bytes[2] === 0x44 &&
+            bytes[3] === 0x46);
+
+        if (!looksLikePdf) {
+          throw new Error('Certificate preview is not available as PDF.');
+        }
+
+        await renderPdfBuffer(data, container);
+        if (!cancelled) setLoading(false);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Certificate preview failed.');
+          setLoading(false);
+        }
       }
     };
 
@@ -143,7 +98,7 @@ export default function ReachCertificatePdfViewer({
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl, fallbackPdfUrl, loadUrl]);
+  }, [pdfUrl, renderPdfBuffer]);
 
   return (
     <div className="relative min-h-[820px] bg-slate-100 overflow-auto">

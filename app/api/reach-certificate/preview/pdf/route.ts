@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
-import { resolveReachCertificatePreview } from '@/lib/reach-certificate-preview';
+import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
 import {
   loadReachCertificateInputByCertificateId,
   loadReachCertificateInputByClientChemical,
@@ -18,7 +18,7 @@ function inlinePdfResponse(buffer: Buffer, fileName: string) {
   });
 }
 
-/** Live EU REACH preview — always fresh from current template (inline PDF or Office DOCX URL). */
+/** EU REACH preview — PDF from EU_REACH_CERTIFICATE.docx (same as print/download). */
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -42,14 +42,8 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const result = await resolveReachCertificatePreview(adminSupabase, input);
-      if (result.mode === 'pdf') {
-        return inlinePdfResponse(result.buffer, result.fileName);
-      }
-      return NextResponse.json({
-        previewMode: 'docx',
-        docxUrl: result.docxUrl,
-      });
+      const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
+      return inlinePdfResponse(file.buffer, file.fileName);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Certificate PDF preview failed.';
       return NextResponse.json({ error: message }, { status: 503 });
@@ -84,16 +78,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await resolveReachCertificatePreview(adminSupabase, input);
-
-    if (result.mode === 'pdf') {
-      return inlinePdfResponse(result.buffer, result.fileName);
-    }
-
-    return NextResponse.json({
-      previewMode: 'docx',
-      docxUrl: result.docxUrl,
-    });
+    const file = await resolveReachCertificateDownloadFile(adminSupabase, input);
+    return inlinePdfResponse(file.buffer, file.fileName);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Certificate PDF preview failed.';
     return NextResponse.json({ error: message }, { status: 503 });

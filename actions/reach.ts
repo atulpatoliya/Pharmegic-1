@@ -9,7 +9,6 @@ import { buildRcSmtpConfig } from '@/lib/certificate-smtp-settings';
 import { CERTIFICATES_BUCKET, ensureCertificatesBucket } from '@/lib/storage';
 import { resolveReachCertificateDownloadFile } from '@/lib/reach-certificate-pdf';
 import { clearReachCertificateStorageFiles } from '@/lib/reach-certificate-storage';
-import { resolveReachCertificatePreview } from '@/lib/reach-certificate-preview';
 import { revalidatePath } from 'next/cache';
 import { notifyUser } from '@/lib/notifications';
 import { getTonnageBandMaxQuota } from '@/lib/quota';
@@ -353,62 +352,6 @@ export async function regenerateReachCertificateFile(certId: string) {
   await adminSupabase.from('certificates').update({ file_url: publicUrl }).eq('id', certId);
 
   return { success: true as const, fileUrl: publicUrl };
-}
-
-/** Pre-generate pending RC preview assets (PDF or public DOCX for Office embed). */
-export async function ensurePendingReachPreviewAssets(
-  clientId: string,
-  chemicalId: string,
-  data: {
-    registrationNumber: string;
-    issuedDate: string;
-    validatedDate: string;
-    tonnageBand?: string | null;
-  }
-): Promise<{ pdfUrl: string | null; docxUrl: string | null }> {
-  const adminSupabase = createAdminClient();
-
-  const [{ data: client }, { data: chemical }] = await Promise.all([
-    adminSupabase
-      .from('clients')
-      .select('id, company_name, uuid_number, address, city, state, postal_code, country')
-      .eq('id', clientId)
-      .single(),
-    adminSupabase
-      .from('chemicals')
-      .select('id, chemical_name, cas_number, ec_number, tonnage_band')
-      .eq('id', chemicalId)
-      .single(),
-  ]);
-
-  if (!client || !chemical) return { pdfUrl: null, docxUrl: null };
-
-  const certNumber = `RC-preview-${chemicalId.slice(0, 8)}`;
-
-  await clearReachCertificateStorageFiles(adminSupabase, certNumber);
-
-  try {
-    const result = await resolveReachCertificatePreview(adminSupabase, {
-      certificateNumber: certNumber,
-      registrationNumber: data.registrationNumber.trim() || '—',
-      issuedDate: data.issuedDate,
-      validatedDate: data.validatedDate,
-      client,
-      chemical,
-      tonnageBand: data.tonnageBand || chemical.tonnage_band,
-    });
-
-    if (result.mode === 'pdf') {
-      const {
-        data: { publicUrl },
-      } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(result.fileName);
-      return { pdfUrl: publicUrl, docxUrl: null };
-    }
-
-    return { pdfUrl: null, docxUrl: result.docxUrl };
-  } catch {
-    return { pdfUrl: null, docxUrl: null };
-  }
 }
 
 export async function issueReachCertificateFromPreviewAction(

@@ -21,10 +21,11 @@ import {
   Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
-import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import ReachCertificateViewer from '@/components/ReachCertificateViewer';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
+  buildReachCertificatePdfPreviewUrlByCertificateId,
 } from '@/lib/reach-certificate-download';
 import {
   buildTccCertificateDocxPreviewUrl,
@@ -152,7 +153,12 @@ export default function CertificatePreviewClient({
       : '/admin/approvals';
 
   const totalSent = cert.mail_resend_count + (cert.mail_sent ? 1 : 0);
-  const docxPreviewUrl = `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`;
+  const docxPreviewUrl = isReach
+    ? `${buildReachCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`
+    : `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`;
+  const pdfPreviewUrl = isReach
+    ? `${buildReachCertificatePdfPreviewUrlByCertificateId(cert.id)}&v=${previewVersion}`
+    : '';
 
   const viewApplication = useMemo(() => {
     if (!tccApp) return null;
@@ -402,7 +408,12 @@ export default function CertificatePreviewClient({
               <h3 className="text-sm font-bold text-slate-800">Certificate Document Preview</h3>
             </div>
             {cert.id ? (
-              <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
+              <ReachCertificateViewer
+                key={isReach ? pdfPreviewUrl : docxPreviewUrl}
+                certificateType={isReach ? 'rc' : 'tcc'}
+                docxUrl={docxPreviewUrl}
+                pdfUrl={pdfPreviewUrl}
+              />
             ) : (
               <div className="flex flex-col items-center justify-center h-96 text-slate-400">
                 <Shield className="h-12 w-12 mb-3 opacity-30" />
