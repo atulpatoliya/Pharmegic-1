@@ -25,14 +25,14 @@ async function check() {
         }
       });
       const js = await jsRes.text();
-      if (js.includes('tableLayout') || js.includes('col1.setAttribute("width", "180")') || js.includes('col1.setAttribute(\'width\', \'180\')')) {
-        console.log(`FOUND NEW PATCH IN: ${url}`);
+      if (js.includes('Gotenberg PDF converter is starting up')) {
+        console.log(`FOUND RETRY LOGIC IN: ${url}`);
         found = true;
       }
     }
     
     if (!found) {
-      console.log('NEW PATCH NOT DEPLOYED YET ON THE LIVE SERVER!');
+      console.log('RETRY LOGIC NOT DEPLOYED YET ON THE LIVE SERVER!');
     }
   } catch (err) {
     console.error(err);
