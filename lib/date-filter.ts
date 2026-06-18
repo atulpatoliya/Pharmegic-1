@@ -33,6 +33,24 @@ export function formatDisplayDate(dateStr: string | null | undefined): string {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
+      timeZone: 'UTC',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+/** Stable en-GB datetime for SSR + client (avoids hydration mismatch). */
+export function formatDisplayDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'UTC',
     });
   } catch {
     return '—';

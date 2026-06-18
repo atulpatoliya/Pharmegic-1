@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight, Home } from 'lucide-react';
 import { useLayoutStore } from '@/store/layout';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 const routeMaps: Record<string, string> = {
   admin: 'Admin Portal',
@@ -42,8 +42,24 @@ export default function Breadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split('/').filter(Boolean);
   const { customBreadcrumb } = useLayoutStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   if (segments.length === 0) return null;
+
+  if (!mounted) {
+    return (
+      <nav
+        className="flex items-center space-x-2 text-xs font-semibold text-slate-500"
+        aria-hidden
+      >
+        <span className="h-3.5 w-3.5" />
+      </nav>
+    );
+  }
 
   if (customBreadcrumb) {
     return (
@@ -52,7 +68,7 @@ export default function Breadcrumbs() {
           <Home className="h-3.5 w-3.5" />
         </Link>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 shrink-0" />
-        <span className="text-slate-800 font-bold truncate max-w-[150px] sm:max-w-[300px]">
+        <span className="text-slate-800 font-bold truncate max-w-[150px] sm:max-w-[300px]" suppressHydrationWarning>
           {customBreadcrumb}
         </span>
       </nav>
@@ -81,6 +97,7 @@ export default function Breadcrumbs() {
                     ? 'text-slate-800 font-bold truncate max-w-[150px] sm:max-w-[300px]'
                     : 'truncate max-w-[120px]'
                 }
+                suppressHydrationWarning
               >
                 {displayName}
               </span>

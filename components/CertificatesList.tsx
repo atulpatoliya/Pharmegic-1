@@ -25,6 +25,7 @@ import {
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
+import { formatDisplayDate } from '@/lib/date-filter';
 
 interface Certificate {
   id: string;
@@ -202,13 +203,15 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
                     <td className="p-4 text-slate-500 font-medium">
                       <div className="flex items-center gap-1.5 text-xs">
                         <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{new Date(cert.issued_at).toLocaleDateString()}</span>
+                        <span suppressHydrationWarning>{formatDisplayDate(cert.issued_at)}</span>
                       </div>
                     </td>
                     <td className="p-4 text-slate-500 font-medium">
                       <div className="flex items-center gap-1.5 text-xs">
                         <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{cert.expires_at ? new Date(cert.expires_at).toLocaleDateString() : 'N/A'}</span>
+                        <span suppressHydrationWarning>
+                          {cert.expires_at ? formatDisplayDate(cert.expires_at) : 'N/A'}
+                        </span>
                       </div>
                     </td>
                     <td className="p-4">{getStatusBadge(cert.status)}</td>

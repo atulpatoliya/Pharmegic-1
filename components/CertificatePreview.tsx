@@ -31,6 +31,7 @@ import {
   buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
+import { formatDisplayDate } from '@/lib/date-filter';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
 import {
@@ -386,12 +387,14 @@ export default function CertificatePreviewClient({
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Issue Date</p>
-                <p className="font-semibold text-slate-800">{new Date(issuedAt).toLocaleDateString()}</p>
+                <p className="font-semibold text-slate-800" suppressHydrationWarning>
+                  {formatDisplayDate(issuedAt)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">Expiry Date</p>
-                <p className="font-semibold text-slate-800">
-                  {expiresAt ? new Date(expiresAt).toLocaleDateString() : 'N/A'}
+                <p className="font-semibold text-slate-800" suppressHydrationWarning>
+                  {expiresAt ? formatDisplayDate(expiresAt) : 'N/A'}
                 </p>
               </div>
             </div>

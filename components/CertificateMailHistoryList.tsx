@@ -1,3 +1,5 @@
+import { formatDisplayDateTime } from '@/lib/date-filter';
+
 type CertificateMailHistoryListProps = {
   timestamps: string[];
 };
@@ -12,7 +14,9 @@ export function CertificateMailHistoryList({ timestamps }: CertificateMailHistor
       </p>
       <ol className="list-decimal list-inside space-y-0.5">
         {timestamps.map((timestamp, index) => (
-          <li key={`${timestamp}-${index}`}>{new Date(timestamp).toLocaleString()}</li>
+          <li key={`${timestamp}-${index}`} suppressHydrationWarning>
+            {formatDisplayDateTime(timestamp)}
+          </li>
         ))}
       </ol>
     </div>
