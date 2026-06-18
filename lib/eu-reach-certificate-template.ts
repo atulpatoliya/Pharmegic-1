@@ -18,4 +18,10 @@ export const EU_REACH_TEMPLATE = {
     'previews',
     'eu-reach-certificate-sample.pdf'
   ),
+  bundledPreviewDocx: path.join(
+    process.cwd(),
+    'public',
+    'previews',
+    'eu-reach-certificate-sample.docx'
+  ),
 } as const;

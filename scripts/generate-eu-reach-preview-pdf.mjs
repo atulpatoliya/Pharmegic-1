@@ -131,7 +131,7 @@ if (!converted || !fs.existsSync(pdfOut)) {
   process.exit(1);
 }
 
-fs.unlinkSync(docxOut);
+console.log(`Settings preview DOCX kept at ${docxOut} (${fs.statSync(docxOut).size} bytes)`);
 if (fs.existsSync(path.join(outDir, 'rc-template-2-sample.pdf'))) {
   fs.unlinkSync(path.join(outDir, 'rc-template-2-sample.pdf'));
 }

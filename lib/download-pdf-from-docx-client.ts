@@ -1,6 +1,7 @@
 'use client';
 
 import { buildReachCertificateConvertPdfUrl } from '@/lib/reach-certificate-download';
+import { applyReachDocxPreviewStyles } from '@/lib/reach-docx-preview-styles';
 import { renderAsync } from 'docx-preview';
 import { toast } from '@/store/toast';
 
@@ -168,6 +169,8 @@ async function convertDocxBlobToPdfAndDownload(blob: Blob, fileName: string): Pr
     if (!wrapper) {
       throw new Error('Certificate preview failed to render.');
     }
+
+    applyReachDocxPreviewStyles(wrapper);
 
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
       import('html2canvas'),
