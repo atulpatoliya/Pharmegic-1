@@ -37,9 +37,11 @@ export default function ReachCertificateDocxViewer({ docxUrl }: ReachCertificate
           ignoreWidth: false,
           ignoreHeight: false,
           breakPages: true,
+          ignoreLastRenderedPageBreak: true,
         });
 
         applyReachDocxPreviewStyles(container);
+        requestAnimationFrame(() => applyReachDocxPreviewStyles(container));
       } catch (err: unknown) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Certificate preview failed.');
@@ -68,7 +70,7 @@ export default function ReachCertificateDocxViewer({ docxUrl }: ReachCertificate
       )}
       <div
         ref={containerRef}
-        className="docx-preview-container flex justify-center py-6 [&_.docx-wrapper]:bg-white [&_.docx-wrapper]:shadow-md"
+        className="docx-preview-container flex justify-center py-6 [&_.docx-preview-wrapper]:bg-transparent [&_.docx-preview-wrapper>section.docx-preview]:bg-white [&_.docx-preview-wrapper>section.docx-preview]:shadow-md [&_.docx-preview-wrapper>section.docx-preview]:mb-0"
       />
     </div>
   );

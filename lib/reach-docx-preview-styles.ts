@@ -111,10 +111,150 @@ function hideDuplicateManufacturerBlocks(paragraphs: HTMLParagraphElement[]): vo
   }
 }
 
+function findDocxPageSections(container: HTMLElement): HTMLElement[] {
+  const wrapper =
+    container.querySelector('.docx-preview-wrapper') ?? container.querySelector('.docx-wrapper');
+  if (!wrapper) return [];
+
+  return Array.from(wrapper.children).filter(
+    (el): el is HTMLElement => el instanceof HTMLElement && el.tagName === 'SECTION'
+  );
+}
+
+function isReachBrandingNode(node: HTMLElement): boolean {
+  if (node.closest('[data-reach-bottom-branding]')) return false;
+  if (node.querySelector('img, svg, picture')) return true;
+
+  const text = normalizeText(node.textContent || '');
+  return /pharmegic healthcare|jasstin|lithuania/i.test(text);
+}
+
+function tightenReachPreviewVerticalSpacing(root: HTMLElement): void {
+  root.querySelectorAll('p').forEach((p) => {
+    if (!(p instanceof HTMLElement)) return;
+    const text = normalizeText(p.textContent || '');
+    if (!text) {
+      p.style.display = 'none';
+      p.style.margin = '0';
+      p.style.minHeight = '0';
+      p.style.lineHeight = '0';
+    }
+  });
+
+  root.querySelectorAll('[data-reach-manufacturer-card]').forEach((card) => {
+    if (card instanceof HTMLElement) {
+      card.style.margin = '8px 0 10px';
+      card.style.padding = '10px 14px 12px';
+    }
+  });
+}
+
+function layoutReachBottomBranding(brandingHost: HTMLElement): void {
+  brandingHost.querySelectorAll('img, svg, picture').forEach((asset) => {
+    if (!(asset instanceof HTMLElement)) return;
+    asset.style.maxHeight = '110px';
+    asset.style.width = 'auto';
+    asset.style.objectFit = 'contain';
+    asset.style.display = 'block';
+  });
+
+  const children = Array.from(brandingHost.children).filter(
+    (child): child is HTMLElement => child instanceof HTMLElement
+  );
+  if (children.length >= 2) {
+    children[0].style.flex = '1 1 auto';
+    children[children.length - 1].style.flex = '0 0 auto';
+    children[children.length - 1].style.marginLeft = 'auto';
+  }
+}
+
+function ensureReachBottomBrandingHost(page: HTMLElement): HTMLElement {
+  const existing = page.querySelector('[data-reach-bottom-branding]');
+  if (existing instanceof HTMLElement) return existing;
+
+  const host = document.createElement('div');
+  host.setAttribute('data-reach-bottom-branding', 'true');
+  Object.assign(host.style, {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '16px',
+    margin: '4px 0 0',
+    padding: '0 8px',
+    minHeight: '110px',
+    boxSizing: 'border-box',
+    width: '100%',
+  });
+
+  const footer = page.querySelector('footer');
+  if (footer) {
+    page.insertBefore(host, footer);
+  } else {
+    const article = page.querySelector('article');
+    (article ?? page).appendChild(host);
+  }
+
+  return host;
+}
+
+function moveNodeIntoBrandingHost(node: HTMLElement, host: HTMLElement): void {
+  if (node.closest('[data-reach-bottom-branding]') === host) return;
+  if (node === host) return;
+  host.appendChild(node);
+}
+
+/** Pull logo/seal graphics from overflow pages back onto page 1 (before footer). */
+function consolidateReachDocxPreviewPages(container: HTMLElement): void {
+  const pages = findDocxPageSections(container);
+  if (pages.length === 0) return;
+
+  const firstPage = pages[0];
+  const firstArticle = firstPage.querySelector('article');
+  if (!firstArticle) return;
+
+  tightenReachPreviewVerticalSpacing(firstArticle);
+  const brandingHost = ensureReachBottomBrandingHost(firstPage);
+
+  for (let i = 1; i < pages.length; i++) {
+    const page = pages[i];
+    const article = page.querySelector('article');
+    if (!article) {
+      page.style.display = 'none';
+      continue;
+    }
+
+    Array.from(article.children).forEach((child) => {
+      if (child instanceof HTMLElement) {
+        moveNodeIntoBrandingHost(child, brandingHost);
+      }
+    });
+    page.style.display = 'none';
+  }
+
+  const articleBrandingCandidates = Array.from(firstArticle.children).filter(
+    (child): child is HTMLElement => child instanceof HTMLElement && isReachBrandingNode(child)
+  );
+  articleBrandingCandidates.forEach((node) => moveNodeIntoBrandingHost(node, brandingHost));
+
+  if (brandingHost.childElementCount === 0) {
+    brandingHost.remove();
+    return;
+  }
+
+  layoutReachBottomBranding(brandingHost);
+  firstPage.style.minHeight = 'auto';
+  firstPage.style.height = 'auto';
+  firstPage.style.overflow = 'visible';
+}
+
 /** Rebuild manufacturer info cards when docx-preview omits Word drawing/VML shapes. */
 export function applyReachDocxPreviewStyles(container: HTMLElement): void {
   const paragraphs = Array.from(container.querySelectorAll('p')).filter(
     (p): p is HTMLParagraphElement => p instanceof HTMLParagraphElement
+  );
+
+  const isReachCertificate = paragraphs.some((p) =>
+    /NON-EU\s+MANUFACTURER/i.test(normalizeText(p.textContent || ''))
   );
 
   hideDuplicateManufacturerBlocks(paragraphs);
@@ -150,4 +290,8 @@ export function applyReachDocxPreviewStyles(container: HTMLElement): void {
       p.style.lineHeight = '1.1';
     }
   });
+
+  if (isReachCertificate) {
+    consolidateReachDocxPreviewPages(container);
+  }
 }
