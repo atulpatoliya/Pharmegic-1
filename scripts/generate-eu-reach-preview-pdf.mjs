@@ -78,7 +78,7 @@ try { $word.Quit() } catch {}
   });
 }
 
-const templatePath = path.join(projectRoot, 'templates', 'EU_REACH_CERTIFICATE.docx');
+const templatePath = path.join(projectRoot, 'templates', 'EU_REACH_main.docx');
 const outDir = path.join(projectRoot, 'public', 'previews');
 const docxOut = path.join(outDir, 'eu-reach-certificate-sample.docx');
 const pdfOut = path.join(outDir, 'eu-reach-certificate-sample.pdf');

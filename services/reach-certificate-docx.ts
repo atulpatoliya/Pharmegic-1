@@ -30,7 +30,7 @@ export {
 function resolveTemplatePath(): string {
   if (fs.existsSync(EU_REACH_TEMPLATE.runtime)) return EU_REACH_TEMPLATE.runtime;
   throw new Error(
-    'EU REACH certificate template not found. Copy your Word file to templates/source/EU_REACH_SOURCE.docx and run: node scripts/prepare-eu-reach-template.mjs'
+    'EU REACH certificate template not found. Copy your Word file to templates/source/EU_REACH_SOURCE.docx and run: node scripts/prepare-eu-reach-template.mjs (writes templates/EU_REACH_main.docx)'
   );
 }
 

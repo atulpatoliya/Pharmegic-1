@@ -2,7 +2,7 @@
  * Builds EU REACH certificate template from the master Word source.
  *
  * Edit design: templates/source/EU_REACH_SOURCE.docx
- * Output: templates/EU_REACH_CERTIFICATE.docx — used everywhere (print/PDF/preview)
+ * Output: templates/EU_REACH_main.docx — used everywhere (print/PDF/preview)
  *
  * Run: node scripts/prepare-eu-reach-template.mjs
  */
@@ -13,7 +13,7 @@ import PizZip from 'pizzip';
 const root = process.cwd();
 const sourceDir = path.join(root, 'templates', 'source');
 const source = path.join(sourceDir, 'EU_REACH_SOURCE.docx');
-const target = path.join(root, 'templates', 'EU_REACH_CERTIFICATE.docx');
+const target = path.join(root, 'templates', 'EU_REACH_main.docx');
 
 if (!fs.existsSync(source)) {
   console.error('templates/source/EU_REACH_SOURCE.docx not found.');
