@@ -1,5 +1,6 @@
 import {
   buildReachDocxData,
+  formatEuReachManufacturerAddressDisplay,
   formatReachCertDateLong,
   type ReachCertificateDocxData,
   type ReachPdfChemical,
@@ -7,6 +8,7 @@ import {
 } from '@/lib/reach-certificate-data';
 
 export type ReachCertificateHtmlData = ReachCertificateDocxData & {
+  manufacturerAddress: string;
   issuedDateDisplay: string;
   validatedDateDisplay: string;
   accentColor: string;
@@ -57,6 +59,7 @@ export function buildReachHtmlData(
 
   return {
     ...docx,
+    manufacturerAddress: formatEuReachManufacturerAddressDisplay(client),
     issuedDateDisplay: formatReachCertDateLong(docx.issuedDate),
     validatedDateDisplay: formatReachCertDateLong(docx.validatedDate),
     accentColor: options.accentColor?.trim() || DEFAULT_ACCENT,

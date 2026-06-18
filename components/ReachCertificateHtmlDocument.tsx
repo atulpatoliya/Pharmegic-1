@@ -36,10 +36,7 @@ export default function ReachCertificateHtmlDocument({ data }: ReachCertificateH
           <div className="reach-manufacturer-box">
             <p className="reach-manufacturer-label">NON-EU MANUFACTURER</p>
             <p className="reach-manufacturer-name">{data.companyName}</p>
-            <p className="reach-manufacturer-address">{data.addressLine1}</p>
-            {data.addressLine3 ? (
-              <p className="reach-manufacturer-address">{data.addressLine3}</p>
-            ) : null}
+            <p className="reach-manufacturer-address">{data.manufacturerAddress}</p>
             <p className="reach-appointment-text">
               has appointed <strong>PHARMEGIC HEALTHCARE LIMITED</strong> as its Only Representative
             </p>

@@ -15,7 +15,7 @@ const projectRoot = path.join(__dirname, '..');
 
 const SAMPLE = {
   companyName: 'Example Pharma Ltd',
-  addressLine1: '123 Industrial Estate, Sample Road, Ahmedabad: 382445,',
+  addressLine1: '123 Industrial Estate, Sample Road, Ahmedabad - 382445, Gujarat,',
   addressLine3: 'India',
   chemicalName: 'Example Chemical Substance',
   casNumber: '000-00-0',

@@ -66,7 +66,7 @@ function isReachMissingField(value?: string | null): boolean {
   return !trimmed || trimmed === '—';
 }
 
-/** EU REACH: "Street, City: Postal," on one line; country on the next. */
+/** EU REACH: "Street, City - Postal," on one line; country on the next. */
 export function buildEuReachAddressLine1(client: {
   address?: string | null;
   city?: string | null;
@@ -80,7 +80,7 @@ export function buildEuReachAddressLine1(client: {
   if (street && !isReachMissingField(street)) parts.push(street);
 
   if (city && postal) {
-    parts.push(`${city}: ${postal}`);
+    parts.push(`${city} - ${postal}`);
   } else if (city && !isReachMissingField(city)) {
     parts.push(city);
   } else if (postal && !isReachMissingField(postal)) {
@@ -91,7 +91,7 @@ export function buildEuReachAddressLine1(client: {
   return `${parts.join(', ')},`;
 }
 
-/** Manufacturer card address — avoids "—, —, India" when only country is known. */
+/** Manufacturer card: "Street, City - Postal, State, Country" on one line (docx uses line1 + line3). */
 export function formatEuReachManufacturerAddress(client: {
   address?: string | null;
   city?: string | null;
@@ -109,14 +109,14 @@ export function formatEuReachManufacturerAddress(client: {
   if (street && !isReachMissingField(street)) locality.push(street);
 
   if (city && postal) {
-    locality.push(`${city}: ${postal}`);
+    locality.push(`${city} - ${postal}`);
   } else if (city && !isReachMissingField(city)) {
     locality.push(city);
   } else if (postal && !isReachMissingField(postal)) {
     locality.push(postal);
-  } else if (state && !isReachMissingField(state)) {
-    locality.push(state);
   }
+
+  if (state && !isReachMissingField(state)) locality.push(state);
 
   if (locality.length === 0) {
     return {
@@ -127,8 +127,20 @@ export function formatEuReachManufacturerAddress(client: {
 
   return {
     line1: `${locality.join(', ')},`,
-    line3: country && !isReachMissingField(country) ? country : '—',
+    line3: country && !isReachMissingField(country) ? country : '',
   };
+}
+
+/** Single-line manufacturer address for HTML preview and display. */
+export function formatEuReachManufacturerAddressDisplay(client: {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+}): string {
+  const { line1, line3 } = formatEuReachManufacturerAddress(client);
+  return [line1, line3].filter(Boolean).join(' ');
 }
 
 export function buildReachAddressLines(client: {
