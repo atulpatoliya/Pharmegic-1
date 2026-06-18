@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { parseFlexibleDateToIso } from '@/lib/parse-flexible-date';
 import { REGULATORY_REGISTRATIONS, normalizeRegulatoryRegistrations, type RegulatoryRegistration } from '@/lib/regulatory-registrations';
 
 export const CLIENT_IMPORT_DEFAULT_PASSWORD = 'Change@123';
@@ -242,6 +243,11 @@ function rowToClient(
   };
 }
 
+function parseImportDateField(value: unknown, fallback: string): string {
+  if (value == null || String(value).trim() === '') return fallback;
+  return parseFlexibleDateToIso(value) ?? fallback;
+}
+
 function rowToSubstance(
   row: Record<string, unknown>,
   headerMap: Map<string, string>,
@@ -284,11 +290,14 @@ function rowToSubstance(
     registration_number:
       pick(row, headerMap, ['Registration Number', 'registration_number']) ||
       SUBSTANCE_IMPORT_DEFAULTS.registration_number,
-    issued_date:
-      pick(row, headerMap, ['Issued Date', 'issued_date']) || SUBSTANCE_IMPORT_DEFAULTS.issued_date,
-    validity_date:
-      pick(row, headerMap, ['Validity Date', 'Validity / Expires Date', 'validity_date']) ||
-      SUBSTANCE_IMPORT_DEFAULTS.validity_date,
+    issued_date: parseImportDateField(
+      pick(row, headerMap, ['Issued Date', 'issued_date']),
+      SUBSTANCE_IMPORT_DEFAULTS.issued_date
+    ),
+    validity_date: parseImportDateField(
+      pick(row, headerMap, ['Validity Date', 'Validity / Expires Date', 'validity_date']),
+      SUBSTANCE_IMPORT_DEFAULTS.validity_date
+    ),
     status: parseLinkStatus(pick(row, headerMap, ['Status', 'status'])),
   };
 }
@@ -343,7 +352,7 @@ export function parseSpreadsheetBuffer(
   buffer: ArrayBuffer,
   defaultPassword = CLIENT_IMPORT_DEFAULT_PASSWORD
 ): ClientImportParseResult {
-  const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+  const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     throw new Error('The file does not contain any worksheets.');
@@ -424,6 +433,8 @@ export const IMPORT_TEMPLATE_SHEET_NAME = 'Client Import';
 
 export function toImportDateValue(value: string | null | undefined): string {
   if (!value) return '';
+  const iso = parseFlexibleDateToIso(value);
+  if (iso) return iso;
   const datePart = String(value).trim().split('T')[0];
   return datePart || '';
 }

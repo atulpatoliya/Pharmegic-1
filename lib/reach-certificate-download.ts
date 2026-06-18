@@ -5,6 +5,28 @@ export function buildReachCertificatePdfDownloadUrl(certificateId: string): stri
   return buildReachCertificatePdfPreviewUrlByCertificateId(certificateId);
 }
 
+export function buildReachCertificateHtmlDataUrl(params: {
+  certificateId?: string;
+  clientId?: string;
+  chemicalId?: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string | null;
+}): string {
+  const search = new URLSearchParams();
+  if (params.certificateId) search.set('certificateId', params.certificateId);
+  if (params.clientId) search.set('clientId', params.clientId);
+  if (params.chemicalId) search.set('chemicalId', params.chemicalId);
+  if (params.registrationNumber) search.set('registrationNumber', params.registrationNumber);
+  if (params.issuedDate) search.set('issuedDate', params.issuedDate);
+  if (params.validatedDate) search.set('validatedDate', params.validatedDate);
+  if (params.tonnageBand !== undefined && params.tonnageBand !== null) {
+    search.set('tonnageBand', params.tonnageBand);
+  }
+  return `/api/reach-certificate/html-data?${search.toString()}`;
+}
+
 export function buildReachCertificateConvertPdfUrl(params: {
   docxUrl?: string;
   certificateId?: string;

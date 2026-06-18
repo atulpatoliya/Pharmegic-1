@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
 import { formatErrorMessage } from '@/lib/format-error';
+import { normalizeDateInput, normalizeOptionalDateInput } from '@/lib/parse-flexible-date';
 import { getTonnageBandMaxQuota, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuotaForReachPeriod, computeAssignableQuota } from '@/lib/quota';
 import { createReachCertificate, deleteAllReachCertificatesForClientChemical } from '@/actions/reach';
 import { clientWizardSchema, clientWizardEditSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
@@ -495,6 +496,17 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
   if (!data.issued_date?.trim()) return { success: false, error: 'Issued date is required.' };
   if (!data.validated_date?.trim()) return { success: false, error: 'Validated date is required.' };
 
+  const issuedDateResult = normalizeDateInput(data.issued_date, 'Issued date');
+  if (!issuedDateResult.ok) return { success: false, error: issuedDateResult.error };
+  const validatedDateResult = normalizeDateInput(data.validated_date, 'Validated date');
+  if (!validatedDateResult.ok) return { success: false, error: validatedDateResult.error };
+
+  const issuedDate = issuedDateResult.iso;
+  const validatedDate = validatedDateResult.iso;
+  if (validatedDate < issuedDate) {
+    return { success: false, error: 'Validated date cannot be before issued date.' };
+  }
+
   const adminSupabase = createAdminClient();
   let chemicalId: string | undefined;
   let isNewOrRestored = false;
@@ -596,8 +608,8 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         chemicalId,
         userId: session.userId,
         registrationNumber,
-        issuedDate: data.issued_date.trim(),
-        validatedDate: data.validated_date.trim(),
+        issuedDate,
+        validatedDate,
         allocatedQuantity: allocatedQty,
         tonnageBand: data.tonnage_band,
       });
@@ -618,8 +630,8 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         chemicalId,
         {
           id: rcResult.certificateId!,
-          issued_at: data.issued_date.trim(),
-          expires_at: data.validated_date.trim(),
+          issued_at: issuedDate,
+          expires_at: validatedDate,
         }
       );
       const remainingQuota = getRemainingQuotaForReachPeriod(
@@ -632,9 +644,9 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         .from('client_chemicals')
         .update({
           available_quantity: remainingQuota,
-          validity_date: data.validated_date || data.validity_date || null,
+          validity_date: validatedDate,
           registration_number: registrationNumber,
-          issued_date: data.issued_date.trim(),
+          issued_date: issuedDate,
           certificate_number: rcResult.certNumber,
         })
         .eq('id', existingLink.id);
@@ -659,7 +671,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       revalidatePath(`/admin/clients/${clientId}/rc-certificates`);
       return {
         success: true,
-        message: `RC Certificate issued for ${data.chemical_name.trim()} (${data.issued_date.trim().slice(0, 4)}). Previous certificates remain on record.`,
+        message: `RC Certificate issued for ${data.chemical_name.trim()} (${issuedDate.slice(0, 4)}). Previous certificates remain on record.`,
         certificateId: rcResult.certificateId,
       };
     }
@@ -669,9 +681,9 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         .from('client_chemicals')
         .update({
           available_quantity: assignable,
-          validity_date: data.validated_date || data.validity_date || null,
+          validity_date: validatedDate,
           registration_number: registrationNumber,
-          issued_date: data.issued_date.trim(),
+          issued_date: issuedDate,
           status: 'active',
           assigned_by: session.userId,
         })
@@ -683,9 +695,9 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
         client_id: clientId,
         chemical_id: chemicalId,
         available_quantity: assignable,
-        validity_date: data.validated_date || data.validity_date || null,
+        validity_date: validatedDate,
         registration_number: registrationNumber,
-        issued_date: data.issued_date.trim(),
+        issued_date: issuedDate,
         status: 'active',
         assigned_by: session.userId,
       });
@@ -709,8 +721,8 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       chemicalId,
       userId: session.userId,
       registrationNumber,
-      issuedDate: data.issued_date.trim(),
-      validatedDate: data.validated_date.trim(),
+      issuedDate,
+      validatedDate,
       allocatedQuantity: allocatedQtyNew,
       tonnageBand: data.tonnage_band,
     });
@@ -931,13 +943,21 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
       registration_number?: string | null;
       issued_date?: string | null;
     } = {
-      validity_date: data.validity_date || null,
+      validity_date: null,
     };
+
+    if (data.validity_date !== undefined) {
+      const validity = normalizeOptionalDateInput(data.validity_date, 'Validity date');
+      if (!validity.ok) return { success: false, error: validity.error };
+      clientChemUpdate.validity_date = validity.iso;
+    }
     if (data.registration_number !== undefined) {
       clientChemUpdate.registration_number = data.registration_number?.trim() || null;
     }
     if (data.issued_date !== undefined) {
-      clientChemUpdate.issued_date = data.issued_date || null;
+      const issued = normalizeOptionalDateInput(data.issued_date, 'Issued date');
+      if (!issued.ok) return { success: false, error: issued.error };
+      clientChemUpdate.issued_date = issued.iso;
     }
     if (nextQuota !== undefined && nextQuota !== null) {
       clientChemUpdate.available_quantity = nextQuota;

@@ -97,7 +97,7 @@ export default function SettingsDashboard({ initialSettings, initialTemplate }: 
   const [rcAccentColor, setRcAccentColor] = useState(rcDefaults.accent_color);
   const [rcFooterText, setRcFooterText] = useState(
     rcDefaults.footer_text ||
-      'Pharmegic Healthcare Compliance Division. For verification, scan the QR code.'
+      'Pharmegic Healthcare Limited\n6th, Floor, Konstitucijos av. 21A, 08130 Vilnius, Lithuania | VAT: LT100012557418\njs@pharmegichealthcarelimited.com | : +37 05 2074005 | www.pharmegichealthcare.com'
   );
   const [rcLogo, setRcLogo] = useState<string | null>(rcDefaults.logo);
   const [rcSignature, setRcSignature] = useState<string | null>(rcDefaults.signature_image);

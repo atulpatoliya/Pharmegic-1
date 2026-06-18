@@ -5,6 +5,8 @@ import ReachCertificatePreviewClient from '@/components/ReachCertificatePreviewC
 import { getLastDateOfYear, getTodayDateString, isReachCertificateType, getDefaultReachPeriodForYear } from '@/lib/reach-certificate';
 import { regenerateReachCertificateFile } from '@/actions/reach';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
+import { resolveRcBranding } from '@/lib/certificate-template-config';
+import { getActiveTemplate } from '@/services/db';
 import {
   loadCertificateMailSentHistory,
   REACH_MAIL_LOG_ACTIONS,
@@ -125,6 +127,9 @@ export default async function ReachCertificatePreviewPage({
     tonnageBand: resolvedCert?.tonnage_band || chemical.tonnage_band || '',
   };
 
+  const templateSettings = await getActiveTemplate(adminSupabase);
+  const rcBranding = resolveRcBranding(templateSettings);
+
   return (
     <ReachCertificatePreviewClient
       clientId={clientId}
@@ -149,6 +154,12 @@ export default async function ReachCertificatePreviewPage({
       defaults={defaults}
       mailRecipients={mailRecipients}
       mailSentHistory={mailSentHistory}
+      branding={{
+        accentColor: rcBranding.accent_color,
+        logoUrl: rcBranding.logo,
+        signatureUrl: rcBranding.signature_image,
+        footerText: rcBranding.footer_text,
+      }}
     />
   );
 }

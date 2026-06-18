@@ -1,9 +1,13 @@
 'use client';
 
-import { buildReachCertificateConvertPdfUrl } from '@/lib/reach-certificate-download';
+import { buildReachCertificateHtmlDataUrl } from '@/lib/reach-certificate-download';
 import { applyReachDocxPreviewStyles } from '@/lib/reach-docx-preview-styles';
+import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
+import {
+  downloadReachHtmlCertificatePdf,
+  downloadReachHtmlCertificatePdfFromElement,
+} from '@/lib/reach-certificate-html-pdf-client';
 import { renderAsync } from 'docx-preview';
-import { toast } from '@/store/toast';
 
 const DOCX_PREVIEW_CLASS = 'docx';
 
@@ -335,10 +339,42 @@ async function downloadFromPdfResponse(
   return { kind: 'unsupported' };
 }
 
-/** RC download via server LibreOffice/Gotenberg — same DOCX as Office preview, never browser canvas. */
-async function downloadRcPdfViaServerConvert(params: {
-  docxUrl: string;
+async function fetchReachHtmlDataForDownload(params: {
+  pdfUrl: string;
+  clientId?: string;
+  chemicalId?: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string | null;
+}): Promise<ReachCertificateHtmlData> {
+  const certificateId = extractCertificateIdFromUrl(params.pdfUrl);
+  const url = buildReachCertificateHtmlDataUrl({
+    certificateId: certificateId ?? undefined,
+    clientId: params.clientId,
+    chemicalId: params.chemicalId,
+    registrationNumber: params.registrationNumber,
+    issuedDate: params.issuedDate,
+    validatedDate: params.validatedDate,
+    tonnageBand: params.tonnageBand,
+  });
+
+  const res = await fetch(appendCacheBuster(url), {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error || 'Failed to load certificate data for PDF.');
+  }
+
+  return (await res.json()) as ReachCertificateHtmlData;
+}
+
+async function downloadRcHtmlPreviewPdf(params: {
   fileName: string;
+  htmlData?: ReachCertificateHtmlData | null;
   pdfUrl: string;
   clientId?: string;
   chemicalId?: string;
@@ -347,100 +383,20 @@ async function downloadRcPdfViaServerConvert(params: {
   validatedDate?: string;
   tonnageBand?: string | null;
 }): Promise<CertificateDownloadResult> {
-  const certificateId = extractCertificateIdFromUrl(params.pdfUrl);
-  const convertUrls = [
-    buildReachCertificateConvertPdfUrl({
-      docxUrl: params.docxUrl,
-      fileName: params.fileName,
-    }),
-    certificateId
-      ? buildReachCertificateConvertPdfUrl({
-          certificateId,
-          fileName: params.fileName,
-        })
-      : null,
-    params.clientId && params.chemicalId
-      ? buildReachCertificateConvertPdfUrl({
-          clientId: params.clientId,
-          chemicalId: params.chemicalId,
-          registrationNumber: params.registrationNumber,
-          issuedDate: params.issuedDate,
-          validatedDate: params.validatedDate,
-          tonnageBand: params.tonnageBand,
-          fileName: params.fileName,
-        })
-      : null,
-  ].filter((url): url is string => Boolean(url));
-
-  let lastError: string | undefined;
-
-  for (const convertUrl of convertUrls) {
-    let retries = 3;
-    let waitMs = 6000;
-    
-    while (retries >= 0) {
-      try {
-        const res = await fetch(appendCacheBuster(convertUrl), {
-          credentials: 'same-origin',
-          cache: 'no-store',
-        });
-
-        if (res.status === 503 && retries > 0) {
-          toast.info('Gotenberg PDF converter is starting up... please wait.', 6000);
-          await new Promise((resolve) => setTimeout(resolve, waitMs));
-          retries--;
-          continue;
-        }
-
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          lastError = body?.error || RC_PDF_SETUP_MESSAGE;
-          break; // break retry loop to try next URL candidate
-        }
-
-        const contentType = res.headers.get('Content-Type') || '';
-        if (contentType.includes('application/json')) {
-          lastError = RC_PDF_SETUP_MESSAGE;
-          break;
-        }
-
-        const blob = await res.blob();
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        if (!isPdfContentType(contentType, bytes)) {
-          lastError = RC_PDF_SETUP_MESSAGE;
-          break;
-        }
-
-        triggerBlobDownload(new Blob([bytes], { type: 'application/pdf' }), params.fileName);
-        return { format: 'pdf', fileName: params.fileName };
-      } catch (err) {
-        if (err instanceof Error) {
-          lastError = err.message;
-        }
-        if (retries > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          retries--;
-          continue;
-        }
-        break;
-      }
-    }
+  const onPage = document.querySelector('[data-reach-cert-root]');
+  if (onPage instanceof HTMLElement) {
+    await downloadReachHtmlCertificatePdfFromElement(onPage, params.fileName);
+    return { format: 'pdf', fileName: params.fileName };
   }
 
-  throw new Error(lastError || RC_PDF_SETUP_MESSAGE);
-}
+  if (params.htmlData) {
+    await downloadReachHtmlCertificatePdf(params.htmlData, params.fileName);
+    return { format: 'pdf', fileName: params.fileName };
+  }
 
-function collectRcDocxSources(params: {
-  docxUrl: string;
-  previewDocxUrl?: string | null;
-  officeDocxUrl?: string | null;
-}): string[] {
-  const urls = [params.officeDocxUrl, params.previewDocxUrl, params.docxUrl].filter(
-    (url): url is string => Boolean(url?.trim())
-  );
-  const externalUrls = urls.filter((url) => url.startsWith('http'));
-  const apiUrls = urls.filter((url) => url.startsWith('/'));
-  return [...new Set([...externalUrls, ...apiUrls])];
+  const htmlData = await fetchReachHtmlDataForDownload(params);
+  await downloadReachHtmlCertificatePdf(htmlData, params.fileName);
+  return { format: 'pdf', fileName: params.fileName };
 }
 
 export async function downloadCertificatePdf(params: {
@@ -450,6 +406,7 @@ export async function downloadCertificatePdf(params: {
   previewDocxUrl?: string | null;
   officeDocxUrl?: string | null;
   certificateType?: 'rc' | 'tcc';
+  htmlData?: ReachCertificateHtmlData | null;
   clientId?: string;
   chemicalId?: string;
   registrationNumber?: string;
@@ -459,12 +416,11 @@ export async function downloadCertificatePdf(params: {
 }): Promise<CertificateDownloadResult> {
   const isRc = params.certificateType === 'rc';
   let serverError: string | undefined;
-  const rcDocxSources = collectRcDocxSources(params);
 
-  const tryRcDownload = async (preferredDocxUrl: string) =>
-    downloadRcPdfViaServerConvert({
-      docxUrl: preferredDocxUrl,
+  if (isRc) {
+    return downloadRcHtmlPreviewPdf({
       fileName: params.fileName,
+      htmlData: params.htmlData,
       pdfUrl: params.pdfUrl,
       clientId: params.clientId,
       chemicalId: params.chemicalId,
@@ -473,6 +429,7 @@ export async function downloadCertificatePdf(params: {
       validatedDate: params.validatedDate,
       tonnageBand: params.tonnageBand,
     });
+  }
 
   try {
     const pdfRes = await fetch(appendCacheBuster(params.pdfUrl), {
@@ -485,17 +442,6 @@ export async function downloadCertificatePdf(params: {
 
       if ('kind' in parsed) {
         if (parsed.kind === 'docx') {
-          if (isRc) {
-            try {
-              return await tryRcDownload(parsed.docxUrl);
-            } catch (err) {
-              if (err instanceof Error) {
-                serverError = err.message;
-              }
-              // Fallback to client-side conversion
-              return downloadPdfFromDocxSources([parsed.docxUrl, ...rcDocxSources], params.fileName);
-            }
-          }
           return downloadPdfFromDocxSources([parsed.docxUrl], params.fileName);
         }
       } else {
@@ -511,34 +457,15 @@ export async function downloadCertificatePdf(params: {
     }
   }
 
-  if (isRc && rcDocxSources.length > 0) {
+  const docxSources = [params.previewDocxUrl, params.docxUrl].filter(
+    (url): url is string => Boolean(url?.trim())
+  );
+  if (docxSources.length > 0) {
     try {
-      return await tryRcDownload(rcDocxSources[0]);
+      return await downloadPdfFromDocxSources(docxSources, params.fileName);
     } catch (err) {
       if (err instanceof Error) {
         serverError = err.message;
-      }
-      try {
-        return await downloadPdfFromDocxSources(rcDocxSources, params.fileName);
-      } catch (fallbackErr) {
-        if (fallbackErr instanceof Error) {
-          serverError = fallbackErr.message;
-        }
-      }
-    }
-  }
-
-  if (!isRc) {
-    const docxSources = [params.previewDocxUrl, params.docxUrl].filter(
-      (url): url is string => Boolean(url?.trim())
-    );
-    if (docxSources.length > 0) {
-      try {
-        return await downloadPdfFromDocxSources(docxSources, params.fileName);
-      } catch (err) {
-        if (err instanceof Error) {
-          serverError = err.message;
-        }
       }
     }
   }

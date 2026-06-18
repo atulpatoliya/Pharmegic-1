@@ -23,6 +23,24 @@ import {
   getLastDateOfYear,
   getTodayDateString,
 } from '@/lib/reach-certificate';
+import { normalizeDateInput } from '@/lib/parse-flexible-date';
+
+function normalizeReachCertificateDates(
+  issuedDate: string,
+  validatedDate: string
+): { ok: true; issuedDate: string; validatedDate: string } | { ok: false; error: string } {
+  const issued = normalizeDateInput(issuedDate, 'Issued date');
+  if (!issued.ok) return issued;
+
+  const validated = normalizeDateInput(validatedDate, 'Validated date');
+  if (!validated.ok) return validated;
+
+  if (validated.iso < issued.iso) {
+    return { ok: false, error: 'Validated date cannot be before issued date.' };
+  }
+
+  return { ok: true, issuedDate: issued.iso, validatedDate: validated.iso };
+}
 
 async function requireAdmin() {
   const session = await getSession();
@@ -44,19 +62,26 @@ export type CreateReachCertificateInput = {
 };
 
 export async function createReachCertificate(input: CreateReachCertificateInput) {
-  const { clientId, chemicalId, userId, registrationNumber, issuedDate, validatedDate, allocatedQuantity, tonnageBand } =
-    input;
+  const {
+    clientId,
+    chemicalId,
+    userId,
+    registrationNumber,
+    allocatedQuantity,
+    tonnageBand,
+  } = input;
   const adminSupabase = createAdminClient();
 
   if (!registrationNumber.trim()) {
     return { success: false as const, error: 'Registration number is required.' };
   }
-  if (!issuedDate || !validatedDate) {
-    return { success: false as const, error: 'Issued date and validated date are required.' };
+
+  const dates = normalizeReachCertificateDates(input.issuedDate, input.validatedDate);
+  if (!dates.ok) {
+    return { success: false as const, error: dates.error };
   }
-  if (new Date(validatedDate) < new Date(issuedDate)) {
-    return { success: false as const, error: 'Validated date cannot be before issued date.' };
-  }
+  const issuedDate = dates.issuedDate;
+  const validatedDate = dates.validatedDate;
 
   const [{ data: client }, { data: clientChem }, { data: chemical }] = await Promise.all([
     adminSupabase
@@ -161,8 +186,8 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
     }
   }
 
-  const issueDate = new Date(issuedDate);
-  const expiryDate = new Date(validatedDate);
+  const issueDate = new Date(`${issuedDate}T12:00:00`);
+  const expiryDate = new Date(`${validatedDate}T12:00:00`);
   const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
   const certNumber = `RC-${issueDate.getFullYear()}-${randStr}`;
   const certFile = await buildReachCertificateStoredFile(client, chemical, certNumber, {
@@ -422,12 +447,9 @@ export async function renewReachCertificateAction(
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
 
-  if (!data.issuedDate || !data.validatedDate) {
-    return { success: false, error: 'Issue date and expiry date are required.' };
-  }
-  if (new Date(data.validatedDate) < new Date(data.issuedDate)) {
-    return { success: false, error: 'Expiry date cannot be before issue date.' };
-  }
+  const dates = normalizeReachCertificateDates(data.issuedDate, data.validatedDate);
+  if (!dates.ok) return { success: false, error: dates.error };
+
   if (!data.available_quantity || data.available_quantity <= 0) {
     return { success: false, error: 'Quota must be greater than 0 MT.' };
   }
@@ -465,8 +487,8 @@ export async function renewReachCertificateAction(
       chemicalId,
       userId: session.userId,
       registrationNumber,
-      issuedDate: data.issuedDate,
-      validatedDate: data.validatedDate,
+      issuedDate: dates.issuedDate,
+      validatedDate: dates.validatedDate,
       allocatedQuantity: data.available_quantity,
       tonnageBand: data.tonnageBand || prevTonnageBand,
     });
@@ -477,7 +499,7 @@ export async function renewReachCertificateAction(
       .from('client_chemicals')
       .update({
         available_quantity: data.available_quantity,
-        validity_date: data.validatedDate,
+        validity_date: dates.validatedDate,
         certificate_number: result.certNumber,
         status: 'active',
       })
@@ -501,7 +523,7 @@ export async function renewReachCertificateAction(
       action: 'REACH_CERTIFICATE_RENEWED',
       entity_type: 'certificates',
       entity_id: result.certificateId,
-      description: `RC renewed with ${data.available_quantity} MT quota until ${data.validatedDate}`,
+      description: `RC renewed with ${data.available_quantity} MT quota until ${dates.validatedDate}`,
     });
 
     revalidatePath(`/admin/clients/${clientId}`);
@@ -538,12 +560,9 @@ export async function updateReachCertificateAction(
 
   const registrationNumber = data.registrationNumber?.trim();
   if (!registrationNumber) return { success: false, error: 'Registration number is required.' };
-  if (!data.issuedDate || !data.validatedDate) {
-    return { success: false, error: 'Issue date and expiry date are required.' };
-  }
-  if (new Date(data.validatedDate) < new Date(data.issuedDate)) {
-    return { success: false, error: 'Expiry date cannot be before issue date.' };
-  }
+
+  const dates = normalizeReachCertificateDates(data.issuedDate, data.validatedDate);
+  if (!dates.ok) return { success: false, error: dates.error };
 
   const adminSupabase = createAdminClient();
   const { data: cert } = await adminSupabase
@@ -571,8 +590,8 @@ export async function updateReachCertificateAction(
     siblingCerts,
     cert.chemical_id,
     chemicalName,
-    data.issuedDate,
-    data.validatedDate,
+    dates.issuedDate,
+    dates.validatedDate,
     certId,
     casNumber,
     registrationNumber
@@ -581,7 +600,7 @@ export async function updateReachCertificateAction(
     return { success: false, error: periodConflict };
   }
 
-  const certYear = getReachCertificateYear(data.issuedDate);
+  const certYear = getReachCertificateYear(dates.issuedDate);
   if (certYear != null) {
     const yearConflict = findReachCertificateYearConflict(
       siblingCerts,
@@ -598,8 +617,8 @@ export async function updateReachCertificateAction(
   }
 
   try {
-    const issueDate = new Date(data.issuedDate);
-    const expiryDate = new Date(data.validatedDate);
+    const issueDate = new Date(`${dates.issuedDate}T12:00:00`);
+    const expiryDate = new Date(`${dates.validatedDate}T12:00:00`);
 
     const { error: updateError } = await adminSupabase
       .from('certificates')
@@ -633,9 +652,9 @@ export async function updateReachCertificateAction(
       await adminSupabase
         .from('client_chemicals')
         .update({
-          validity_date: data.validatedDate,
+          validity_date: dates.validatedDate,
           registration_number: registrationNumber,
-          issued_date: data.issuedDate,
+          issued_date: dates.issuedDate,
           certificate_number: cert.certificate_number,
         })
         .eq('client_id', cert.client_id)

@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   Download,
   FileText,
+  Printer,
   ShieldCheck,
   Mail,
   RefreshCw,
@@ -27,15 +28,15 @@ import {
   PenLine,
 } from 'lucide-react';
 import ReachCertificateViewer from '@/components/ReachCertificateViewer';
+import { buildReachHtmlData } from '@/lib/reach-certificate-html-data';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificateDocxPreviewUrlByClientChemical,
   buildReachCertificatePdfDownloadUrl,
   buildReachCertificatePdfDownloadUrlByClientChemical,
-  buildReachCertificatePdfPreviewUrl,
-  buildReachCertificatePdfPreviewUrlByCertificateId,
 } from '@/lib/reach-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
+import { printReachHtmlCertificate } from '@/lib/reach-certificate-html-pdf-client';
 import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
 import { useLayoutStore } from '@/store/layout';
 type ReachCertificatePreviewClientProps = {
@@ -81,6 +82,12 @@ type ReachCertificatePreviewClientProps = {
     cc: string[];
   } | null;
   mailSentHistory: string[];
+  branding?: {
+    accentColor?: string | null;
+    logoUrl?: string | null;
+    signatureUrl?: string | null;
+    footerText?: string | null;
+  };
 };
 
 function formatEmailList(emails: string[]): string {
@@ -96,6 +103,7 @@ export default function ReachCertificatePreviewClient({
   defaults,
   mailRecipients,
   mailSentHistory,
+  branding,
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
   const setCustomBreadcrumb = useLayoutStore((state) => state.setCustomBreadcrumb);
@@ -145,36 +153,50 @@ export default function ReachCertificatePreviewClient({
     previewVersion,
   ]);
 
-  const pdfPreviewUrl = useMemo(() => {
-    if (cert && !isEditing && fieldsMatchDefaults) {
-      return `${buildReachCertificatePdfPreviewUrlByCertificateId(cert.id)}&v=${previewVersion}`;
-    }
-
-    return `${buildReachCertificatePdfPreviewUrl({
-      clientId,
-      chemicalId,
-      registrationNumber: registrationNumber.trim() || '—',
+  const htmlData = useMemo(
+    () =>
+      buildReachHtmlData(
+        {
+          company_name: client.company_name,
+          address: client.address,
+          city: client.city,
+          state: client.state,
+          postal_code: client.postal_code,
+          country: client.country,
+          uuid_number: client.uuid_number,
+        },
+        {
+          chemical_name: chemical.chemical_name,
+          cas_number: chemical.cas_number,
+          ec_number: chemical.ec_number,
+          tonnage_band: chemical.tonnage_band,
+        },
+        {
+          registrationNumber: registrationNumber.trim() || '—',
+          issuedDate,
+          validatedDate,
+          tonnageBand,
+          accentColor: branding?.accentColor,
+          logoUrl: branding?.logoUrl,
+          signatureUrl: branding?.signatureUrl,
+          footerText: branding?.footerText,
+        }
+      ),
+    [
+      client,
+      chemical,
+      registrationNumber,
       issuedDate,
       validatedDate,
       tonnageBand,
-    })}&v=${previewVersion}`;
-  }, [
-    cert,
-    isEditing,
-    fieldsMatchDefaults,
-    clientId,
-    chemicalId,
-    registrationNumber,
-    issuedDate,
-    validatedDate,
-    tonnageBand,
-    previewVersion,
-  ]);
+      branding,
+    ]
+  );
 
   useEffect(() => {
-    setCustomBreadcrumb(`RC · ${chemical.chemical_name}`);
+    setCustomBreadcrumb(client.company_name);
     return () => setCustomBreadcrumb(null);
-  }, [chemical.chemical_name, setCustomBreadcrumb]);
+  }, [client.company_name, setCustomBreadcrumb]);
 
   const downloadPdfUrl = cert
     ? buildReachCertificatePdfDownloadUrl(cert.id)
@@ -308,6 +330,7 @@ export default function ReachCertificatePreviewClient({
             docxUrl={downloadDocxUrl}
             fileName={downloadFileName}
             certificateType="rc"
+            htmlData={htmlData}
             clientId={clientId}
             chemicalId={chemicalId}
             registrationNumber={registrationNumber.trim() || '—'}
@@ -318,6 +341,16 @@ export default function ReachCertificatePreviewClient({
           >
             <Download className="h-4 w-4" /> {downloadLabel}
           </CertificatePdfDownloadLink>
+
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => printReachHtmlCertificate()}
+            className="gap-1.5 text-xs font-bold"
+          >
+            <Printer className="h-4 w-4" /> Print
+          </Button>
 
           {!isPending && cert && (
             <Button
@@ -446,10 +479,10 @@ export default function ReachCertificatePreviewClient({
           <h3 className="text-sm font-bold text-slate-800">EU REACH Registration Certificate</h3>
         </div>
         <ReachCertificateViewer
-          key={pdfPreviewUrl}
+          key={JSON.stringify(htmlData)}
           certificateType="rc"
           docxUrl={docxPreviewUrl}
-          pdfUrl={pdfPreviewUrl}
+          htmlData={htmlData}
         />
       </div>
 

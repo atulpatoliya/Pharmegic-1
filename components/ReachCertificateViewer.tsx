@@ -1,31 +1,26 @@
 'use client';
 
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
-import ReachCertificatePdfViewer from '@/components/ReachCertificatePdfViewer';
+import ReachCertificateHtmlViewer from '@/components/ReachCertificateHtmlViewer';
+import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
 
 type ReachCertificateViewerProps = {
   certificateType?: 'rc' | 'tcc';
   docxUrl: string;
-  pdfUrl?: string;
+  htmlData?: ReachCertificateHtmlData | null;
 };
 
 /**
- * RC: PDF embed (exact Word/print layout) → DOCX fallback.
+ * RC: styled HTML preview (exact certificate design).
  * TCC: in-app DOCX preview.
  */
 export default function ReachCertificateViewer({
   certificateType = 'tcc',
   docxUrl,
-  pdfUrl,
+  htmlData,
 }: ReachCertificateViewerProps) {
-  if (certificateType === 'rc' && pdfUrl) {
-    return (
-      <ReachCertificatePdfViewer
-        key={pdfUrl}
-        pdfUrl={pdfUrl}
-        docxFallbackUrl={docxUrl}
-      />
-    );
+  if (certificateType === 'rc' && htmlData) {
+    return <ReachCertificateHtmlViewer key={JSON.stringify(htmlData)} data={htmlData} />;
   }
 
   return <ReachCertificateDocxViewer key={docxUrl} docxUrl={docxUrl} />;

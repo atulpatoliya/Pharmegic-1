@@ -5,7 +5,6 @@ import { getRcTemplatePreviewSample } from '@/lib/certificate-template-preview-d
 import { EU_REACH_TEMPLATE } from '@/lib/eu-reach-certificate-template';
 import { buildReachDocxData } from '@/lib/reach-pdf-data';
 import {
-  BUNDLED_RC_PREVIEW_PDF,
   convertReachDocxToPdf,
   generateReachCertificateDocx,
 } from '@/services/reach-certificate-docx';
@@ -35,11 +34,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Word-generated bundled PDF preserves drawing/VML layout; LibreOffice often strips it.
-    if (fs.existsSync(BUNDLED_RC_PREVIEW_PDF)) {
-      return pdfResponse(fs.readFileSync(BUNDLED_RC_PREVIEW_PDF), 'rc-template-preview.pdf');
-    }
-
     const sample = getRcTemplatePreviewSample();
     const docxBuffer = generateReachCertificateDocx(
       buildReachDocxData(sample.client, sample.chemical, sample.options)

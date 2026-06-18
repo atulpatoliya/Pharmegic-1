@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ReachCertificateViewer from '@/components/ReachCertificateViewer';
+import { getRcTemplatePreviewSample } from '@/lib/certificate-template-preview-data';
+import { buildReachHtmlData } from '@/lib/reach-certificate-html-data';
 import {
   Palette,
   Upload,
@@ -54,12 +56,20 @@ export function CertificateTemplateSettingsPanel({
       : '/api/certificate-template/tcc-preview';
   }, [certificateType]);
 
-  const previewPdfUrl = useMemo(() => {
-    if (certificateType === 'rc') {
-      return '/api/certificate-template/rc-preview/pdf';
-    }
-    return '';
-  }, [certificateType]);
+  const rcHtmlData = useMemo(() => {
+    if (certificateType !== 'rc') return null;
+    const sample = getRcTemplatePreviewSample();
+    return buildReachHtmlData(sample.client, sample.chemical, {
+      ...sample.options,
+      accentColor,
+      logoUrl: logo,
+      signatureUrl: signature,
+      footerText,
+    });
+  }, [certificateType, accentColor, logo, signature, footerText]);
+
+  const previewKey =
+    certificateType === 'rc' ? JSON.stringify(rcHtmlData) : previewDocxUrl;
 
   return (
     <div className="grid gap-8 grid-cols-1 lg:grid-cols-5">
@@ -195,17 +205,15 @@ export function CertificateTemplateSettingsPanel({
             <Sparkles className="h-4 w-4 text-emerald-500 animate-pulse" /> Live Certificate Preview
           </h2>
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-            {certificateType === 'rc'
-              ? 'PDF preview — exact print layout'
-              : 'Same layout as print / PDF'}
+            Same layout as print / PDF
           </span>
         </div>
         <div className="w-full border border-slate-200/80 rounded-xl shadow-xs overflow-hidden bg-white">
           <ReachCertificateViewer
-            key={certificateType === 'rc' ? previewPdfUrl : previewDocxUrl}
+            key={previewKey}
             certificateType={certificateType}
             docxUrl={previewDocxUrl}
-            pdfUrl={previewPdfUrl || undefined}
+            htmlData={rcHtmlData}
           />
         </div>
       </div>
