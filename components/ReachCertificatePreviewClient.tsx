@@ -45,6 +45,11 @@ type ReachCertificatePreviewClientProps = {
     company_name: string;
     email: string;
     uuid_number: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
   };
   chemical: {
     chemical_name: string;
@@ -107,7 +112,6 @@ export default function ReachCertificatePreviewClient({
   const [validatedDate, setValidatedDate] = useState(defaults.validatedDate);
   const [tonnageBand, setTonnageBand] = useState(defaults.tonnageBand || chemical.tonnage_band || '');
   const [previewVersion, setPreviewVersion] = useState(0);
-  const [officeDocxUrl, setOfficeDocxUrl] = useState<string | null>(null);
 
   const fieldsMatchDefaults =
     registrationNumber === defaults.registrationNumber &&
@@ -172,10 +176,6 @@ export default function ReachCertificatePreviewClient({
     return () => setCustomBreadcrumb(null);
   }, [chemical.chemical_name, setCustomBreadcrumb]);
 
-  useEffect(() => {
-    setOfficeDocxUrl(null);
-  }, [pdfPreviewUrl]);
-
   const downloadPdfUrl = cert
     ? buildReachCertificatePdfDownloadUrl(cert.id)
     : buildReachCertificatePdfDownloadUrlByClientChemical({
@@ -216,7 +216,6 @@ export default function ReachCertificatePreviewClient({
         toast.success(res.message || 'RC Certificate updated.');
         setIsEditing(false);
         setPreviewVersion((v) => v + 1);
-        setOfficeDocxUrl(null);
         router.refresh();
       } else {
         toast.error(res.error || 'Failed to update RC certificate.');
@@ -307,8 +306,6 @@ export default function ReachCertificatePreviewClient({
           <CertificatePdfDownloadLink
             pdfUrl={downloadPdfUrl}
             docxUrl={downloadDocxUrl}
-            previewDocxUrl={downloadDocxUrl}
-            officeDocxUrl={officeDocxUrl}
             fileName={downloadFileName}
             certificateType="rc"
             clientId={clientId}
@@ -453,7 +450,6 @@ export default function ReachCertificatePreviewClient({
           certificateType="rc"
           docxUrl={docxPreviewUrl}
           pdfUrl={pdfPreviewUrl}
-          onOfficeDocxUrl={setOfficeDocxUrl}
         />
       </div>
 

@@ -1,72 +1,39 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 
 type ReachCertificatePdfViewerProps = {
   pdfUrl: string;
-  onOfficeDocxUrl?: (docxUrl: string) => void;
-  onUnavailable?: () => void;
+  docxFallbackUrl: string;
 };
 
-/** Renders server-generated PDF — exact match to EU_REACH_CERTIFICATE.docx print output. */
+/**
+ * RC preview — embeds server PDF (Word layout). Falls back to DOCX when PDF is unavailable.
+ */
 export default function ReachCertificatePdfViewer({
   pdfUrl,
-  onOfficeDocxUrl,
-  onUnavailable,
+  docxFallbackUrl,
 }: ReachCertificatePdfViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<'loading' | 'pdf' | 'docx'>('loading');
+  const [docxUrl, setDocxUrl] = useState(docxFallbackUrl);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const renderPdfBuffer = useCallback(async (data: ArrayBuffer, container: HTMLDivElement) => {
-    const pdfjs = await import('pdfjs-dist');
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-
-    const pdf = await pdfjs.getDocument({ data }).promise;
-
-    container.innerHTML = '';
-    const shell = document.createElement('div');
-    shell.className = 'docx-wrapper bg-white shadow-md';
-    shell.style.width = '794px';
-    shell.style.maxWidth = '100%';
-    container.appendChild(shell);
-
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 1.35 });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      canvas.className = 'block w-full h-auto';
-      shell.appendChild(canvas);
-
-      const context = canvas.getContext('2d');
-      if (!context) {
-        throw new Error('Canvas rendering is not supported in this browser.');
-      }
-
-      await page.render({ canvasContext: context, viewport }).promise;
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    const container = containerRef.current;
-    if (!container) return;
 
-    const load = async () => {
-      setLoading(true);
+    const resolvePreview = async () => {
+      setMode('loading');
       setError(null);
-      container.innerHTML = '';
+      setDocxUrl(docxFallbackUrl);
 
       try {
-        const fetchUrl = pdfUrl.includes('?') ? `${pdfUrl}&_=${Date.now()}` : `${pdfUrl}?_=${Date.now()}`;
-        const res = await fetch(fetchUrl, { credentials: 'same-origin', cache: 'no-store' });
-        const contentType = res.headers.get('Content-Type') || '';
+        const res = await fetch(pdfUrl, { cache: 'no-store', credentials: 'same-origin' });
+        const contentType = res.headers.get('content-type') || '';
 
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(body?.error || 'Failed to load certificate preview.');
+        if (res.ok && contentType.includes('application/pdf')) {
+          if (!cancelled) setMode('pdf');
+          return;
         }
 
         if (contentType.includes('application/json')) {
@@ -76,62 +43,59 @@ export default function ReachCertificatePdfViewer({
             error?: string;
           };
           if (body.previewMode === 'docx' && body.docxUrl) {
-            onOfficeDocxUrl?.(body.docxUrl);
+            if (!cancelled) {
+              setDocxUrl(body.docxUrl);
+              setMode('docx');
+            }
             return;
           }
-          throw new Error(body.error || 'Certificate PDF preview is not available.');
+          throw new Error(body.error || 'PDF preview is not available.');
         }
 
-        const data = await res.arrayBuffer();
-        const bytes = new Uint8Array(data);
-        const looksLikePdf =
-          contentType.includes('application/pdf') ||
-          contentType.includes('application/octet-stream') ||
-          (bytes.length >= 4 &&
-            bytes[0] === 0x25 &&
-            bytes[1] === 0x50 &&
-            bytes[2] === 0x44 &&
-            bytes[3] === 0x46);
-
-        if (!looksLikePdf) {
-          throw new Error('Certificate preview is not available as PDF.');
-        }
-
-        await renderPdfBuffer(data, container);
-        if (!cancelled) setLoading(false);
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || 'PDF preview is not available.');
       } catch (err: unknown) {
         if (!cancelled) {
-          if (onUnavailable) {
-            onUnavailable();
-            return;
-          }
-          setError(err instanceof Error ? err.message : 'Certificate preview failed.');
-          setLoading(false);
+          setError(err instanceof Error ? err.message : 'PDF preview failed.');
+          setMode('docx');
         }
       }
     };
 
-    void load();
+    void resolvePreview();
 
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl, renderPdfBuffer, onOfficeDocxUrl, onUnavailable]);
+  }, [pdfUrl, docxFallbackUrl]);
+
+  if (mode === 'docx') {
+    return (
+      <div>
+        {error && (
+          <p className="px-4 py-2 text-xs font-medium text-amber-700 bg-amber-50 border-b border-amber-100">
+            {error} Showing DOCX preview — layout may differ from print PDF.
+          </p>
+        )}
+        <ReachCertificateDocxViewer key={docxUrl} docxUrl={docxUrl} />
+      </div>
+    );
+  }
 
   return (
-    <div className="relative min-h-[820px] bg-slate-100 overflow-auto">
-      {loading && (
+    <div className="relative min-h-[820px] bg-slate-100">
+      {mode === 'loading' && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
           Loading certificate preview…
         </div>
       )}
-      {error && (
-        <div className="p-8 text-center text-sm text-red-600 font-medium">{error}</div>
+      {mode === 'pdf' && (
+        <iframe
+          title="EU REACH certificate preview"
+          src={`${pdfUrl}#toolbar=0&navpanes=0`}
+          className="block w-full min-h-[820px] border-0 bg-white"
+        />
       )}
-      <div
-        ref={containerRef}
-        className="docx-preview-container flex justify-center py-6 [&_.docx-wrapper]:bg-white [&_.docx-wrapper]:shadow-md"
-      />
     </div>
   );
 }

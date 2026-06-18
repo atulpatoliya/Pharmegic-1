@@ -36,11 +36,19 @@ export default async function CertificatePreviewPage({ params }: { params: Promi
       mail_resend_count,
       last_resend_at,
       mail_sent_history,
+      registration_number,
+      tonnage_band,
       clients (
         company_name,
         legal_name,
         email,
-        registration_number
+        registration_number,
+        address,
+        city,
+        state,
+        postal_code,
+        country,
+        uuid_number
       ),
       chemicals (
         chemical_name,

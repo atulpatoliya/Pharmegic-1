@@ -72,6 +72,8 @@ interface CertificatePreviewClientProps {
     issued_at: string;
     expires_at: string;
     status: string;
+    registration_number?: string | null;
+    tonnage_band?: string | null;
     mail_sent: boolean;
     mail_sent_at: string | null;
     mail_resend_count: number;
@@ -81,6 +83,12 @@ interface CertificatePreviewClientProps {
       legal_name: string | null;
       email: string;
       registration_number: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postal_code?: string | null;
+      country?: string | null;
+      uuid_number?: string | null;
     };
     chemicals?: {
       chemical_name: string;
@@ -415,7 +423,7 @@ export default function CertificatePreviewClient({
                 key={isReach ? pdfPreviewUrl : docxPreviewUrl}
                 certificateType={isReach ? 'rc' : 'tcc'}
                 docxUrl={docxPreviewUrl}
-                pdfUrl={pdfPreviewUrl}
+                pdfUrl={pdfPreviewUrl || undefined}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-96 text-slate-400">

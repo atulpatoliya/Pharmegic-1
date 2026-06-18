@@ -1,0 +1,138 @@
+import { normalizeReachDisplayValue, resolveReachTonnageBand } from '@/lib/reach-certificate-fields';
+
+export type ReachCertificateDocxData = {
+  companyName: string;
+  addressLine1: string;
+  addressLine2: string;
+  addressLine3: string;
+  chemicalName: string;
+  ecNumber: string;
+  casNumber: string;
+  registrationNumber: string;
+  tonnageBand: string;
+  uuidNumber: string;
+  issuedDate: string;
+  validatedDate: string;
+};
+
+export type ReachPdfSource = {
+  company_name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  uuid_number?: string | null;
+};
+
+export type ReachPdfChemical = {
+  chemical_name: string;
+  cas_number: string;
+  ec_number?: string | null;
+  tonnage_band?: string | null;
+};
+
+export function escapeReachXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/** Format as DD.MM.YYYY (used by TCC certificates). */
+export function formatReachCertDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+  if (!year || !month || !day) return dateStr;
+  return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
+}
+
+/** Format as "1 January 2026" for EU REACH certificate. */
+export function formatReachCertDateLong(dateStr: string): string {
+  const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+  if (!year || !month || !day) return dateStr;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/** EU REACH: "Street, City: Postal," on one line; country on the next. */
+export function buildEuReachAddressLine1(client: {
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+}): string {
+  const street = client.address?.trim();
+  const city = client.city?.trim();
+  const postal = client.postal_code?.trim();
+
+  const parts: string[] = [];
+  if (street) parts.push(street);
+
+  if (city && postal) {
+    parts.push(`${city}: ${postal}`);
+  } else if (city) {
+    parts.push(city);
+  } else if (postal) {
+    parts.push(postal);
+  }
+
+  if (parts.length === 0) return '—';
+  return `${parts.join(', ')},`;
+}
+
+export function buildReachAddressLines(client: {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+}): { line1: string; line2: string; line3: string } {
+  const cityState = [client.city, client.state].filter(Boolean).join(', ');
+  const cityPostal =
+    client.city && client.postal_code
+      ? `${client.city} – ${client.postal_code}`
+      : [client.city, client.postal_code].filter(Boolean).join(' – ');
+  const line3 = [cityPostal, client.country].filter(Boolean).join(', ');
+
+  return {
+    line1: client.address?.trim() || '—',
+    line2: cityState || '—',
+    line3: line3 || '—',
+  };
+}
+
+export function buildReachDocxData(
+  client: ReachPdfSource,
+  chemical: ReachPdfChemical,
+  options: {
+    registrationNumber: string;
+    issuedDate: string;
+    validatedDate: string;
+    tonnageBand?: string | null;
+  }
+): ReachCertificateDocxData {
+  const address = buildReachAddressLines(client);
+  const issuedIso = options.issuedDate.split('T')[0];
+  const validatedIso = options.validatedDate.split('T')[0];
+  const tonnage = resolveReachTonnageBand(options.tonnageBand, chemical.tonnage_band);
+  return {
+    companyName: normalizeReachDisplayValue(client.company_name),
+    addressLine1: buildEuReachAddressLine1(client),
+    addressLine2: normalizeReachDisplayValue(address.line2),
+    addressLine3: normalizeReachDisplayValue(client.country),
+    chemicalName: normalizeReachDisplayValue(chemical.chemical_name),
+    ecNumber: normalizeReachDisplayValue(chemical.ec_number),
+    casNumber: normalizeReachDisplayValue(chemical.cas_number),
+    registrationNumber: normalizeReachDisplayValue(options.registrationNumber),
+    tonnageBand: normalizeReachDisplayValue(tonnage),
+    uuidNumber: normalizeReachDisplayValue(client.uuid_number),
+    issuedDate: issuedIso,
+    validatedDate: validatedIso,
+  };
+}

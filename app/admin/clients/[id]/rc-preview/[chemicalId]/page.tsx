@@ -133,6 +133,11 @@ export default async function ReachCertificatePreviewPage({
         company_name: client.company_name,
         email: client.email,
         uuid_number: client.uuid_number,
+        address: client.address,
+        city: client.city,
+        state: client.state,
+        postal_code: client.postal_code,
+        country: client.country,
       }}
       chemical={{
         chemical_name: chemical.chemical_name,

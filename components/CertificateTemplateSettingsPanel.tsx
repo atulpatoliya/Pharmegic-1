@@ -49,10 +49,9 @@ export function CertificateTemplateSettingsPanel({
   isPending,
 }: CertificateTemplateSettingsPanelProps) {
   const previewDocxUrl = useMemo(() => {
-    if (certificateType === 'rc') {
-      return '/api/certificate-template/rc-preview';
-    }
-    return '/api/certificate-template/tcc-preview';
+    return certificateType === 'rc'
+      ? '/api/certificate-template/rc-preview'
+      : '/api/certificate-template/tcc-preview';
   }, [certificateType]);
 
   const previewPdfUrl = useMemo(() => {
@@ -197,7 +196,7 @@ export function CertificateTemplateSettingsPanel({
           </h2>
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
             {certificateType === 'rc'
-              ? 'Example data · same layout as print / PDF'
+              ? 'PDF preview — exact print layout'
               : 'Same layout as print / PDF'}
           </span>
         </div>
@@ -206,7 +205,7 @@ export function CertificateTemplateSettingsPanel({
             key={certificateType === 'rc' ? previewPdfUrl : previewDocxUrl}
             certificateType={certificateType}
             docxUrl={previewDocxUrl}
-            pdfUrl={previewPdfUrl}
+            pdfUrl={previewPdfUrl || undefined}
           />
         </div>
       </div>
