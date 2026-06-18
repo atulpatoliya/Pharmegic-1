@@ -35,7 +35,7 @@ export default function BrandLogo({ variant = 'full', href = '/', className }: B
   }
 
   return (
-    <Link href={href} className="w-full inline-flex items-center focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent rounded-md">
+    <Link href={href} className="w-full items-center focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent rounded-md">
       {image}
     </Link>
   );

@@ -16,7 +16,27 @@ const routeMaps: Record<string, string> = {
   apply: 'Apply for TCC',
   certificates: 'My Certificates',
   'rc-certificates': 'RC Certificates',
+  'rc-preview': 'RC Certificate Preview',
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Only link segments that resolve to a real page (avoids prefetch 404s on partial paths). */
+function segmentHref(segments: string[], index: number): string | null {
+  const segment = segments[index];
+  const url = `/${segments.slice(0, index + 1).join('/')}`;
+
+  if (segment === 'rc-preview') return null;
+
+  if (UUID_RE.test(segment)) {
+    if (index >= 2 && segments[0] === 'admin' && segments[1] === 'clients') {
+      return `/admin/clients/${segment}`;
+    }
+    return null;
+  }
+
+  return url;
+}
 
 export default function Breadcrumbs() {
   const pathname = usePathname();
@@ -48,17 +68,24 @@ export default function Breadcrumbs() {
       {segments.map((segment, index) => {
         const url = `/${segments.slice(0, index + 1).join('/')}`;
         const isLast = index === segments.length - 1;
+        const href = isLast ? null : segmentHref(segments, index);
         const displayName = routeMaps[segment] || segment.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
         return (
           <React.Fragment key={url}>
             <ChevronRight className="h-3.5 w-3.5 text-slate-300 shrink-0" />
-            {isLast ? (
-              <span className="text-slate-800 font-bold truncate max-w-[150px] sm:max-w-[300px]">
+            {isLast || !href ? (
+              <span
+                className={
+                  isLast
+                    ? 'text-slate-800 font-bold truncate max-w-[150px] sm:max-w-[300px]'
+                    : 'truncate max-w-[120px]'
+                }
+              >
                 {displayName}
               </span>
             ) : (
-              <Link href={url} className="hover:text-primary transition-colors truncate max-w-[120px]">
+              <Link href={href} className="hover:text-primary transition-colors truncate max-w-[120px]">
                 {displayName}
               </Link>
             )}

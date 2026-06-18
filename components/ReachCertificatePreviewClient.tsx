@@ -37,6 +37,7 @@ import {
 } from '@/lib/reach-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
 import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
+import { useLayoutStore } from '@/store/layout';
 type ReachCertificatePreviewClientProps = {
   clientId: string;
   chemicalId: string;
@@ -92,6 +93,7 @@ export default function ReachCertificatePreviewClient({
   mailSentHistory,
 }: ReachCertificatePreviewClientProps) {
   const router = useRouter();
+  const setCustomBreadcrumb = useLayoutStore((state) => state.setCustomBreadcrumb);
   const [isIssuing, startIssueTransition] = useTransition();
   const [isUpdating, startUpdateTransition] = useTransition();
   const [isSending, startSendTransition] = useTransition();
@@ -164,6 +166,11 @@ export default function ReachCertificatePreviewClient({
     tonnageBand,
     previewVersion,
   ]);
+
+  useEffect(() => {
+    setCustomBreadcrumb(`RC · ${chemical.chemical_name}`);
+    return () => setCustomBreadcrumb(null);
+  }, [chemical.chemical_name, setCustomBreadcrumb]);
 
   useEffect(() => {
     setOfficeDocxUrl(null);
