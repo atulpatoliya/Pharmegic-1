@@ -1,15 +1,22 @@
-/** EU REACH manufacturer card — matches EU_REACH_SOURCE.docx (#E8EFDF / #135D3F). */
+/** EU REACH manufacturer card — matches PDF / EU_REACH_SOURCE.docx (#E8EFDF / #135D3F). */
 const MANUFACTURER_CARD_STYLE: Partial<CSSStyleDeclaration> = {
   backgroundColor: '#E8EFDF',
-  borderLeft: '6px solid #135D3F',
-  borderRadius: '4px',
-  padding: '14px 16px 14px 14px',
+  borderRadius: '10px',
+  padding: '12px 16px 16px',
   margin: '12px 0 16px',
   boxSizing: 'border-box',
 };
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+function cleanManufacturerAddressText(text: string): string {
+  const parts = normalizeText(text)
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part && part !== '—');
+  return parts.length > 0 ? parts.join(', ') : '—';
 }
 
 function styleManufacturerCardParagraph(p: HTMLElement, index: number): void {
@@ -24,30 +31,35 @@ function styleManufacturerCardParagraph(p: HTMLElement, index: number): void {
     p.style.color = '#135D3F';
     p.style.textTransform = 'uppercase';
     p.style.letterSpacing = '0.04em';
-    p.style.marginBottom = '5px';
+    p.style.marginBottom = '6px';
     return;
   }
 
   if (index === 1) {
     p.style.fontSize = '13.5pt';
     p.style.fontWeight = '700';
-    p.style.color = '#2D2D2D';
-    p.style.marginBottom = '3px';
+    p.style.color = '#135D3F';
+    p.style.marginBottom = '4px';
     return;
   }
 
   if (index === 2) {
+    const cleaned = cleanManufacturerAddressText(p.textContent || '');
+    if (cleaned !== normalizeText(p.textContent || '')) {
+      p.textContent = cleaned;
+    }
     p.style.fontSize = '9pt';
     p.style.fontWeight = '400';
     p.style.color = '#596472';
-    p.style.marginBottom = '2px';
+    p.style.marginBottom = '4px';
     return;
   }
 
   p.style.fontSize = '9pt';
   p.style.fontWeight = '700';
   p.style.color = '#135D3F';
-  p.style.marginTop = '6px';
+  p.style.marginTop = '8px';
+  p.style.lineHeight = '1.4';
 }
 
 function collectManufacturerCardParagraphs(
@@ -83,13 +95,33 @@ function wrapManufacturerCard(cardParagraphs: HTMLParagraphElement[]): void {
   });
 }
 
+function hideDuplicateManufacturerBlocks(paragraphs: HTMLParagraphElement[]): void {
+  const hits: number[] = [];
+  for (let i = 0; i < paragraphs.length; i++) {
+    const text = normalizeText(paragraphs[i].textContent || '');
+    if (!/NON-EU\s+MANUFACTURER/i.test(text)) continue;
+    hits.push(i);
+  }
+
+  for (let h = 1; h < hits.length; h++) {
+    const card = collectManufacturerCardParagraphs(paragraphs, hits[h]);
+    card.forEach((p) => {
+      p.style.display = 'none';
+    });
+  }
+}
+
 /** Rebuild manufacturer info cards when docx-preview omits Word drawing/VML shapes. */
 export function applyReachDocxPreviewStyles(container: HTMLElement): void {
   const paragraphs = Array.from(container.querySelectorAll('p')).filter(
     (p): p is HTMLParagraphElement => p instanceof HTMLParagraphElement
   );
 
+  hideDuplicateManufacturerBlocks(paragraphs);
+
   for (let i = 0; i < paragraphs.length; i++) {
+    if (paragraphs[i].style.display === 'none') continue;
+
     const text = normalizeText(paragraphs[i].textContent || '');
     if (!/NON-EU\s+MANUFACTURER/i.test(text)) continue;
 

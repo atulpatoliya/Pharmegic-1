@@ -61,6 +61,11 @@ export function formatReachCertDateLong(dateStr: string): string {
   });
 }
 
+function isReachMissingField(value?: string | null): boolean {
+  const trimmed = value?.trim() ?? '';
+  return !trimmed || trimmed === '—';
+}
+
 /** EU REACH: "Street, City: Postal," on one line; country on the next. */
 export function buildEuReachAddressLine1(client: {
   address?: string | null;
@@ -72,18 +77,58 @@ export function buildEuReachAddressLine1(client: {
   const postal = client.postal_code?.trim();
 
   const parts: string[] = [];
-  if (street) parts.push(street);
+  if (street && !isReachMissingField(street)) parts.push(street);
 
   if (city && postal) {
     parts.push(`${city}: ${postal}`);
-  } else if (city) {
+  } else if (city && !isReachMissingField(city)) {
     parts.push(city);
-  } else if (postal) {
+  } else if (postal && !isReachMissingField(postal)) {
     parts.push(postal);
   }
 
   if (parts.length === 0) return '—';
   return `${parts.join(', ')},`;
+}
+
+/** Manufacturer card address — avoids "—, —, India" when only country is known. */
+export function formatEuReachManufacturerAddress(client: {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+}): { line1: string; line3: string } {
+  const street = client.address?.trim();
+  const city = client.city?.trim();
+  const postal = client.postal_code?.trim();
+  const state = client.state?.trim();
+  const country = client.country?.trim();
+
+  const locality: string[] = [];
+  if (street && !isReachMissingField(street)) locality.push(street);
+
+  if (city && postal) {
+    locality.push(`${city}: ${postal}`);
+  } else if (city && !isReachMissingField(city)) {
+    locality.push(city);
+  } else if (postal && !isReachMissingField(postal)) {
+    locality.push(postal);
+  } else if (state && !isReachMissingField(state)) {
+    locality.push(state);
+  }
+
+  if (locality.length === 0) {
+    return {
+      line1: country && !isReachMissingField(country) ? country : '—',
+      line3: '',
+    };
+  }
+
+  return {
+    line1: `${locality.join(', ')},`,
+    line3: country && !isReachMissingField(country) ? country : '—',
+  };
 }
 
 export function buildReachAddressLines(client: {
@@ -118,14 +163,15 @@ export function buildReachDocxData(
   }
 ): ReachCertificateDocxData {
   const address = buildReachAddressLines(client);
+  const manufacturerAddress = formatEuReachManufacturerAddress(client);
   const issuedIso = options.issuedDate.split('T')[0];
   const validatedIso = options.validatedDate.split('T')[0];
   const tonnage = resolveReachTonnageBand(options.tonnageBand, chemical.tonnage_band);
   return {
     companyName: normalizeReachDisplayValue(client.company_name),
-    addressLine1: buildEuReachAddressLine1(client),
+    addressLine1: manufacturerAddress.line1,
     addressLine2: normalizeReachDisplayValue(address.line2),
-    addressLine3: normalizeReachDisplayValue(client.country),
+    addressLine3: manufacturerAddress.line3,
     chemicalName: normalizeReachDisplayValue(chemical.chemical_name),
     ecNumber: normalizeReachDisplayValue(chemical.ec_number),
     casNumber: normalizeReachDisplayValue(chemical.cas_number),
