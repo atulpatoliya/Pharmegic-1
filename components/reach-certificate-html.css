@@ -85,7 +85,7 @@
 
 [data-reach-cert-root] .reach-cert-title {
   display: block;
-  margin: 12px 0 18px !important;
+  margin: 25px 0 18px !important;
   padding: 0 !important; 
   text-align: center !important;
   font-family: 'Times New Roman', Times, serif !important;
@@ -130,6 +130,7 @@
   text-transform: uppercase;
   color: var(--reach-green-dark) !important;
   font-family: 'Verdana', Geneva, Tahoma, sans-serif !important;
+  line-height: 1.02 !important;
 }
 
 [data-reach-cert-root] .reach-manufacturer-name {
