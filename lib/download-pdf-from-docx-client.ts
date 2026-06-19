@@ -481,46 +481,32 @@ export async function downloadCertificatePdf(params: {
     });
   }
 
-  try {
-    const pdfRes = await fetch(appendCacheBuster(params.pdfUrl), {
-      credentials: 'same-origin',
-      cache: 'no-store',
-    });
+  if (params.certificateType === 'tcc') {
+    try {
+      const pdfRes = await fetch(appendCacheBuster(params.pdfUrl), {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
 
-    if (pdfRes.ok) {
-      const parsed = await downloadFromPdfResponse(pdfRes, params.fileName);
-
-      if ('kind' in parsed) {
-        if (parsed.kind === 'docx') {
-          return downloadPdfFromDocxSources([parsed.docxUrl], params.fileName);
+      if (pdfRes.ok) {
+        const parsed = await downloadFromPdfResponse(pdfRes, params.fileName);
+        if (!('kind' in parsed)) {
+          return parsed;
         }
       } else {
-        return parsed;
+        const body = (await pdfRes.json().catch(() => null)) as { error?: string } | null;
+        serverError = body?.error;
       }
-    } else {
-      const body = (await pdfRes.json().catch(() => null)) as { error?: string } | null;
-      serverError = body?.error;
-    }
-  } catch (err) {
-    if (err instanceof Error && !serverError) {
-      serverError = err.message;
-    }
-  }
-
-  const docxSources = [params.previewDocxUrl, params.docxUrl].filter(
-    (url): url is string => Boolean(url?.trim())
-  );
-  if (docxSources.length > 0) {
-    try {
-      return await downloadPdfFromDocxSources(docxSources, params.fileName);
     } catch (err) {
-      if (err instanceof Error) {
+      if (err instanceof Error && !serverError) {
         serverError = err.message;
       }
     }
+
+    throw new Error(serverError || RC_PDF_SETUP_MESSAGE);
   }
 
-  throw new Error(serverError || RC_PDF_SETUP_MESSAGE);
+  throw new Error('Certificate type is required for PDF download.');
 }
 
 export async function downloadPdfFromDocxUrl(docxUrl: string, fileName: string): Promise<void> {

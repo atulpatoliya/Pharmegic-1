@@ -51,9 +51,10 @@ export function CertificateTemplateSettingsPanel({
   isPending,
 }: CertificateTemplateSettingsPanelProps) {
   const previewDocxUrl = useMemo(() => {
-    return certificateType === 'rc'
-      ? '/api/certificate-template/rc-preview'
-      : '/api/certificate-template/tcc-preview';
+    if (certificateType === 'rc') {
+      return '/api/certificate-template/rc-preview';
+    }
+    return '';
   }, [certificateType]);
 
   const rcHtmlData = useMemo(() => {

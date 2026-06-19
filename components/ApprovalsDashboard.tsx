@@ -15,7 +15,6 @@ import { matchesDateRange, formatDisplayDate } from '@/lib/date-filter';
 import { matchesNumberRange } from '@/lib/number-filter';
 import { getTccApplicationAvailableQuota } from '@/lib/tcc-application-quota';
 import {
-  buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
@@ -603,8 +602,9 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                           {app.status === 'approved' && cert?.id && (
                             <CertificatePdfDownloadLink
                               pdfUrl={buildTccCertificatePdfDownloadUrl(cert.id)}
-                              docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)}
+                              docxUrl=""
                               fileName={`${cert.certificate_number}.pdf`}
+                              certificateType="tcc"
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 h-8 text-xs font-bold text-primary hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/50 rounded-md transition-colors border border-emerald-100 disabled:opacity-60"
                             >
                               <Download className="h-3.5 w-3.5" />

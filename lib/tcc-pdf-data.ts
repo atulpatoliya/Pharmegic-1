@@ -1,15 +1,3 @@
-import {
-  buildTccExporterFullAddress,
-  convertTccDocxToPdf,
-  formatTccCertDate,
-  generateTccCertificateDocx,
-  parseEuImporterFields,
-  type TccCertificateDocxData,
-} from '@/services/tcc-certificate-docx';
-import { buildReachAddressLines } from '@/services/reach-certificate-docx';
-import { getTodayDateString } from '@/lib/reach-certificate';
-import { splitEuImporterAddress } from '@/lib/tcc-eu-importer';
-
 export type TccCertificateStoredFile = {
   buffer: Buffer;
   fileName: string;
@@ -46,119 +34,33 @@ export type TccPdfApplication = {
   invoice_number?: string | null;
 };
 
-export function buildTccDocxData(input: {
+export async function buildTccCertificateStoredFile(input: {
+  certNumber: string;
   client: TccPdfClient;
   chemical: TccPdfChemical;
   application: TccPdfApplication;
   registrationNumber?: string | null;
   validUntilDate: string;
   deliveryChallanNo?: string | null;
-}): TccCertificateDocxData {
-  const address = buildReachAddressLines(input.client);
-  const exportDateRaw = input.application.export_date || getTodayDateString();
-
-  const euCompanyName = input.application.eu_importer_company_name?.trim();
-  const euAddress = input.application.eu_importer_address?.trim();
-  let euImporterName: string;
-  let euImporterAddr1: string;
-  let euImporterAddr2: string;
-  let euImporterAddr3: string;
-
-  if (euCompanyName) {
-    euImporterName = euCompanyName;
-    const split = splitEuImporterAddress(euAddress || '');
-    euImporterAddr1 = split.addr1;
-    euImporterAddr2 = split.addr2;
-    euImporterAddr3 = split.addr3;
-  } else {
-    const legacy = parseEuImporterFields(
-      input.application.remarks,
-      input.application.registration_number
-    );
-    euImporterName = legacy.name;
-    euImporterAddr1 = legacy.addr1;
-    euImporterAddr2 = legacy.addr2;
-    euImporterAddr3 = legacy.addr3;
-  }
-
-  return {
-    companyName: input.client.company_name,
-    addressLine1: address.line1,
-    addressLine2: address.line2,
-    addressLine3: address.line3,
-    exporterFullAddress: buildTccExporterFullAddress(input.client),
-    chemicalName: input.chemical.chemical_name,
-    ecNumber: input.chemical.ec_number || '—',
-    casNumber: input.chemical.cas_number,
-    registrationNumber: input.registrationNumber?.trim() || '—',
-    tonnageBand: input.chemical.tonnage_band || '—',
-    uuidNumber: input.client.uuid_number || '—',
-    euImporterName,
-    euImporterAddr1,
-    euImporterAddr2,
-    euImporterAddr3,
-    volumeMt: `${Number(input.application.quantity_mt)} MT`,
-    deliveryChallanNo:
-      input.deliveryChallanNo?.trim() ||
-      input.application.purchase_order_number?.trim() ||
-      input.application.tracking_id?.trim() ||
-      '—',
-    exportDate: formatTccCertDate(exportDateRaw),
-    validUntilDate: formatTccCertDate(input.validUntilDate),
-  };
-}
-
-export async function buildTccCertificateStoredFile(
-  input: {
-    certNumber: string;
-    client: TccPdfClient;
-    chemical: TccPdfChemical;
-    application: TccPdfApplication;
-    registrationNumber?: string | null;
-    validUntilDate: string;
-    deliveryChallanNo?: string | null;
-    issuedDate?: string | null;
-  }
-): Promise<TccCertificateStoredFile> {
+  issuedDate?: string | null;
+}): Promise<TccCertificateStoredFile> {
   const { generateTccCertificateHtmlPdf } = await import('@/lib/tcc-certificate-html-pdf-server');
-  const { isReachPuppeteerPdfAvailable } = await import('@/services/reach-certificate-puppeteer-pdf');
 
-  if (isReachPuppeteerPdfAvailable()) {
-    try {
-      const pdfBuffer = await generateTccCertificateHtmlPdf({
-        certificateNumber: input.certNumber,
-        client: input.client,
-        chemical: input.chemical,
-        application: input.application,
-        registrationNumber: input.registrationNumber,
-        validUntilDate: input.validUntilDate,
-        deliveryChallanNo: input.deliveryChallanNo,
-        issuedDate: input.issuedDate,
-      });
-      return {
-        buffer: pdfBuffer,
-        fileName: `${input.certNumber}.pdf`,
-        contentType: 'application/pdf',
-        format: 'pdf',
-      };
-    } catch {
-      // Fall through to LibreOffice DOCX conversion.
-    }
-  }
+  const pdfBuffer = await generateTccCertificateHtmlPdf({
+    certificateNumber: input.certNumber,
+    client: input.client,
+    chemical: input.chemical,
+    application: input.application,
+    registrationNumber: input.registrationNumber,
+    validUntilDate: input.validUntilDate,
+    deliveryChallanNo: input.deliveryChallanNo,
+    issuedDate: input.issuedDate,
+  });
 
-  const docxBuffer = generateTccCertificateDocx(buildTccDocxData(input));
-  const pdfBuffer = await convertTccDocxToPdf(docxBuffer);
   return {
     buffer: pdfBuffer,
     fileName: `${input.certNumber}.pdf`,
     contentType: 'application/pdf',
     format: 'pdf',
   };
-}
-
-export async function generateTccPdfForApplication(
-  input: Parameters<typeof buildTccDocxData>[0]
-): Promise<Buffer> {
-  const docxBuffer = generateTccCertificateDocx(buildTccDocxData(input));
-  return convertTccDocxToPdf(docxBuffer);
 }

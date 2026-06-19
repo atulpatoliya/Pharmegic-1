@@ -68,7 +68,6 @@ import {
   buildReachCertificatePdfDownloadUrl,
 } from '@/lib/reach-certificate-download';
 import {
-  buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
@@ -2081,8 +2080,9 @@ export default function ClientDashboardDetails({
                           {cert?.id && app.status === 'approved' && (
                             <CertificatePdfDownloadLink
                               pdfUrl={buildTccCertificatePdfDownloadUrl(cert.id)}
-                              docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)}
+                              docxUrl=""
                               fileName={`${cert.certificate_number || 'tcc-certificate'}.pdf`}
+                              certificateType="tcc"
                               title="Download certificate PDF"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
                             >

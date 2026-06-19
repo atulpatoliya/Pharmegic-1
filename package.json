@@ -15,7 +15,9 @@
     "prepare:eu-reach": "node scripts/prepare-eu-reach-template.mjs && node scripts/generate-eu-reach-preview-pdf.mjs",
     "setup:pdf": "bash scripts/setup-pdf-converter.sh",
     "setup:live-pdf": "bash scripts/setup-live-pdf.sh",
-    "deploy:live": "bash scripts/deploy-live.sh"
+    "deploy:live": "bash scripts/deploy-live.sh",
+    "cleanup:tcc-docx": "npx tsx scripts/cleanup-tcc-docx-storage.ts",
+    "cleanup:tcc-docx:dry": "npx tsx scripts/cleanup-tcc-docx-storage.ts --dry-run"
   },
   "dependencies": {
     "@fontsource/tinos": "^5.2.7",

@@ -144,15 +144,9 @@ This writes:
 
 ### TCC Certificate template
 
-TCC certificates use `templates/TCC-Demo.docx` as the source design. Prepare the merge template with:
+TCC certificates are rendered from HTML (`components/TccCertificateHtmlDocument.tsx`) and exported to PDF via Puppeteer. Branding (logo, signature, accent color, footer) is configured in **Admin → Settings → TCC Certificate Template**.
 
-```bash
-node scripts/prepare-tcc-template.mjs
-```
-
-This writes `templates/TCC_2026.docx`. Only client, chemical, and application fields are filled at issue time; the Word layout stays fixed.
-
-Dynamic fields include: company name/address, chemical name, CAS/EC numbers, REACH registration number, tonnage band, UUID, export volume (MT), delivery challan, export date, and valid-until date.
+Reference design file: `templates/TCC Final.docx` (layout reference only; not used at runtime).
 
 ---
 

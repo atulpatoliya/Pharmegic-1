@@ -21,7 +21,6 @@ import {
   buildReachCertificatePdfDownloadUrl,
 } from '@/lib/reach-certificate-download';
 import {
-  buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
@@ -225,7 +224,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
                           }
                           docxUrl={
                             cert.type === 'TCC'
-                              ? buildTccCertificateDocxPreviewUrl(cert.id)
+                              ? ''
                               : buildReachCertificateDocxPreviewUrl(cert.id)
                           }
                           fileName={`${cert.certificate_number}.pdf`}

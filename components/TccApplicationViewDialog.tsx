@@ -33,8 +33,6 @@ import {
 } from '@/components/TccApplicationAdminEditForm';
 import TccCertificateHtmlPreviewFromApi from '@/components/TccCertificateHtmlPreviewFromApi';
 import {
-  buildTccCertificateApplicationPreviewUrl,
-  buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
@@ -224,11 +222,7 @@ export function TccApplicationViewDialog({
   const showActions =
     allowReview && canReviewActions(displayApp.status) && !isEditing && isEuReachFramework(displayApp.regulatory_framework);
   const boUrl = displayApp.bo_attachment_url;
-  const docxPreviewUrl = cert?.id
-    ? `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`
-    : displayApp.id
-      ? `${buildTccCertificateApplicationPreviewUrl(displayApp.id)}&v=${previewVersion}`
-      : '';
+  const showDraftPreview = Boolean(displayApp.export_date || displayApp.id);
   const totalSent = mailState.mail_resend_count + (mailState.mail_sent ? 1 : 0);
 
   const handleSendMail = () => {
@@ -464,8 +458,9 @@ export function TccApplicationViewDialog({
                   <div className="flex items-center gap-2 flex-wrap">
                     <CertificatePdfDownloadLink
                       pdfUrl={buildTccCertificatePdfDownloadUrl(cert.id)}
-                      docxUrl={buildTccCertificateDocxPreviewUrl(cert.id)}
+                      docxUrl=""
                       fileName={`${cert.certificate_number}.pdf`}
+                      certificateType="tcc"
                       className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline disabled:opacity-60"
                     >
                       <Download className="h-3.5 w-3.5" />
@@ -516,9 +511,9 @@ export function TccApplicationViewDialog({
                   </div>
                 )}
 
-                <TccCertificateHtmlPreviewFromApi certificateId={cert.id} />
+                <TccCertificateHtmlPreviewFromApi key={previewVersion} certificateId={cert.id} />
               </div>
-            ) : docxPreviewUrl ? (
+            ) : showDraftPreview ? (
               <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50/50">
                 <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                   <div>
@@ -530,7 +525,7 @@ export function TccApplicationViewDialog({
                     </p>
                   </div>
                 </div>
-                <TccCertificateHtmlPreviewFromApi applicationId={displayApp.id} />
+                <TccCertificateHtmlPreviewFromApi key={previewVersion} applicationId={displayApp.id} />
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">

@@ -28,7 +28,6 @@ import {
   buildReachCertificatePdfDownloadUrl,
 } from '@/lib/reach-certificate-download';
 import {
-  buildTccCertificateDocxPreviewUrl,
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
 import { formatDisplayDate } from '@/lib/date-filter';
@@ -164,7 +163,7 @@ export default function CertificatePreviewClient({
   const totalSent = cert.mail_resend_count + (cert.mail_sent ? 1 : 0);
   const docxPreviewUrl = isReach
     ? `${buildReachCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`
-    : `${buildTccCertificateDocxPreviewUrl(cert.id)}&v=${previewVersion}`;
+    : '';
   const viewApplication = useMemo(() => {
     if (!tccApp) return null;
     return buildViewApplicationFromCert(
@@ -266,7 +265,7 @@ export default function CertificatePreviewClient({
             docxUrl={
               isReach
                 ? buildReachCertificateDocxPreviewUrl(cert.id)
-                : buildTccCertificateDocxPreviewUrl(cert.id)
+                : ''
             }
             fileName={`${cert.certificate_number}.pdf`}
             certificateType={isReach ? 'rc' : 'tcc'}

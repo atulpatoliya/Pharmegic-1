@@ -1,5 +1,5 @@
 import type { ReachPdfChemical, ReachPdfSource } from '@/lib/reach-pdf-data';
-import type { TccCertificateDocxData } from '@/services/tcc-certificate-docx';
+import type { TccCertificateDocxData } from '@/lib/tcc-certificate-html-data';
 
 const RC_PREVIEW_SAMPLE = {
   client: {

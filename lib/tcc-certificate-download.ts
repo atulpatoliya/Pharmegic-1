@@ -13,11 +13,3 @@ export function buildTccCertificateApplicationHtmlDataUrl(applicationId: string)
 export function buildTccCertificateApplicationPdfUrl(applicationId: string): string {
   return `/api/tcc-certificate/pdf-html?applicationId=${encodeURIComponent(applicationId)}`;
 }
-
-export function buildTccCertificateDocxPreviewUrl(certificateId: string): string {
-  return `/api/tcc-certificate/docx?certificateId=${encodeURIComponent(certificateId)}`;
-}
-
-export function buildTccCertificateApplicationPreviewUrl(applicationId: string): string {
-  return `/api/tcc-certificate/docx?applicationId=${encodeURIComponent(applicationId)}`;
-}
