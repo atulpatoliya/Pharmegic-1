@@ -363,7 +363,7 @@
 [data-reach-cert-root] .reach-seal-wrap {
   display: flex !important;
   justify-content: center;
-  margin: 10px 0 20px !important;
+  margin: 10px 0 10px !important;
   padding: 0 !important;
 }
 
