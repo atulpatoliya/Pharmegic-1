@@ -22,7 +22,7 @@ html, body {
   font-family: 'Noto Sans', Verdana, Geneva, Tahoma, sans-serif;
 }
 [data-reach-cert-root] .reach-cert-title {
-  font-family: 'Tinos', 'Times New Roman', Times, serif !important;
+  font-family: 'Times New Roman', Times, serif !important;
 }
 `;
 
