@@ -44,6 +44,28 @@ The Pharmegic Healthcare Portal is fully compatible with Vercel's edge network.
    - `SMTP_FROM`
 5. Click **Deploy**. Vercel will automatically build the Next.js App Router project and allocate serverless routes.
 
+### RC HTML Certificate PDF (Puppeteer on Vercel)
+
+The live RC certificate download uses server-side HTML → PDF via Puppeteer. On Vercel this uses `@sparticuz/chromium` automatically — **do not** set `PUPPETEER_EXECUTABLE_PATH` or `REACH_PDF_RENDER_URL` in Vercel.
+
+**Required Vercel environment variable:**
+
+| Variable | Value |
+|----------|-------|
+| `NEXT_PUBLIC_APP_URL` | `https://portal.pharmegichealthcare.com` |
+
+After adding or changing this variable, **Redeploy** the project (required for `NEXT_PUBLIC_*` vars).
+
+**Verify after deploy:**
+
+```
+https://portal.pharmegichealthcare.com/api/health/pdf-converter
+```
+
+Check that `htmlPdfEnabled` is `true`, `htmlPdfRenderUrl` is your production domain, and `htmlPdfUsesServerlessChromium` is `true`.
+
+**Do NOT set on Vercel:** `REACH_PDF_RENDER_URL`, `PUPPETEER_EXECUTABLE_PATH`, `CHROME_PATH` (these are for VPS/Linux only).
+
 ---
 
 ## 3. Production Database Backups & Auditing

@@ -1,4 +1,9 @@
-import type { Browser } from 'puppeteer-core';
+import type { Browser, LaunchOptions } from 'puppeteer-core';
+import { isVercelHosting } from '@/lib/reach-gotenberg';
+
+function isServerlessHosting(): boolean {
+  return isVercelHosting() || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
 
 function chromeCandidates(): string[] {
   const fromEnv = [process.env.PUPPETEER_EXECUTABLE_PATH, process.env.CHROME_PATH].filter(
@@ -24,7 +29,7 @@ function chromeCandidates(): string[] {
   ];
 }
 
-async function resolveChromeExecutable(): Promise<string> {
+async function resolveSystemChromeExecutable(): Promise<string> {
   const { access } = await import('node:fs/promises');
 
   for (const candidate of chromeCandidates()) {
@@ -41,15 +46,34 @@ async function resolveChromeExecutable(): Promise<string> {
   );
 }
 
-let browserPromise: Promise<Browser> | null = null;
+async function buildLaunchOptions(): Promise<LaunchOptions> {
+  if (isServerlessHosting()) {
+    const [puppeteer, chromium] = await Promise.all([
+      import('puppeteer-core'),
+      import('@sparticuz/chromium'),
+    ]);
 
-async function launchBrowser(): Promise<Browser> {
-  const [puppeteer, executablePath] = await Promise.all([
-    import('puppeteer-core'),
-    resolveChromeExecutable(),
-  ]);
+    chromium.default.setGraphicsMode = false;
 
-  return puppeteer.default.launch({
+    const args = await puppeteer.default.defaultArgs({
+      args: chromium.default.args,
+      headless: 'shell',
+    });
+
+    return {
+      args,
+      defaultViewport: {
+        width: 794,
+        height: 1123,
+        deviceScaleFactor: 1,
+      },
+      executablePath: await chromium.default.executablePath(),
+      headless: 'shell',
+    };
+  }
+
+  const executablePath = await resolveSystemChromeExecutable();
+  return {
     headless: true,
     executablePath,
     args: [
@@ -58,10 +82,22 @@ async function launchBrowser(): Promise<Browser> {
       '--disable-dev-shm-usage',
       '--font-render-hinting=none',
     ],
-  });
+  };
+}
+
+let browserPromise: Promise<Browser> | null = null;
+
+async function launchBrowser(): Promise<Browser> {
+  const puppeteer = await import('puppeteer-core');
+  const options = await buildLaunchOptions();
+  return puppeteer.default.launch(options);
 }
 
 async function getBrowser(): Promise<Browser> {
+  if (isServerlessHosting()) {
+    return launchBrowser();
+  }
+
   if (!browserPromise) {
     browserPromise = launchBrowser().catch((err) => {
       browserPromise = null;
@@ -69,6 +105,12 @@ async function getBrowser(): Promise<Browser> {
     });
   }
   return browserPromise;
+}
+
+async function closeBrowserIfNeeded(browser: Browser): Promise<void> {
+  if (isServerlessHosting()) {
+    await browser.close();
+  }
 }
 
 export async function generateReachHtmlPdfWithPuppeteer(printUrl: string): Promise<Buffer> {
@@ -108,9 +150,14 @@ export async function generateReachHtmlPdfWithPuppeteer(printUrl: string): Promi
     return Buffer.from(pdf);
   } finally {
     await page.close();
+    await closeBrowserIfNeeded(browser);
   }
 }
 
 export function isReachPuppeteerPdfAvailable(): boolean {
   return process.env.REACH_PDF_DISABLED !== '1';
+}
+
+export function usesServerlessChromium(): boolean {
+  return isServerlessHosting();
 }

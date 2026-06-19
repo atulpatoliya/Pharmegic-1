@@ -13,17 +13,7 @@ import {
 } from '@/lib/reach-certificate-print-token';
 import { generateReachHtmlPdfWithPuppeteer } from '@/services/reach-certificate-puppeteer-pdf';
 import { getActiveTemplate } from '@/services/db';
-
-function resolvePdfRenderBaseUrl(): string {
-  const configured =
-    process.env.REACH_PDF_RENDER_URL?.replace(/\/$/, '') ||
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '');
-
-  if (configured) return configured;
-
-  const port = process.env.PORT || '3000';
-  return `http://127.0.0.1:${port}`;
-}
+import { resolvePdfRenderBaseUrl } from '@/lib/reach-pdf-render-url';
 
 function resolveAbsoluteAssetUrl(url: string | null, baseUrl: string): string | null {
   if (!url?.trim()) return null;
@@ -151,5 +141,3 @@ export async function generateReachCertificateHtmlPdf(
   const printUrl = `${baseUrl}/reach-cert/print?token=${encodeURIComponent(token)}`;
   return generateReachHtmlPdfWithPuppeteer(printUrl);
 }
-
-export { resolvePdfRenderBaseUrl };
