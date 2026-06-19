@@ -1,24 +1,15 @@
-import { createRequire } from 'node:module';
-import type { Browser, LaunchOptions } from 'puppeteer-core';
+import type { Browser } from 'puppeteer-core';
 import { getVercelChromiumPackUrl } from '@/lib/vercel-chromium-config';
 
-const require = createRequire(`${process.cwd()}/`);
-
-type SparticuzChromium = {
-  args: string[];
-  setGraphicsMode: boolean;
-  executablePath(input?: string): Promise<string>;
-};
-
-type PuppeteerCore = {
-  launch(options: LaunchOptions): Promise<Browser>;
-  defaultArgs(options?: { args?: string[]; headless?: boolean | 'shell' }): Promise<string[]>;
-};
-
-/** Launch Puppeteer on Vercel using @sparticuz/chromium-min + remote pack (not bundled). */
+/** Launch Puppeteer on Vercel using @sparticuz/chromium-min + remote pack (ESM dynamic import). */
 export async function launchVercelPuppeteerBrowser(): Promise<Browser> {
-  const puppeteer = require('puppeteer-core') as PuppeteerCore;
-  const chromium = require('@sparticuz/chromium-min') as SparticuzChromium;
+  const [puppeteerModule, chromiumModule] = await Promise.all([
+    import('puppeteer-core'),
+    import('@sparticuz/chromium-min'),
+  ]);
+
+  const puppeteer = puppeteerModule.default;
+  const chromium = chromiumModule.default;
 
   chromium.setGraphicsMode = false;
 
