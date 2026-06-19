@@ -14,10 +14,10 @@ type ReachCertificateFont = {
 const PUBLIC_FONTS_DIR = path.join(process.cwd(), 'public', 'fonts');
 
 const REACH_CERTIFICATE_FONTS: ReachCertificateFont[] = [
-  { family: 'Verdana', file: 'Verdana.ttf', weight: 400, style: 'normal', format: 'truetype' },
-  { family: 'Verdana', file: 'Verdana-Bold.ttf', weight: 700, style: 'normal', format: 'truetype' },
-  { family: 'Verdana', file: 'Verdana-Italic.ttf', weight: 400, style: 'italic', format: 'truetype' },
-  { family: 'Verdana', file: 'Verdana-BoldItalic.ttf', weight: 700, style: 'italic', format: 'truetype' },
+  { family: 'Verdana', file: 'verdana.ttf', weight: 400, style: 'normal', format: 'truetype' },
+  { family: 'Verdana', file: 'verdanab.ttf', weight: 700, style: 'normal', format: 'truetype' },
+  { family: 'Verdana', file: 'verdanai.ttf', weight: 400, style: 'italic', format: 'truetype' },
+  { family: 'Verdana', file: 'verdanaz.ttf', weight: 700, style: 'italic', format: 'truetype' },
   {
     family: 'Times New Roman',
     file: 'Times-New-Roman.ttf',
