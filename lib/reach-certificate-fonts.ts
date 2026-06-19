@@ -46,6 +46,10 @@ const REACH_CERTIFICATE_FONTS: ReachCertificateFont[] = [
     style: 'italic',
     format: 'truetype',
   },
+  { family: 'Arial', file: 'arial.ttf', weight: 400, style: 'normal', format: 'truetype' },
+  { family: 'Arial', file: 'arialbd.ttf', weight: 700, style: 'normal', format: 'truetype' },
+  { family: 'Arial', file: 'ariali.ttf', weight: 400, style: 'italic', format: 'truetype' },
+  { family: 'Arial', file: 'arialbi.ttf', weight: 700, style: 'italic', format: 'truetype' },
 ];
 
 function fontMimeType(format: FontFormat): string {

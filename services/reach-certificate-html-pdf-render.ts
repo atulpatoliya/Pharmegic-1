@@ -51,6 +51,12 @@ html, body {
   margin: 0 0 4px !important;
   line-height: 1.15 !important;
 }
+[data-reach-cert-root] .reach-date-label {
+  font-family: 'Arial', Helvetica, sans-serif !important;
+}
+[data-reach-cert-root] .reach-date-value {
+  font-family: 'Arial', Helvetica, sans-serif !important;
+}
 `;
 
 function loadCertificateCss(): string {

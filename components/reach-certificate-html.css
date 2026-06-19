@@ -344,7 +344,7 @@
   color: rgba(0, 0, 0, 0.6) !important;
   margin: 0 0 4px !important;
   text-transform: uppercase;
-  font-family: 'Verdana', Geneva, Tahoma, sans-serif !important;
+  font-family: 'Arial', Helvetica, sans-serif !important;
 }
 
 [data-reach-cert-root] .reach-date-value {
@@ -353,7 +353,7 @@
   font-weight: bold !important;
   color: #111 !important;
   margin: 0 !important;
-  font-family: 'Verdana', Geneva, Tahoma, sans-serif !important;
+  font-family: 'Arial', Helvetica, sans-serif !important;
 }
 
 [data-reach-cert-root] .reach-date-value.red {
