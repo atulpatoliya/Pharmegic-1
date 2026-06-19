@@ -86,7 +86,7 @@
 [data-reach-cert-root] .reach-cert-title {
   display: block;
   margin: 12px 0 18px !important;
-  padding: 0 !important;
+  padding: 0 !important; 
   text-align: center !important;
   font-family: 'Times New Roman', Times, serif !important;
   font-size: 22pt !important;
