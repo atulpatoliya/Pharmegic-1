@@ -1,18 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  buildReachDocxData,
-  type ReachPdfChemical,
-  type ReachPdfSource,
-} from '@/lib/reach-pdf-data';
-import {
   DOCX_CONTENT_TYPE,
   PDF_CONTENT_TYPE,
   uploadReachCertificateFile,
 } from '@/lib/reach-certificate-storage';
-import {
-  convertReachDocxToPdf,
-  generateReachCertificateDocx,
-} from '@/services/reach-certificate-docx';
+import { generateReachCertificateHtmlPdf } from '@/lib/reach-certificate-html-pdf-server';
+import type { LoadedReachCertificateInput } from '@/lib/reach-certificate-api-input';
+import { buildReachDocxData } from '@/lib/reach-pdf-data';
+import { generateReachCertificateDocx } from '@/services/reach-certificate-docx';
+import type { ReachPdfChemical, ReachPdfSource } from '@/lib/reach-pdf-data';
 
 export type ReachCertPdfInput = {
   certificateNumber: string;
@@ -28,8 +24,31 @@ export type ReachCertificatePreviewResult =
   | { mode: 'pdf'; buffer: Buffer; fileName: string }
   | { mode: 'docx'; docxUrl: string; fileName: string };
 
-function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
-  return generateReachCertificateDocx(
+function toLoadedInput(input: ReachCertPdfInput & LoadedReachCertificateInput): LoadedReachCertificateInput {
+  return input;
+}
+
+/**
+ * Resolves RC preview PDF via Puppeteer HTML render; falls back to DOCX upload for legacy embed.
+ */
+export async function resolveReachCertificatePreview(
+  supabase: SupabaseClient,
+  input: ReachCertPdfInput & LoadedReachCertificateInput
+): Promise<ReachCertificatePreviewResult> {
+  const certNumber = input.certificateNumber;
+  const pdfFileName = `${certNumber}.pdf`;
+  const docxFileName = `${certNumber}.docx`;
+  const loaded = toLoadedInput(input);
+
+  try {
+    const pdfBuffer = await generateReachCertificateHtmlPdf(loaded);
+    void uploadReachCertificateFile(supabase, pdfFileName, pdfBuffer, PDF_CONTENT_TYPE);
+    return { mode: 'pdf', buffer: pdfBuffer, fileName: pdfFileName };
+  } catch {
+    // fall through to DOCX upload
+  }
+
+  const freshDocx = generateReachCertificateDocx(
     buildReachDocxData(input.client, input.chemical, {
       registrationNumber: input.registrationNumber,
       issuedDate: input.issuedDate,
@@ -37,28 +56,6 @@ function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
       tonnageBand: input.tonnageBand,
     })
   );
-}
-
-/**
- * Resolves RC preview: PDF when possible, else uploads full-layout DOCX to storage
- * for Office Online embed (no error when server lacks LibreOffice/Gotenberg).
- */
-export async function resolveReachCertificatePreview(
-  supabase: SupabaseClient,
-  input: ReachCertPdfInput
-): Promise<ReachCertificatePreviewResult> {
-  const certNumber = input.certificateNumber;
-  const freshDocx = buildFreshReachDocx(input);
-  const pdfFileName = `${certNumber}.pdf`;
-  const docxFileName = `${certNumber}.docx`;
-
-  try {
-    const pdfBuffer = await convertReachDocxToPdf(freshDocx);
-    void uploadReachCertificateFile(supabase, pdfFileName, pdfBuffer, PDF_CONTENT_TYPE);
-    return { mode: 'pdf', buffer: pdfBuffer, fileName: pdfFileName };
-  } catch {
-    // Never serve stale storage PDFs — preview uses fresh DOCX when convert fails.
-  }
 
   const docxUrl = await uploadReachCertificateFile(
     supabase,
@@ -77,12 +74,12 @@ export async function resolveReachCertificatePreview(
 /** Returns PDF buffer when possible; throws only when preview cannot be produced at all. */
 export async function resolveReachCertificatePdfBuffer(
   supabase: SupabaseClient,
-  input: ReachCertPdfInput
+  input: ReachCertPdfInput & LoadedReachCertificateInput
 ): Promise<Buffer> {
   const result = await resolveReachCertificatePreview(supabase, input);
   if (result.mode !== 'pdf') {
     throw new Error(
-      'PDF conversion is not available on this server. Install LibreOffice or set GOTENBERG_URL.'
+      'PDF generation is not available on this server. Ensure Puppeteer/Chromium is installed.'
     );
   }
   return result.buffer;

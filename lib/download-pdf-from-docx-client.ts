@@ -1,6 +1,9 @@
 'use client';
 
-import { buildReachCertificateHtmlDataUrl } from '@/lib/reach-certificate-download';
+import {
+  buildReachCertificateHtmlDataUrl,
+  buildReachCertificateHtmlPdfUrl,
+} from '@/lib/reach-certificate-download';
 import { applyReachDocxPreviewStyles } from '@/lib/reach-docx-preview-styles';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
 import {
@@ -12,10 +15,11 @@ import { renderAsync } from 'docx-preview';
 const DOCX_PREVIEW_CLASS = 'docx';
 
 const RC_PDF_SETUP_MESSAGE =
-  'PDF download on the live server requires LibreOffice or Gotenberg. Run on the server: docker compose -f docker-compose.gotenberg.yml up -d';
+  'PDF download failed. Ensure the server has Puppeteer/Chromium installed.';
 
 function triggerBlobDownload(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = fileName;
@@ -383,6 +387,32 @@ async function downloadRcHtmlPreviewPdf(params: {
   validatedDate?: string;
   tonnageBand?: string | null;
 }): Promise<CertificateDownloadResult> {
+  const certificateId = extractCertificateIdFromUrl(params.pdfUrl);
+  const serverPdfUrl = buildReachCertificateHtmlPdfUrl({
+    certificateId: certificateId ?? undefined,
+    clientId: params.clientId,
+    chemicalId: params.chemicalId,
+    registrationNumber: params.registrationNumber,
+    issuedDate: params.issuedDate,
+    validatedDate: params.validatedDate,
+    tonnageBand: params.tonnageBand,
+  });
+
+  try {
+    const res = await fetch(appendCacheBuster(serverPdfUrl), {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const parsed = await downloadFromPdfResponse(res, params.fileName);
+      if (!('kind' in parsed)) {
+        return parsed;
+      }
+    }
+  } catch {
+    // fall through to client-side render
+  }
+
   const onPage = document.querySelector('[data-reach-cert-root]');
   if (onPage instanceof HTMLElement) {
     await downloadReachHtmlCertificatePdfFromElement(onPage, params.fileName);

@@ -1,15 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  buildReachCertificateStoredFile,
-  buildReachDocxData,
-  generateReachPdfForClientChemical,
-  type ReachPdfChemical,
-  type ReachPdfSource,
-} from '@/lib/reach-pdf-data';
+import { buildReachDocxData } from '@/lib/reach-pdf-data';
 import {
   resolveReachCertificatePreview,
   type ReachCertPdfInput,
 } from '@/lib/reach-certificate-preview';
+import { generateReachCertificateHtmlPdf } from '@/lib/reach-certificate-html-pdf-server';
+import type { LoadedReachCertificateInput } from '@/lib/reach-certificate-api-input';
 import { convertReachDocxToPdf, generateReachCertificateDocx } from '@/services/reach-certificate-docx';
 
 const PDF_CONTENT_TYPE = 'application/pdf';
@@ -37,12 +33,11 @@ function buildFreshReachDocx(input: ReachCertPdfInput): Buffer {
 }
 
 /**
- * Resolves RC download — PDF when converter available, else public DOCX URL
- * (same file shown in Office Online preview).
+ * Resolves RC download — Puppeteer HTML PDF when possible, else public DOCX URL.
  */
 export async function resolveReachCertificateDownload(
   supabase: SupabaseClient,
-  input: ReachCertPdfInput
+  input: ReachCertPdfInput & LoadedReachCertificateInput
 ): Promise<ReachCertificateDownloadResult> {
   const preview = await resolveReachCertificatePreview(supabase, input);
   if (preview.mode === 'pdf') {
@@ -60,28 +55,36 @@ export async function resolveReachCertificateDownload(
   };
 }
 
-/** Always builds a PDF from the current EU REACH template — throws when conversion unavailable. */
+/** Always builds a PDF from the HTML certificate template — throws when generation unavailable. */
 export async function resolveReachCertificateDownloadFile(
   supabase: SupabaseClient,
-  input: ReachCertPdfInput
+  input: ReachCertPdfInput & LoadedReachCertificateInput
 ): Promise<ReachCertificateDownloadFile> {
-  const result = await resolveReachCertificateDownload(supabase, input);
-  if (result.format === 'pdf') {
-    return result;
-  }
-  const freshDocx = buildFreshReachDocx(input);
   try {
-    const pdfBuffer = await convertReachDocxToPdf(freshDocx);
+    const pdfBuffer = await generateReachCertificateHtmlPdf(input);
     return {
       buffer: pdfBuffer,
       contentType: PDF_CONTENT_TYPE,
-      fileName: result.fileName,
+      fileName: `${input.certificateNumber}.pdf`,
       format: 'pdf',
     };
-  } catch {
-    throw new Error(
-      'PDF conversion is not available on this server. Install LibreOffice (recommended: apt install libreoffice-writer) or set GOTENBERG_URL for document conversion.'
-    );
+  } catch (htmlErr) {
+    const freshDocx = buildFreshReachDocx(input);
+    try {
+      const pdfBuffer = await convertReachDocxToPdf(freshDocx);
+      return {
+        buffer: pdfBuffer,
+        contentType: PDF_CONTENT_TYPE,
+        fileName: `${input.certificateNumber}.pdf`,
+        format: 'pdf',
+      };
+    } catch {
+      const message =
+        htmlErr instanceof Error
+          ? htmlErr.message
+          : 'PDF generation is not available on this server.';
+      throw new Error(message);
+    }
   }
 }
 
@@ -121,10 +124,10 @@ export async function convertReachDocxUrlToPdf(
 /** Returns a PDF buffer; throws if conversion is unavailable. */
 export async function resolveReachCertificatePdfBuffer(
   supabase: SupabaseClient,
-  input: ReachCertPdfInput
+  input: ReachCertPdfInput & LoadedReachCertificateInput
 ): Promise<Buffer> {
   const file = await resolveReachCertificateDownloadFile(supabase, input);
   return file.buffer;
 }
 
-export { generateReachPdfForClientChemical, buildReachCertificateStoredFile };
+export { generateReachPdfForClientChemical, buildReachCertificateStoredFile } from '@/lib/reach-pdf-data';

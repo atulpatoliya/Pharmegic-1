@@ -3,10 +3,10 @@
   --reach-lime: #92d050;
   --reach-green-dark: #145e40;
   --reach-green-mid: #1b5e3a;
-  --reach-green-light: #e8f5e9;
+  --reach-green-light: #8ac33f;
   --reach-green-pale: #e2efda;
   --reach-table-border: #cfdbc8;
-  --reach-red: #8b4513;
+  --reach-red: #bf382a;
   --reach-accent: #145e40;
   display: block;
   font-family: Verdana, Geneva, Tahoma, sans-serif;
@@ -51,7 +51,7 @@
 [data-reach-cert-root] .reach-cert-body {
   display: block;
   flex: 1 1 auto;
-  padding: 20px 20px 20px !important;
+  padding: 20px 20px 0px !important;
 }
 
 [data-reach-cert-root] .reach-cert-header {
@@ -67,7 +67,7 @@
 
 [data-reach-cert-root] .reach-brand-logo {
   display: block;
-  width: 350px; 
+  width: 350px;
   height: auto;
   object-fit: contain;
 }
@@ -76,7 +76,7 @@
   display: inline-block;
   font-family: Verdana, Geneva, Tahoma, sans-serif !important;
   font-size: 17px !important;
-  font-weight: 700 !important;
+  font-weight: bold !important;
   color: var(--reach-green-dark) !important;
   letter-spacing: 0.01em;
   margin: 0 !important;
@@ -85,12 +85,12 @@
 
 [data-reach-cert-root] .reach-cert-title {
   display: block;
-  margin: 12px 0 12px !important;
+  margin: 12px 0 18px !important;
   padding: 0 !important;
   text-align: center !important;
   font-family: 'Times New Roman', Times, serif !important;
   font-size: 22pt !important;
-  font-weight: 700 !important;
+  font-weight: bold !important;
   color: var(--reach-green-dark) !important;
   text-transform: uppercase;
   text-decoration: underline !important;
@@ -126,7 +126,7 @@
   margin: 0 0 6px !important;
   padding: 0 !important;
   font-size: 7pt !important;
-  font-weight: 700 !important;
+  font-weight: bold !important;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--reach-green-dark) !important;
@@ -138,7 +138,7 @@
   margin: 0 0 4px !important;
   padding: 0 !important;
   font-size: 13.5pt !important;
-  font-weight: 700 !important;
+  font-weight: bold !important;
   color: #000000 !important;
   font-family: Verdana, Geneva, Tahoma, sans-serif !important;
 }
@@ -163,20 +163,20 @@
 }
 
 [data-reach-cert-root] .reach-appointment-text strong {
-  font-weight: 700 !important;
+  font-weight: bold !important;
   color: var(--reach-green-dark) !important;
 }
 
 [data-reach-cert-root] .reach-section-title {
-  display: block;
+  display: inline-block;
   margin: 0 0 8px !important;
   padding: 0 0 2px !important;
-  font-size: 9pt !important;
-  font-weight: 700 !important;
+  font-size: 10.5pt !important;
+  font-weight: bold !important;
   color: var(--reach-green-dark) !important;
-  text-decoration: underline !important;
   border: none !important;
   background: transparent !important;
+  border-bottom: 2px solid var(--reach-green-light) !important;
 }
 
 [data-reach-cert-root] .reach-substance-table {
@@ -201,8 +201,8 @@
 [data-reach-cert-root] .reach-substance-table td {
   display: table-cell !important;
   border: 1px solid var(--reach-table-border) !important;
-  padding: 7px 10px !important;
-  font-size: 8.5pt !important;
+  padding: 8px 10px !important;
+  font-size: 10pt !important;
   vertical-align: middle !important;
   text-align: left !important;
   font-weight: 400 !important;
@@ -213,7 +213,7 @@
   width: 32% !important;
   background: var(--reach-green-dark) !important;
   color: #ffffff !important;
-  font-weight: 700 !important;
+  font-weight: bold !important;
 }
 
 [data-reach-cert-root] .reach-substance-table td {
@@ -227,19 +227,19 @@
   margin: 0 0 12px !important;
   border-radius: 6px !important;
   overflow: hidden;
-  border: none !important;
+  border: 1px solid var(--reach-green-dark) !important;
 }
 
 [data-reach-cert-root] .reach-reg-label {
   display: flex !important;
   align-items: center;
-  flex: 0 0 auto;
-  background: var(--reach-green-dark) !important;
-  color: #ffffff !important;
-  font-size: 8pt !important;
-  font-weight: 700 !important;
-  padding: 10px 14px !important;
+  flex: 0 0 32%;
+  color: var(--reach-green-dark) !important;
+  font-size: 10pt !important;
+  font-weight: bold !important;
+  padding: 7px 10px !important;
   white-space: nowrap;
+  background: var(--reach-lime) !important;
 }
 
 [data-reach-cert-root] .reach-reg-value {
@@ -248,16 +248,14 @@
   flex: 1 1 auto;
   background: var(--reach-lime) !important;
   color: #ffffff !important;
-  font-size: 11pt !important;
-  font-weight: 700 !important;
-  padding: 10px 14px !important;
-  letter-spacing: 0.02em;
+  font-size: 10pt !important;
+  font-weight: bold !important;
 }
 
 [data-reach-cert-root] .reach-reg-pipe {
   margin-right: 8px;
   font-weight: 700;
-  opacity: 0.9;
+  color: var(--reach-green-dark) !important;
 }
 
 [data-reach-cert-root] .reach-representative-box {
@@ -267,15 +265,15 @@
   border-radius: 8px !important;
   padding: 12px 16px !important;
   margin: 0 0 14px !important;
-  border: none !important;
+  border: 1px solid #000 !important;
 }
 
 [data-reach-cert-root] .reach-rep-name {
   display: block;
   margin: 0 0 4px !important;
   padding: 0 !important;
-  font-size: 11pt !important;
-  font-weight: 700 !important;
+  font-size: 13.5pt !important;
+  font-weight: bold !important;
   color: #ffffff !important;
 }
 
@@ -283,58 +281,73 @@
   display: block;
   margin: 0 0 6px !important;
   padding: 0 !important;
-  font-size: 8.5pt !important;
+  font-size: 10pt !important;
   line-height: 1.35 !important;
   color: #ffffff !important;
+  color: var(--reach-green-light) !important;
+  font-weight: normal !important;
 }
 
 [data-reach-cert-root] .reach-rep-uuid {
   display: block;
   margin: 0 !important;
   padding: 0 !important;
-  font-size: 8pt !important;
-  color: rgba(255, 255, 255, 0.92) !important;
+  font-size: 10pt !important;
+  color: #ffffff !important;
+  font-weight: normal !important;
+}
+
+[data-reach-cert-root] .reach-rep-uuid strong {
+  font-weight: bold !important;
+  color: var(--reach-green-light) !important;
 }
 
 [data-reach-cert-root] .reach-date-section {
   display: flex !important;
   gap: 0;
-  margin: 0 0 16px !important;
-  background: #f3f7ef !important;
-  border: 1px solid #d4e4c8 !important;
+  margin: 0px !important;
+  background: var(--reach-green-pale) !important;
+  border: 1px solid var(--reach-green-light) !important;
   border-radius: 8px !important;
   overflow: hidden;
+  padding: 8px 5px;
 }
 
 [data-reach-cert-root] .reach-date-box {
   display: block;
   flex: 1 1 50%;
-  padding: 10px 12px !important;
-  text-align: center !important;
+  text-align: left !important;
   background: transparent !important;
-  border: none !important;
 }
 
 [data-reach-cert-root] .reach-date-box.right {
-  border-left: 1px solid #d4e4c8 !important;
+  border-left: 2px solid #000 !important;
+  padding-left: 10px;
+  text-align: left !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: column !important;
 }
 
 [data-reach-cert-root] .reach-date-label {
   display: block;
   font-size: 7pt !important;
-  font-weight: 700 !important;
+  font-weight: bold !important;
   letter-spacing: 0.05em;
-  color: var(--reach-green-dark) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
   margin: 0 0 4px !important;
   text-transform: uppercase;
+  font-family: Arial, Helvetica, sans-serif !important;
 }
 
 [data-reach-cert-root] .reach-date-value {
   display: block;
   font-size: 11pt !important;
-  font-weight: 700 !important;
+  font-weight: bold !important;
   color: #111 !important;
   margin: 0 !important;
+  font-family: Arial, Helvetica, sans-serif !important;
 }
 
 [data-reach-cert-root] .reach-date-value.red {
@@ -368,7 +381,7 @@
   margin: 0 !important;
   background: #145e40 !important;
   color: #ffffff !important;
-  padding: 16px 20px 15px !important;
+  padding: 10px !important;
   text-align: left !important;
   border: none !important;
 }
@@ -377,9 +390,9 @@
   display: block;
   margin: 0 !important;
   padding: 0 !important;
-  font-family: Arial, Helvetica, sans-serif !important;
-  font-size: 7pt !important;
-  line-height: 1.55 !important;
+  font-family: Verdana, Geneva, Tahoma, sans-serif !important;
+  font-size: 8pt !important;
+  line-height: 1.3 !important;
   color: #ffffff !important;
   font-weight: 400 !important;
   text-align: left !important;
@@ -387,12 +400,9 @@
 }
 
 [data-reach-cert-root] .reach-footer-company {
-  font-size: 7pt !important;
-  font-weight: 400 !important;
-  margin-bottom: 2px !important;
 }
 
-[data-reach-cert-root] .reach-footer-line + .reach-footer-line {
+[data-reach-cert-root] .reach-footer-line+.reach-footer-line {
   margin-top: 0 !important;
 }
 
@@ -415,7 +425,7 @@
     print-color-adjust: exact;
   }
 
-  body.reach-cert-printing > :not([data-reach-cert-print-area]) {
+  body.reach-cert-printing> :not([data-reach-cert-print-area]) {
     display: none !important;
   }
 
@@ -433,7 +443,7 @@
     z-index: 2147483647 !important;
   }
 
-  [data-reach-cert-print-area] > div {
+  [data-reach-cert-print-area]>div {
     display: block !important;
     margin: 0 !important;
     padding: 0 !important;

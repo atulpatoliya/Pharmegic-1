@@ -11,6 +11,7 @@ import type { ReachCertPdfInput } from '@/lib/reach-certificate-preview';
 export type LoadedReachCertificateInput = ReachCertPdfInput & {
   certificateId?: string;
   clientId?: string;
+  chemicalId?: string;
 };
 
 export async function loadReachCertificateInputByCertificateId(
@@ -66,6 +67,7 @@ export async function loadReachCertificateInputByCertificateId(
   return {
     certificateId: cert.id,
     clientId: cert.client_id,
+    chemicalId: cert.chemical_id,
     certificateNumber: cert.certificate_number,
     registrationNumber: cert.registration_number?.trim() || '—',
     issuedDate,
@@ -145,6 +147,7 @@ export async function loadReachCertificateInputByClientChemical(
 
   return {
     clientId,
+    chemicalId,
     certificateNumber: certNumber,
     registrationNumber,
     issuedDate,

@@ -4,9 +4,10 @@ import {
   type ReachPdfChemical,
   type ReachPdfSource,
 } from '@/lib/reach-certificate-data';
+import { generateReachCertificateHtmlPdf } from '@/lib/reach-certificate-html-pdf-server';
+import type { LoadedReachCertificateInput } from '@/lib/reach-certificate-api-input';
 import {
   generateReachCertificateDocx,
-  convertReachDocxToPdf,
 } from '@/services/reach-certificate-docx';
 
 export type { ReachCertificateDocxData, ReachPdfChemical, ReachPdfSource } from '@/lib/reach-certificate-data';
@@ -30,13 +31,25 @@ export async function generateReachPdfForClientChemical(
     issuedDate: string;
     validatedDate: string;
     tonnageBand?: string | null;
+    clientId?: string;
+    chemicalId?: string;
   }
 ): Promise<Buffer> {
-  const docxBuffer = generateReachCertificateDocx(buildReachDocxData(client, chemical, options));
-  return convertReachDocxToPdf(docxBuffer);
+  const input: LoadedReachCertificateInput = {
+    certificateNumber: `RC-preview-${options.chemicalId?.slice(0, 8) || 'draft'}`,
+    registrationNumber: options.registrationNumber,
+    issuedDate: options.issuedDate,
+    validatedDate: options.validatedDate,
+    client,
+    chemical,
+    tonnageBand: options.tonnageBand,
+    clientId: options.clientId,
+    chemicalId: options.chemicalId,
+  };
+  return generateReachCertificateHtmlPdf(input);
 }
 
-/** Build certificate file for storage — PDF when converter available, else DOCX for preview/embed. */
+/** Build certificate file for storage — Puppeteer HTML PDF when available, else DOCX fallback. */
 export async function buildReachCertificateStoredFile(
   client: ReachPdfSource,
   chemical: ReachPdfChemical,
@@ -46,12 +59,24 @@ export async function buildReachCertificateStoredFile(
     issuedDate: string;
     validatedDate: string;
     tonnageBand?: string | null;
+    clientId?: string;
+    chemicalId?: string;
   }
 ): Promise<ReachCertificateStoredFile> {
-  const docxBuffer = generateReachCertificateDocx(buildReachDocxData(client, chemical, options));
+  const input: LoadedReachCertificateInput = {
+    certificateNumber: certNumber,
+    registrationNumber: options.registrationNumber,
+    issuedDate: options.issuedDate,
+    validatedDate: options.validatedDate,
+    client,
+    chemical,
+    tonnageBand: options.tonnageBand,
+    clientId: options.clientId,
+    chemicalId: options.chemicalId,
+  };
 
   try {
-    const pdfBuffer = await convertReachDocxToPdf(docxBuffer);
+    const pdfBuffer = await generateReachCertificateHtmlPdf(input);
     return {
       buffer: pdfBuffer,
       fileName: `${certNumber}.pdf`,
@@ -59,6 +84,9 @@ export async function buildReachCertificateStoredFile(
       format: 'pdf',
     };
   } catch {
+    const docxBuffer = generateReachCertificateDocx(
+      buildReachDocxData(client, chemical, options)
+    );
     return {
       buffer: docxBuffer,
       fileName: `${certNumber}.docx`,

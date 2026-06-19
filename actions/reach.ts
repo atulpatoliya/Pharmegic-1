@@ -195,6 +195,8 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
     issuedDate,
     validatedDate,
     tonnageBand: tonnageBand || chemical.tonnage_band,
+    clientId,
+    chemicalId,
   });
 
   await ensureCertificatesBucket(adminSupabase);
@@ -359,6 +361,8 @@ export async function regenerateReachCertificateFile(certId: string) {
       issuedDate: cert.issued_at.split('T')[0],
       validatedDate: cert.expires_at?.split('T')[0] || getLastDateOfYear(),
       tonnageBand: cert.tonnage_band,
+      clientId: cert.client_id,
+      chemicalId: cert.chemical_id,
     });
 
     await ensureCertificatesBucket(adminSupabase);
@@ -859,6 +863,7 @@ async function fetchReachCertificateMailContext(certificateId: string) {
 async function downloadReachCertificateAttachment(
   adminSupabase: ReturnType<typeof createAdminClient>,
   cert: {
+    id: string;
     certificate_number: string;
     registration_number: string | null;
     issued_at: string;
@@ -887,6 +892,7 @@ async function downloadReachCertificateAttachment(
     : getLastDateOfYear();
 
   const certFile = await resolveReachCertificateDownloadFile(adminSupabase, {
+    certificateId: cert.id,
     certificateNumber: cert.certificate_number,
     registrationNumber: cert.registration_number?.trim() || '—',
     issuedDate,

@@ -20,7 +20,6 @@ import {
   ArrowLeft,
   Download,
   FileText,
-  Printer,
   ShieldCheck,
   Mail,
   RefreshCw,
@@ -36,7 +35,6 @@ import {
   buildReachCertificatePdfDownloadUrlByClientChemical,
 } from '@/lib/reach-certificate-download';
 import { CertificatePdfDownloadLink } from '@/components/CertificatePdfDownloadLink';
-import { printReachHtmlCertificate } from '@/lib/reach-certificate-html-pdf-client';
 import { CertificateMailHistoryList } from '@/components/CertificateMailHistoryList';
 import { useLayoutStore } from '@/store/layout';
 type ReachCertificatePreviewClientProps = {
@@ -341,16 +339,6 @@ export default function ReachCertificatePreviewClient({
           >
             <Download className="h-4 w-4" /> {downloadLabel}
           </CertificatePdfDownloadLink>
-
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={() => printReachHtmlCertificate()}
-            className="gap-1.5 text-xs font-bold"
-          >
-            <Printer className="h-4 w-4" /> Print
-          </Button>
 
           {!isPending && cert && (
             <Button

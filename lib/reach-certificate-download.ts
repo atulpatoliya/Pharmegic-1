@@ -1,8 +1,30 @@
 import { REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 import { buildTccCertificatePdfDownloadUrl } from '@/lib/tcc-certificate-download';
 
+export function buildReachCertificateHtmlPdfUrl(params: {
+  certificateId?: string;
+  clientId?: string;
+  chemicalId?: string;
+  registrationNumber?: string;
+  issuedDate?: string;
+  validatedDate?: string;
+  tonnageBand?: string | null;
+}): string {
+  const search = new URLSearchParams();
+  if (params.certificateId) search.set('certificateId', params.certificateId);
+  if (params.clientId) search.set('clientId', params.clientId);
+  if (params.chemicalId) search.set('chemicalId', params.chemicalId);
+  if (params.registrationNumber) search.set('registrationNumber', params.registrationNumber);
+  if (params.issuedDate) search.set('issuedDate', params.issuedDate);
+  if (params.validatedDate) search.set('validatedDate', params.validatedDate);
+  if (params.tonnageBand !== undefined && params.tonnageBand !== null) {
+    search.set('tonnageBand', params.tonnageBand);
+  }
+  return `/api/reach-certificate/pdf-html?${search.toString()}`;
+}
+
 export function buildReachCertificatePdfDownloadUrl(certificateId: string): string {
-  return buildReachCertificatePdfPreviewUrlByCertificateId(certificateId);
+  return buildReachCertificateHtmlPdfUrl({ certificateId });
 }
 
 export function buildReachCertificateHtmlDataUrl(params: {
@@ -90,7 +112,7 @@ export function buildReachCertificatePdfDownloadUrlByClientChemical(params: {
   validatedDate?: string;
   tonnageBand?: string | null;
 }): string {
-  return buildReachCertificatePdfPreviewUrl(params);
+  return buildReachCertificateHtmlPdfUrl(params);
 }
 
 export function buildReachCertificateDocxPreviewUrlByClientChemical(params: {

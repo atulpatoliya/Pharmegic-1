@@ -17,25 +17,16 @@ import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data
 
 
 function triggerBlobDownload(blob: Blob, fileName: string) {
-
   const url = URL.createObjectURL(blob);
-
+  window.open(url, '_blank', 'noopener,noreferrer');
   const anchor = document.createElement('a');
-
   anchor.href = url;
-
   anchor.download = fileName;
-
   anchor.style.display = 'none';
-
   document.body.appendChild(anchor);
-
   anchor.click();
-
   document.body.removeChild(anchor);
-
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-
 }
 
 
@@ -180,37 +171,6 @@ export async function downloadReachHtmlCertificatePdfFromElement(
 
   await captureElementToPdf(element, fileName);
 
-}
-
-
-
-export function printReachHtmlCertificate(): void {
-  const printArea = document.querySelector('[data-reach-cert-print-area]');
-  if (!(printArea instanceof HTMLElement)) {
-    window.print();
-    return;
-  }
-
-  const placeholder = document.createComment('reach-cert-print-placeholder');
-  const parent = printArea.parentNode;
-  if (parent) {
-    parent.insertBefore(placeholder, printArea);
-  }
-
-  document.body.classList.add('reach-cert-printing');
-  document.body.appendChild(printArea);
-
-  const cleanup = () => {
-    document.body.classList.remove('reach-cert-printing');
-    if (placeholder.parentNode && parent) {
-      parent.insertBefore(printArea, placeholder);
-      placeholder.remove();
-    }
-  };
-
-  window.addEventListener('afterprint', cleanup, { once: true });
-  window.print();
-  window.setTimeout(cleanup, 1000);
 }
 
 

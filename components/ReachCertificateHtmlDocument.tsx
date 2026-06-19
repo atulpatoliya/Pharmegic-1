@@ -76,7 +76,9 @@ export default function ReachCertificateHtmlDocument({ data }: ReachCertificateH
           <div className="reach-representative-box">
             <p className="reach-rep-name">{OR_NAME}</p>
             <p className="reach-rep-address">{OR_ADDRESS}</p>
-            <p className="reach-rep-uuid">UUID: {data.uuidNumber}</p>
+            <p className="reach-rep-uuid">
+              <strong>UUID:</strong> {data.uuidNumber}
+            </p>
           </div>
 
           <div className="reach-date-section">
@@ -85,8 +87,10 @@ export default function ReachCertificateHtmlDocument({ data }: ReachCertificateH
               <div className="reach-date-value">{data.issuedDateDisplay}</div>
             </div>
             <div className="reach-date-box right">
-              <div className="reach-date-label">VALID UNTIL</div>
-              <div className="reach-date-value red">{data.validatedDateDisplay}</div>
+              <div className='reach-date-box-inner'>
+                <div className="reach-date-label">VALID UNTIL</div>
+                <div className="reach-date-value red">{data.validatedDateDisplay}</div>
+              </div>
             </div>
           </div>
 
