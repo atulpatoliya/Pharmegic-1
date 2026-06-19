@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { renderAsync } from 'docx-preview';
 import { applyReachDocxPreviewStyles } from '@/lib/reach-docx-preview-styles';
+import '@/components/reach-certificate-fonts.css';
+import '@/components/reach-certificate-a4.css';
 
 type ReachCertificateDocxViewerProps = {
   docxUrl: string;
@@ -59,7 +61,7 @@ export default function ReachCertificateDocxViewer({ docxUrl }: ReachCertificate
   }, [docxUrl]);
 
   return (
-    <div className="relative min-h-[820px] bg-slate-100 overflow-auto">
+    <div data-reach-cert-preview-shell className="relative">
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
           Loading certificate preview…
@@ -70,7 +72,7 @@ export default function ReachCertificateDocxViewer({ docxUrl }: ReachCertificate
       )}
       <div
         ref={containerRef}
-        className="docx-preview-container flex justify-center py-6 [&_.docx-preview-wrapper]:bg-transparent [&_.docx-preview-wrapper>section.docx-preview]:bg-white [&_.docx-preview-wrapper>section.docx-preview]:shadow-md [&_.docx-preview-wrapper>section.docx-preview]:mb-0"
+        className="docx-preview-container flex justify-center [&_.docx-preview-wrapper]:bg-transparent"
       />
     </div>
   );

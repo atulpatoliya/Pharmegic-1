@@ -11,6 +11,9 @@ import {
   downloadReachHtmlCertificatePdfFromElement,
 } from '@/lib/reach-certificate-html-pdf-client';
 import { renderAsync } from 'docx-preview';
+import '@/components/reach-certificate-fonts.css';
+import '@/components/reach-certificate-a4.css';
+import { REACH_CERT_A4_WIDTH_PX } from '@/lib/reach-certificate-a4';
 
 const DOCX_PREVIEW_CLASS = 'docx';
 
@@ -46,6 +49,13 @@ function waitForLayout(): Promise<void> {
       });
     });
   });
+}
+
+async function waitForFontsAndLayout(): Promise<void> {
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+  await waitForLayout();
 }
 
 function sanitizeDocxCloneForPdf(root: HTMLElement): void {
@@ -146,12 +156,13 @@ function sanitizeDocxCloneForPdf(root: HTMLElement): void {
 
 async function convertDocxBlobToPdfAndDownload(blob: Blob, fileName: string): Promise<void> {
   const host = document.createElement('div');
+  host.className = 'docx-preview-container';
   host.setAttribute('aria-hidden', 'true');
   host.style.cssText = [
     'position:fixed',
     'left:0',
     'top:0',
-    'width:794px',
+    `width:${REACH_CERT_A4_WIDTH_PX}px`,
     'background:#ffffff',
     'pointer-events:none',
     'clip:rect(0,0,0,0)',
@@ -179,6 +190,8 @@ async function convertDocxBlobToPdfAndDownload(blob: Blob, fileName: string): Pr
     }
 
     applyReachDocxPreviewStyles(wrapper);
+
+    await waitForFontsAndLayout();
 
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
       import('html2canvas'),

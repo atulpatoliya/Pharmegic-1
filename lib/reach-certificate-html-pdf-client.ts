@@ -53,6 +53,10 @@ function waitForLayout(): Promise<void> {
 
 async function waitForImages(container: HTMLElement): Promise<void> {
 
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+
   const imgs = Array.from(container.querySelectorAll('img'));
 
   await Promise.all(
@@ -197,6 +201,8 @@ export async function downloadReachHtmlCertificatePdf(
     import('react-dom/client'),
     import('react'),
     import('@/components/ReachCertificateHtmlDocument'),
+    import('@/components/reach-certificate-fonts.css'),
+    import('@/components/reach-certificate-a4.css'),
     import('@/components/reach-certificate-html.css'),
   ]);
 

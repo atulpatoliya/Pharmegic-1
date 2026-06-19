@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
+import { REACH_CERT_A4_CSS_VARS } from '@/lib/reach-certificate-a4';
 
 type ReachCertificateHtmlDocumentProps = {
   data: ReachCertificateHtmlData;
@@ -10,7 +11,10 @@ const OR_ADDRESS = '6th Floor, Konstitucijos av. 21A, 08130 Vilnius, Lithuania';
 
 /** Shared certificate markup — safe to import from client components and server PDF render. */
 export default function ReachCertificateHtmlDocument({ data }: ReachCertificateHtmlDocumentProps) {
-  const style = { '--reach-accent': data.accentColor } as CSSProperties;
+  const style = {
+    ...REACH_CERT_A4_CSS_VARS,
+    '--reach-accent': data.accentColor,
+  } as CSSProperties;
 
   return (
     <div className="reach-cert-page" style={style} data-reach-cert-root>

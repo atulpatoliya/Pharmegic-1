@@ -22,7 +22,7 @@ function cleanManufacturerAddressText(text: string): string {
 function styleManufacturerCardParagraph(p: HTMLElement, index: number): void {
   p.style.margin = '0';
   p.style.padding = '0';
-  p.style.fontFamily = 'Verdana, Geneva, sans-serif';
+  p.style.fontFamily = "'Verdana', Geneva, Tahoma, sans-serif";
   p.style.lineHeight = '1.35';
 
   if (index === 0) {

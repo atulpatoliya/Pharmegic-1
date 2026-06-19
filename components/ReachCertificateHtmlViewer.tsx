@@ -1,29 +1,40 @@
 'use client';
 
+import { useEffect } from 'react';
 import ReachCertificateHtmlDocument from '@/components/ReachCertificateHtmlDocument';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
+import '@/components/reach-certificate-fonts.css';
+import '@/components/reach-certificate-a4.css';
 import '@/components/reach-certificate-html.css';
 
 type ReachCertificateHtmlViewerProps = {
   data: ReachCertificateHtmlData;
 };
 
+function useReachCertificatePrintMode(): void {
+  useEffect(() => {
+    const onBeforePrint = () => document.body.classList.add('reach-cert-printing');
+    const onAfterPrint = () => document.body.classList.remove('reach-cert-printing');
+
+    window.addEventListener('beforeprint', onBeforePrint);
+    window.addEventListener('afterprint', onAfterPrint);
+
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint);
+      window.removeEventListener('afterprint', onAfterPrint);
+      document.body.classList.remove('reach-cert-printing');
+    };
+  }, []);
+}
+
 export default function ReachCertificateHtmlViewer({ data }: ReachCertificateHtmlViewerProps) {
+  useReachCertificatePrintMode();
+
   return (
-    <>
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Tinos:wght@400;700&display=swap"
-      />
-      <div
-        data-reach-cert-print-area
-        className="min-h-[820px] bg-slate-100 overflow-auto p-[50px] print:min-h-0 print:h-auto print:bg-white print:p-0 print:overflow-visible"
-      >
-      <div className="mx-auto w-fit shadow-md print:mx-0 print:w-full print:shadow-none">
+    <div data-reach-cert-preview-shell>
+      <div data-reach-cert-print-area>
         <ReachCertificateHtmlDocument data={data} />
       </div>
     </div>
-    </>
   );
 }
