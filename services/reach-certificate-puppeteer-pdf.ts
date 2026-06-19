@@ -1,5 +1,6 @@
 import type { Browser, LaunchOptions } from 'puppeteer-core';
 import { isVercelHosting } from '@/lib/hosting';
+import { launchVercelPuppeteerBrowser } from '@/services/reach-certificate-puppeteer-vercel';
 
 function isServerlessHosting(): boolean {
   return isVercelHosting() || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
@@ -48,28 +49,7 @@ async function resolveSystemChromeExecutable(): Promise<string> {
 
 async function buildLaunchOptions(): Promise<LaunchOptions> {
   if (isServerlessHosting()) {
-    const [puppeteer, chromium] = await Promise.all([
-      import('puppeteer-core'),
-      import('@sparticuz/chromium'),
-    ]);
-
-    chromium.default.setGraphicsMode = false;
-
-    const args = await puppeteer.default.defaultArgs({
-      args: chromium.default.args,
-      headless: 'shell',
-    });
-
-    return {
-      args,
-      defaultViewport: {
-        width: 794,
-        height: 1123,
-        deviceScaleFactor: 1,
-      },
-      executablePath: await chromium.default.executablePath(),
-      headless: 'shell',
-    };
+    throw new Error('Use launchVercelPuppeteerBrowser() on serverless hosting.');
   }
 
   const executablePath = await resolveSystemChromeExecutable();
@@ -88,6 +68,10 @@ async function buildLaunchOptions(): Promise<LaunchOptions> {
 let browserPromise: Promise<Browser> | null = null;
 
 async function launchBrowser(): Promise<Browser> {
+  if (isServerlessHosting()) {
+    return launchVercelPuppeteerBrowser();
+  }
+
   const puppeteer = await import('puppeteer-core');
   const options = await buildLaunchOptions();
   return puppeteer.default.launch(options);

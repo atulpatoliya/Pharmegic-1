@@ -10,6 +10,7 @@ import {
 import { isReachPuppeteerPdfAvailable } from '@/services/reach-certificate-puppeteer-pdf';
 
 /** Server-side HTML → PDF (Puppeteer) — same layout as on-screen certificate preview. */
+export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 function pdfResponse(buffer: Buffer, fileName: string) {
