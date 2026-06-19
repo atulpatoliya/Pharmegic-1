@@ -44,7 +44,7 @@ html, body {
   padding: 0;
 }
 [data-reach-cert-root] .reach-manufacturer-label {
-  margin: 0 !important;
+  margin: 0 0 2px !important;
   line-height: 1 !important;
 }
 [data-reach-cert-root] .reach-manufacturer-name {
