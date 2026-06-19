@@ -6,6 +6,7 @@ import {
 } from '@/lib/reach-certificate-download';
 import { applyReachDocxPreviewStyles } from '@/lib/reach-docx-preview-styles';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
+import type { TccCertificateHtmlData } from '@/lib/tcc-certificate-html-data';
 import {
   downloadReachHtmlCertificatePdf,
   downloadReachHtmlCertificatePdfFromElement,
@@ -455,7 +456,7 @@ export async function downloadCertificatePdf(params: {
   previewDocxUrl?: string | null;
   officeDocxUrl?: string | null;
   certificateType?: 'rc' | 'tcc';
-  htmlData?: ReachCertificateHtmlData | null;
+  htmlData?: ReachCertificateHtmlData | TccCertificateHtmlData | null;
   clientId?: string;
   chemicalId?: string;
   registrationNumber?: string;
@@ -469,7 +470,7 @@ export async function downloadCertificatePdf(params: {
   if (isRc) {
     return downloadRcHtmlPreviewPdf({
       fileName: params.fileName,
-      htmlData: params.htmlData,
+      htmlData: params.htmlData as ReachCertificateHtmlData | null | undefined,
       pdfUrl: params.pdfUrl,
       clientId: params.clientId,
       chemicalId: params.chemicalId,

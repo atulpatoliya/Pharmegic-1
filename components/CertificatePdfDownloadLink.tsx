@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { downloadCertificatePdf } from '@/lib/download-pdf-from-docx-client';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
+import type { TccCertificateHtmlData } from '@/lib/tcc-certificate-html-data';
 import { toast } from '@/store/toast';
 
 type CertificatePdfDownloadLinkProps = {
@@ -12,7 +13,7 @@ type CertificatePdfDownloadLinkProps = {
   previewDocxUrl?: string | null;
   officeDocxUrl?: string | null;
   certificateType?: 'rc' | 'tcc';
-  htmlData?: ReachCertificateHtmlData | null;
+  htmlData?: ReachCertificateHtmlData | TccCertificateHtmlData | null;
   clientId?: string;
   chemicalId?: string;
   registrationNumber?: string;

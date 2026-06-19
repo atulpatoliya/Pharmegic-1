@@ -8,6 +8,8 @@ import {
 } from '@/lib/tcc-pdf-data';
 import { CERTIFICATES_BUCKET } from '@/lib/storage';
 import { convertTccDocxToPdf, generateTccCertificateDocx } from '@/services/tcc-certificate-docx';
+import { generateTccCertificateHtmlPdf } from '@/lib/tcc-certificate-html-pdf-server';
+import { isReachPuppeteerPdfAvailable } from '@/services/reach-certificate-puppeteer-pdf';
 import { findReachCertificateForExportDate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 
 const REACH_QUOTA_CERT_SELECT =
@@ -21,7 +23,10 @@ type TccCertPdfInput = {
   registrationNumber?: string | null;
   validUntilDate: string;
   deliveryChallanNo?: string | null;
+  issuedDate?: string | null;
 };
+
+export type { TccCertPdfInput };
 
 const PDF_CONTENT_TYPE = 'application/pdf';
 const DOCX_CONTENT_TYPE =
@@ -86,9 +91,26 @@ export async function resolveTccCertificateDownloadFile(
   input: TccCertPdfInput
 ): Promise<TccCertificateDownloadFile> {
   const certNumber = input.certificateNumber;
+
+  // 1. Fresh HTML → PDF (Puppeteer) — matches on-screen preview
+  if (isReachPuppeteerPdfAvailable()) {
+    try {
+      const pdfBuffer = await generateTccCertificateHtmlPdf(input);
+      cachePdfToStorage(supabase, certNumber, pdfBuffer);
+      return {
+        buffer: pdfBuffer,
+        contentType: PDF_CONTENT_TYPE,
+        fileName: `${certNumber}.pdf`,
+        format: 'pdf',
+      };
+    } catch {
+      // Fall through to DOCX/LibreOffice path.
+    }
+  }
+
   const docxData = buildTccDocxData(buildDocxInput(input));
 
-  // 1. Fresh PDF from current template
+  // 2. Fresh PDF from DOCX template (LibreOffice)
   try {
     const docxBuffer = generateTccCertificateDocx(docxData);
     const pdfBuffer = await tryConvertDocxToPdf(docxBuffer);
@@ -103,7 +125,7 @@ export async function resolveTccCertificateDownloadFile(
     // Converter unavailable or failed — try stored files.
   }
 
-  // 2. Stored PDF (from a previous successful conversion)
+  // 3. Stored PDF (from a previous successful conversion)
   const storedPdf = await downloadStorageFile(supabase, `${certNumber}.pdf`);
   if (storedPdf) {
     return {
@@ -114,7 +136,7 @@ export async function resolveTccCertificateDownloadFile(
     };
   }
 
-  // 3. Stored DOCX → convert if possible
+  // 4. Stored DOCX → convert if possible
   const storedDocx = await downloadStorageFile(supabase, `${certNumber}.docx`);
   if (storedDocx) {
     try {
@@ -131,7 +153,7 @@ export async function resolveTccCertificateDownloadFile(
     }
   }
 
-  // 4. Fresh DOCX from template (always available without LibreOffice)
+  // 5. Fresh DOCX from template (always available without LibreOffice)
   const freshDocx = generateTccCertificateDocx(docxData);
   try {
     const pdfBuffer = await tryConvertDocxToPdf(freshDocx);
@@ -222,6 +244,7 @@ export async function buildTccApplicationPreviewInput(
       eu_importer_company_name,
       eu_importer_address,
       purchase_order_number,
+      invoice_number,
       clients (
         company_name,
         uuid_number,
@@ -290,6 +313,7 @@ export async function buildTccApplicationPreviewInput(
     eu_importer_company_name: app.eu_importer_company_name,
     eu_importer_address: app.eu_importer_address,
     purchase_order_number: app.purchase_order_number,
+    invoice_number: app.invoice_number,
   };
 
   return {

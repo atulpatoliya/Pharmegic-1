@@ -3,6 +3,10 @@
     "app/api/reach-certificate/pdf-html/route.ts": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "app/api/tcc-certificate/pdf-html/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }

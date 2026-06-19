@@ -1158,6 +1158,7 @@ export async function processTccAction(
         registrationNumber: matchedReachCert?.registration_number || null,
         validUntilDate: expiryDate.toISOString().split('T')[0],
         deliveryChallanNo: app.tracking_id,
+        issuedDate: issueDateRaw || issueDate.toISOString().split('T')[0],
       });
 
       // 8. Upload to Supabase Storage

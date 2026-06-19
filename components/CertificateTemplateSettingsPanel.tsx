@@ -7,12 +7,12 @@ import { Input } from '@/components/ui/Input';
 import ReachCertificateViewer from '@/components/ReachCertificateViewer';
 import { getRcTemplatePreviewSample } from '@/lib/certificate-template-preview-data';
 import { buildReachHtmlData } from '@/lib/reach-certificate-html-data';
+import { buildTccTemplatePreviewHtmlData } from '@/lib/tcc-certificate-html-data';
 import {
   Palette,
   Upload,
   RefreshCw,
   Sparkles,
-  Image as ImageIcon,
 } from 'lucide-react';
 
 type CertificateTemplateSettingsPanelProps = {
@@ -68,8 +68,22 @@ export function CertificateTemplateSettingsPanel({
     });
   }, [certificateType, accentColor, logo, signature, footerText]);
 
+  const tccHtmlData = useMemo(() => {
+    if (certificateType !== 'tcc') return null;
+    return buildTccTemplatePreviewHtmlData({
+      accentColor,
+      logoUrl: logo,
+      signatureUrl: signature,
+      footerText,
+    });
+  }, [certificateType, accentColor, logo, signature, footerText]);
+
   const previewKey =
-    certificateType === 'rc' ? JSON.stringify(rcHtmlData) : previewDocxUrl;
+    certificateType === 'rc'
+      ? JSON.stringify(rcHtmlData)
+      : certificateType === 'tcc'
+        ? JSON.stringify(tccHtmlData)
+        : previewDocxUrl;
 
   return (
     <div className="grid gap-8 grid-cols-1 lg:grid-cols-5">
@@ -120,16 +134,21 @@ export function CertificateTemplateSettingsPanel({
                 </div>
               </div>
               {logo && (
-                <div className="flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-lg">
-                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                    <ImageIcon className="h-3.5 w-3.5" /> Logo loaded
-                  </span>
+                <div className="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-100 rounded-lg">
+                  <div className="min-w-0 flex-1 flex items-center justify-center rounded-md border border-slate-200/80 bg-white px-3 py-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logo}
+                      alt="Header logo preview"
+                      className="max-h-14 w-full max-w-[220px] object-contain object-center"
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={onClearLogo}
-                    className="h-7 text-rose-500 border-rose-100 hover:bg-rose-50 px-2 cursor-pointer"
+                    className="h-7 shrink-0 text-rose-500 border-rose-100 hover:bg-rose-50 px-2 cursor-pointer"
                   >
                     Clear
                   </Button>
@@ -157,16 +176,21 @@ export function CertificateTemplateSettingsPanel({
                 </div>
               </div>
               {signature && (
-                <div className="flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-lg">
-                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                    <ImageIcon className="h-3.5 w-3.5" /> Signature loaded
-                  </span>
+                <div className="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-100 rounded-lg">
+                  <div className="min-w-0 flex-1 flex items-center justify-center rounded-md border border-slate-200/80 bg-white px-3 py-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={signature}
+                      alt="Signature preview"
+                      className="max-h-16 w-full max-w-[240px] object-contain object-center"
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={onClearSignature}
-                    className="h-7 text-rose-500 border-rose-100 hover:bg-rose-50 px-2 cursor-pointer"
+                    className="h-7 shrink-0 text-rose-500 border-rose-100 hover:bg-rose-50 px-2 cursor-pointer"
                   >
                     Clear
                   </Button>
@@ -213,7 +237,7 @@ export function CertificateTemplateSettingsPanel({
             key={previewKey}
             certificateType={certificateType}
             docxUrl={previewDocxUrl}
-            htmlData={rcHtmlData}
+            htmlData={certificateType === 'rc' ? rcHtmlData : tccHtmlData}
           />
         </div>
       </div>

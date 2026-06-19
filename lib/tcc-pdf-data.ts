@@ -43,6 +43,7 @@ export type TccPdfApplication = {
   eu_importer_company_name?: string | null;
   eu_importer_address?: string | null;
   purchase_order_number?: string | null;
+  invoice_number?: string | null;
 };
 
 export function buildTccDocxData(input: {
@@ -116,8 +117,35 @@ export async function buildTccCertificateStoredFile(
     registrationNumber?: string | null;
     validUntilDate: string;
     deliveryChallanNo?: string | null;
+    issuedDate?: string | null;
   }
 ): Promise<TccCertificateStoredFile> {
+  const { generateTccCertificateHtmlPdf } = await import('@/lib/tcc-certificate-html-pdf-server');
+  const { isReachPuppeteerPdfAvailable } = await import('@/services/reach-certificate-puppeteer-pdf');
+
+  if (isReachPuppeteerPdfAvailable()) {
+    try {
+      const pdfBuffer = await generateTccCertificateHtmlPdf({
+        certificateNumber: input.certNumber,
+        client: input.client,
+        chemical: input.chemical,
+        application: input.application,
+        registrationNumber: input.registrationNumber,
+        validUntilDate: input.validUntilDate,
+        deliveryChallanNo: input.deliveryChallanNo,
+        issuedDate: input.issuedDate,
+      });
+      return {
+        buffer: pdfBuffer,
+        fileName: `${input.certNumber}.pdf`,
+        contentType: 'application/pdf',
+        format: 'pdf',
+      };
+    } catch {
+      // Fall through to LibreOffice DOCX conversion.
+    }
+  }
+
   const docxBuffer = generateTccCertificateDocx(buildTccDocxData(input));
   const pdfBuffer = await convertTccDocxToPdf(docxBuffer);
   return {

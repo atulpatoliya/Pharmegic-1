@@ -2,17 +2,19 @@
 
 import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
 import ReachCertificateHtmlViewer from '@/components/ReachCertificateHtmlViewer';
+import TccCertificateHtmlViewer from '@/components/TccCertificateHtmlViewer';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
+import type { TccCertificateHtmlData } from '@/lib/tcc-certificate-html-data';
 
 type ReachCertificateViewerProps = {
   certificateType?: 'rc' | 'tcc';
   docxUrl: string;
-  htmlData?: ReachCertificateHtmlData | null;
+  htmlData?: ReachCertificateHtmlData | TccCertificateHtmlData | null;
 };
 
 /**
- * RC: styled HTML preview (exact certificate design).
- * TCC: in-app DOCX preview.
+ * RC/TCC: styled HTML preview when htmlData is provided.
+ * Fallback: in-app DOCX preview.
  */
 export default function ReachCertificateViewer({
   certificateType = 'tcc',
@@ -20,7 +22,21 @@ export default function ReachCertificateViewer({
   htmlData,
 }: ReachCertificateViewerProps) {
   if (certificateType === 'rc' && htmlData) {
-    return <ReachCertificateHtmlViewer key={JSON.stringify(htmlData)} data={htmlData} />;
+    return (
+      <ReachCertificateHtmlViewer
+        key={JSON.stringify(htmlData)}
+        data={htmlData as ReachCertificateHtmlData}
+      />
+    );
+  }
+
+  if (certificateType === 'tcc' && htmlData) {
+    return (
+      <TccCertificateHtmlViewer
+        key={JSON.stringify(htmlData)}
+        data={htmlData as TccCertificateHtmlData}
+      />
+    );
   }
 
   return <ReachCertificateDocxViewer key={docxUrl} docxUrl={docxUrl} />;

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import ReachCertificateViewer from '@/components/ReachCertificateViewer';
+import { buildTccHtmlData } from '@/lib/tcc-certificate-html-data';
 import {
   buildReachCertificateDocxPreviewUrl,
   buildReachCertificatePdfDownloadUrl,
@@ -172,6 +173,43 @@ export default function CertificatePreviewClient({
     );
   }, [cert, tccApp, issuedAt, expiresAt]);
 
+  const tccHtmlData = useMemo(() => {
+    if (isReach || !tccApp || !chemical) return null;
+    return buildTccHtmlData({
+      certificateNumber: cert.certificate_number,
+      client: {
+        company_name: cert.clients.company_name,
+        uuid_number: cert.clients.uuid_number,
+        address: cert.clients.address,
+        city: cert.clients.city,
+        state: cert.clients.state,
+        postal_code: cert.clients.postal_code,
+        country: cert.clients.country,
+      },
+      chemical: {
+        chemical_name: chemical.chemical_name,
+        cas_number: chemical.cas_number,
+        ec_number: chemical.ec_number,
+        tonnage_band: chemical.tonnage_band || cert.tonnage_band,
+      },
+      application: {
+        quantity_mt: tccApp.quantity_mt,
+        export_date: tccApp.export_date,
+        tracking_id: tccApp.tracking_id,
+        registration_number: tccApp.registration_number,
+        remarks: tccApp.remarks,
+        eu_importer_company_name: tccApp.eu_importer_company_name,
+        eu_importer_address: tccApp.eu_importer_address,
+        purchase_order_number: tccApp.purchase_order_number,
+        invoice_number: tccApp.invoice_number,
+      },
+      registrationNumber: cert.registration_number || tccApp.registration_number,
+      validUntilDate: expiresAt.split('T')[0],
+      issuedDate: issuedAt.split('T')[0],
+      deliveryChallanNo: tccApp.purchase_order_number || tccApp.tracking_id || undefined,
+    });
+  }, [isReach, cert, tccApp, chemical, issuedAt, expiresAt]);
+
   const handleSendMail = () => {
     startSendTransition(async () => {
       const res = await sendCertificateEmailAction(cert.id);
@@ -232,6 +270,7 @@ export default function CertificatePreviewClient({
             }
             fileName={`${cert.certificate_number}.pdf`}
             certificateType={isReach ? 'rc' : 'tcc'}
+            htmlData={isReach ? undefined : tccHtmlData}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-60"
           >
             <Download className="h-4 w-4" /> Download PDF
@@ -414,7 +453,12 @@ export default function CertificatePreviewClient({
               <h3 className="text-sm font-bold text-slate-800">Certificate Document Preview</h3>
             </div>
             {cert.id ? (
-              <ReachCertificateViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
+              <ReachCertificateViewer
+                key={isReach ? docxPreviewUrl : JSON.stringify(tccHtmlData)}
+                certificateType={isReach ? 'rc' : 'tcc'}
+                docxUrl={docxPreviewUrl}
+                htmlData={isReach ? undefined : tccHtmlData}
+              />
             ) : (
               <div className="flex flex-col items-center justify-center h-96 text-slate-400">
                 <Shield className="h-12 w-12 mb-3 opacity-30" />

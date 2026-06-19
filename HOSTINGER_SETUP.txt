@@ -1,0 +1,123 @@
+================================================================================
+  PHARMEGIC PORTAL — Hostinger VPS / Node.js Deploy Guide
+================================================================================
+
+IMPORTANT
+---------
+- Use hPanel: Websites → Add Website → **Node.js Apps** (NOT regular PHP website).
+- Shared hosting (PHP only) will NOT work. You need Business/Cloud with Node.js.
+- PDF certificates need Google Chrome on the server (see step 6).
+
+GITHUB DEPLOY (fix "Unsupported framework" error)
+-------------------------------------------------
+If Hostinger shows this error when selecting your repo:
+
+1. Confirm the GitHub repo has FULL code at the ROOT (not inside a subfolder):
+   - package.json
+   - next.config.mjs
+   - app/ folder
+   - package-lock.json
+
+2. Push latest code to the SAME repo you select in Hostinger:
+   git add .
+   git commit -m "Hostinger deploy config"
+   git push origin main
+
+3. If your code is on a different GitHub account (e.g. atulpatoliya) but Hostinger
+   shows atulpatiya — either connect the correct GitHub account OR push code to
+   the atulpatiya/Pharmegic-1 repository.
+
+4. In Hostinger build settings (after repo connects):
+   - Framework: Next.js (or Other if needed)
+   - Node.js: 20
+   - Install: npm ci
+   - Build: npm run build
+   - Start: npm run start -- -p $PORT
+
+5. Add all .env variables in Hostinger dashboard (never commit .env to GitHub).
+
+REQUIREMENTS
+------------
+- Node.js 20 or 22
+- npm
+- 2 GB+ RAM recommended (PDF generation)
+- Domain pointed to your VPS
+
+STEP 1 — Upload & extract
+-------------------------
+1. Upload pharmegic-hostinger-deploy.zip to your VPS (File Manager or SFTP).
+2. Extract into e.g. /home/youruser/pharmegic-portal
+
+STEP 2 — Environment variables
+------------------------------
+1. Copy .env.example to .env.local (or .env)
+2. Fill in all values:
+
+   NEXT_PUBLIC_SUPABASE_URL=
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=
+   SUPABASE_SERVICE_ROLE=
+   DATABASE_URL=
+   SMTP_HOST=
+   SMTP_PORT=
+   SMTP_USER=
+   SMTP_PASS=
+   SMTP_FROM=
+   NEXT_PUBLIC_APP_URL=https://your-domain.com
+
+STEP 3 — Install & start
+------------------------
+cd /home/youruser/pharmegic-portal
+npm ci --omit=dev
+npm run build
+npm start
+
+Default port is 3000. Set PORT=3000 if needed.
+
+STEP 4 — Keep app running (PM2)
+-------------------------------
+npm install -g pm2
+pm2 start npm --name pharmegic -- start
+pm2 save
+pm2 startup
+
+STEP 5 — Reverse proxy (Nginx)
+------------------------------
+Point your domain to http://127.0.0.1:3000
+
+Example Nginx location:
+  proxy_pass http://127.0.0.1:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection 'upgrade';
+  proxy_set_header Host $host;
+  proxy_cache_bypass $http_upgrade;
+
+STEP 6 — PDF on VPS (Chrome)
+------------------------------
+On Ubuntu/Debian VPS:
+  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+  sudo apt install -y google-chrome-stable
+
+Add to .env.local:
+  PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+
+Then restart: pm2 restart pharmegic
+
+Verify: https://your-domain.com/api/health/pdf-converter
+
+STEP 7 — Hostinger hPanel Node.js (if available)
+------------------------------------------------
+- Application root: folder where package.json is
+- Application startup file: leave default OR use "npm start"
+- Node version: 20.x
+- Add environment variables in hPanel (same as .env.local)
+
+NOTES
+-----
+- .env files are NOT included in the zip (security).
+- node_modules is NOT included — run npm ci on the server.
+- templates/ and public/fonts/ are required for certificates.
+
+Support files: deployment.md, .env.example
+
+================================================================================

@@ -31,7 +31,7 @@ import {
   TccApplicationAdminEditForm,
   buildTccAdminEditValues,
 } from '@/components/TccApplicationAdminEditForm';
-import ReachCertificateDocxViewer from '@/components/ReachCertificateDocxViewer';
+import TccCertificateHtmlPreviewFromApi from '@/components/TccCertificateHtmlPreviewFromApi';
 import {
   buildTccCertificateApplicationPreviewUrl,
   buildTccCertificateDocxPreviewUrl,
@@ -516,7 +516,7 @@ export function TccApplicationViewDialog({
                   </div>
                 )}
 
-                <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
+                <TccCertificateHtmlPreviewFromApi certificateId={cert.id} />
               </div>
             ) : docxPreviewUrl ? (
               <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50/50">
@@ -530,7 +530,7 @@ export function TccApplicationViewDialog({
                     </p>
                   </div>
                 </div>
-                <ReachCertificateDocxViewer key={docxPreviewUrl} docxUrl={docxPreviewUrl} />
+                <TccCertificateHtmlPreviewFromApi applicationId={displayApp.id} />
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">

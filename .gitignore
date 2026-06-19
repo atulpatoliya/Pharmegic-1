@@ -20,6 +20,14 @@
 # production
 /build
 
+# env (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# deploy artifacts
+pharmegic-hostinger-deploy.zip
+
 # misc
 .DS_Store
 *.pem
