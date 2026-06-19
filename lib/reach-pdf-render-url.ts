@@ -1,4 +1,4 @@
-import { isVercelHosting } from '@/lib/reach-gotenberg';
+import { isVercelHosting } from '@/lib/hosting';
 
 /** Base URL Puppeteer uses to load /reach-cert/print (must be reachable from the server). */
 export function resolvePdfRenderBaseUrl(): string {

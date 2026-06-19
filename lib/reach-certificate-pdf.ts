@@ -88,7 +88,7 @@ export async function resolveReachCertificateDownloadFile(
   }
 }
 
-/** Convert a public DOCX URL (Office preview file) to PDF via server-side LibreOffice/Gotenberg. */
+/** Convert a public DOCX URL (Office preview file) to PDF via server-side LibreOffice. */
 export async function convertReachDocxUrlToPdf(
   docxUrl: string,
   fileName: string

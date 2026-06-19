@@ -144,7 +144,7 @@ export async function resolveTccCertificateDownloadFile(
     };
   } catch {
     throw new Error(
-      'PDF conversion is not available on this server. Install LibreOffice (recommended: apt install libreoffice-writer) or set GOTENBERG_URL for document conversion.'
+      'PDF conversion is not available on this server. Install LibreOffice (Linux: sudo apt install libreoffice-writer).'
     );
   }
 }

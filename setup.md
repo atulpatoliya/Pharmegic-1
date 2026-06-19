@@ -97,44 +97,30 @@ const { data, error } = await supabase.auth.signUp({
 
 ---
 
-## 4. Certificate PDF conversion (production server — RC & TCC)
+## 4. Certificate PDF (RC & TCC)
 
-Certificate **preview** works in the browser (DOCX template). **PDF download** and **email attachments** require DOCX→PDF conversion on the server.
+### RC certificates (EU REACH)
 
-All certificate **downloads** return `.pdf` only. The production server must have a DOCX→PDF converter (Gotenberg or LibreOffice).
+RC **preview** and **PDF download** use the HTML certificate template rendered with Puppeteer/Chromium.
 
-### Option A — LibreOffice (recommended on Linux/VPS)
+- **Vercel:** set `NEXT_PUBLIC_APP_URL` only (uses `@sparticuz/chromium` automatically).
+- **Local/VPS:** Chrome or Edge installed, or set `PUPPETEER_EXECUTABLE_PATH`.
+
+### TCC certificates (legacy DOCX)
+
+TCC **PDF download** still uses DOCX→PDF conversion on the server (LibreOffice on Linux/VPS, Word/LibreOffice on Windows).
 
 ```bash
 # Ubuntu / Debian
 sudo apt-get update && sudo apt-get install -y libreoffice-writer
-
-# Verify
 soffice --version
 ```
 
 Restart the app after install.
 
-### Option B — Gotenberg (Docker)
-
-Run [Gotenberg](https://gotenberg.dev/) and set in `.env`:
-
-```env
-# Internal URL to your Gotenberg instance (recommended for VPS / Docker)
-GOTENBERG_URL=http://127.0.0.1:3001
-```
-
-Example (Docker on the same server):
-
-```bash
-docker run -d --name gotenberg -p 3001:3000 gotenberg/gotenberg:8
-```
-
-Add `GOTENBERG_URL=http://127.0.0.1:3001` to your production `.env`, then restart the portal.
-
 ### Windows development
 
-Microsoft Word or LibreOffice on the machine is used automatically for PDF generation.
+Microsoft Word or LibreOffice on the machine is used automatically for TCC PDF generation.
 
 ### EU REACH RC Certificate template
 
@@ -154,7 +140,7 @@ node scripts/generate-eu-reach-preview-pdf.mjs
 This writes:
 
 - `templates/EU_REACH_main.docx` — used for all client PDFs/DOCX and Settings preview
-- `public/previews/eu-reach-certificate-sample.pdf` — Settings preview on servers without LibreOffice/Gotenberg
+- `public/previews/eu-reach-certificate-sample.pdf` — Settings preview fallback PDF
 
 ### TCC Certificate template
 

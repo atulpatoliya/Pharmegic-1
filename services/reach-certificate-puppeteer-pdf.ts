@@ -1,5 +1,5 @@
 import type { Browser, LaunchOptions } from 'puppeteer-core';
-import { isVercelHosting } from '@/lib/reach-gotenberg';
+import { isVercelHosting } from '@/lib/hosting';
 
 function isServerlessHosting(): boolean {
   return isVercelHosting() || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);

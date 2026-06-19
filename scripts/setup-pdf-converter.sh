@@ -9,7 +9,3 @@ soffice --version || libreoffice --version
 
 echo ""
 echo "Done. Restart your portal app (e.g. pm2 restart all)."
-echo ""
-echo "Optional — Gotenberg via Docker (often faster):"
-echo "  docker compose -f docker-compose.gotenberg.yml up -d"
-echo "  Add to .env: GOTENBERG_URL=http://127.0.0.1:3001"

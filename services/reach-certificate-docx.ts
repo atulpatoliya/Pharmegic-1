@@ -1,5 +1,4 @@
 import fs from 'fs';
-import { convertDocxBufferWithGotenberg, getGotenbergBaseUrls } from '@/lib/reach-gotenberg';
 import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -89,7 +88,7 @@ export function isLibreOfficeInstalled(): boolean {
 
 /** Sync hint only — use resolveReachPdfConversionStatus() for an accurate live check. */
 export function isReachPdfConversionAvailable(): boolean {
-  return isLibreOfficeInstalled() || getGotenbergBaseUrls().length > 0;
+  return isLibreOfficeInstalled();
 }
 
 async function convertWithLibreOfficeCli(docxPath: string, outDir: string): Promise<string> {
@@ -150,14 +149,6 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
   fs.writeFileSync(docxPath, docxBuffer);
 
   try {
-    if (getGotenbergBaseUrls().length > 0) {
-      try {
-        return await convertDocxBufferWithGotenberg(docxBuffer);
-      } catch {
-        // fall through to local converters
-      }
-    }
-
     try {
       const cliPdf = await convertWithLibreOfficeCli(docxPath, workDir);
       return fs.readFileSync(cliPdf);
@@ -183,7 +174,7 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
     }
 
     throw new Error(
-      'PDF conversion is not available on this server. On Linux run: sudo bash scripts/setup-pdf-converter.sh OR docker compose -f docker-compose.gotenberg.yml up -d'
+      'PDF conversion is not available on this server. Install LibreOffice (Linux: sudo apt install libreoffice-writer).'
     );
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
