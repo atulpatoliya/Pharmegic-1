@@ -39,6 +39,18 @@ html, body {
 [data-reach-cert-root] .reach-cert-title {
   font-family: 'Times New Roman', Times, serif !important;
 }
+[data-reach-cert-root] p {
+  margin: 0;
+  padding: 0;
+}
+[data-reach-cert-root] .reach-manufacturer-label {
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+[data-reach-cert-root] .reach-manufacturer-name {
+  margin: 0 0 4px !important;
+  line-height: 1.15 !important;
+}
 `;
 
 function loadCertificateCss(): string {

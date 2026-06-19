@@ -22,6 +22,11 @@
   box-sizing: border-box;
 }
 
+[data-reach-cert-root] p {
+  margin: 0;
+  padding: 0;
+}
+
 [data-reach-cert-root].reach-cert-page {
   display: block;
   margin: 0 auto;
@@ -123,6 +128,7 @@
 
 [data-reach-cert-root] .reach-manufacturer-label {
   display: block;
+  margin: 0 !important;
   padding: 0 !important;
   font-size: 7pt !important;
   font-weight: bold !important;
@@ -130,7 +136,7 @@
   text-transform: uppercase;
   color: var(--reach-green-dark) !important;
   font-family: 'Verdana', Geneva, Tahoma, sans-serif !important;
-  line-height: 1.02 !important;
+  line-height: 1 !important;
 }
 
 [data-reach-cert-root] .reach-manufacturer-name {
@@ -141,6 +147,7 @@
   font-weight: bold !important;
   color: #000000 !important;
   font-family: 'Verdana', Geneva, Tahoma, sans-serif !important;
+  line-height: 1.15 !important;
 }
 
 [data-reach-cert-root] .reach-manufacturer-address {
