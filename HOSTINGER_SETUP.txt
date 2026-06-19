@@ -12,32 +12,43 @@ GITHUB DEPLOY (fix "Unsupported framework" error)
 -------------------------------------------------
 If Hostinger shows this error when selecting your repo:
 
-1. Confirm the GitHub repo has FULL code at the ROOT (not inside a subfolder):
-   - package.json
-   - next.config.mjs
-   - app/ folder
-   - package-lock.json
+LIKELY CAUSES
+  1. Next.js 16 is newer than Hostinger auto-detection supports (try ZIP upload below).
+  2. .env / secrets were committed to GitHub (now removed — push latest code).
+  3. GitHub app needs re-authorization (Settings → GitHub → refresh access).
 
-2. Push latest code to the SAME repo you select in Hostinger:
-   git add .
-   git commit -m "Hostinger deploy config"
-   git push origin main
+AFTER PUSHING LATEST CODE, try Git again:
+  1. Confirm repo root has: package.json, next.config.mjs, next.config.js, app/
+  2. hPanel: Websites → Add Website → Node.js Apps → Import Git Repository
+  3. Select atulpatoliya/Pharmegic-1
+  4. Build settings:
+     - Framework: Next.js (or Other)
+     - Node.js: 20
+     - Install: npm ci
+     - Build: npm run build
+     - Start: npm run start
+     - Output directory: .next
 
-3. If your code is on a different GitHub account (e.g. atulpatoliya) but Hostinger
-   shows atulpatiya — either connect the correct GitHub account OR push code to
-   the atulpatiya/Pharmegic-1 repository.
-
-4. In Hostinger build settings (after repo connects):
-   - Framework: Next.js (or Other if needed)
-   - Node.js: 20
+ZIP UPLOAD (recommended if Git still fails)
+-------------------------------------------
+1. hPanel → Add Website → Node.js Apps → Upload your website files
+2. Upload pharmegic-hostinger-deploy.zip (project root folder)
+3. Framework: select **Next.js** or **Other**
+4. If Other:
+   - Output directory: .next
+   - Entry file: server.js
    - Install: npm ci
    - Build: npm run build
-   - Start: npm run start -- -p $PORT
+   - Start: npm run start
+5. Add environment variables from .env.example in Hostinger dashboard
+6. Click Deploy
 
-5. Add all .env variables in Hostinger dashboard (never commit .env to GitHub).
+Regenerate ZIP locally:
+  npm run build
+  powershell: tar -a -cf pharmegic-hostinger-deploy.zip --exclude=node_modules --exclude=.git --exclude=.env --exclude=.env.local --exclude=scratch --exclude=pharmegic-hostinger-deploy.zip .
 
-REQUIREMENTS
-------------
+GITHUB DEPLOY STEPS (when Git works)
+------------------------------------
 - Node.js 20 or 22
 - npm
 - 2 GB+ RAM recommended (PDF generation)

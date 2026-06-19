@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const PDF_FONT_TRACE = ['./public/fonts/**'];
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium-min'],
   outputFileTracingIncludes: {
@@ -21,4 +22,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
