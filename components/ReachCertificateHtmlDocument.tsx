@@ -1,14 +1,14 @@
-'use client';
-
 import type { CSSProperties } from 'react';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
 
-type ReachCertificateHtmlDocumentProps = {  data: ReachCertificateHtmlData;
+type ReachCertificateHtmlDocumentProps = {
+  data: ReachCertificateHtmlData;
 };
 
 const OR_NAME = 'Pharmegic Healthcare Limited';
 const OR_ADDRESS = '6th Floor, Konstitucijos av. 21A, 08130 Vilnius, Lithuania';
 
+/** Shared certificate markup — safe to import from client components and server PDF render. */
 export default function ReachCertificateHtmlDocument({ data }: ReachCertificateHtmlDocumentProps) {
   const style = { '--reach-accent': data.accentColor } as CSSProperties;
 
@@ -85,14 +85,12 @@ export default function ReachCertificateHtmlDocument({ data }: ReachCertificateH
               <div className="reach-date-value">{data.issuedDateDisplay}</div>
             </div>
             <div className="reach-date-box right">
-              <div className='reach-date-box-inner'>
+              <div className="reach-date-box-inner">
                 <div className="reach-date-label">VALID UNTIL</div>
                 <div className="reach-date-value red">{data.validatedDateDisplay}</div>
               </div>
             </div>
           </div>
-
-
         </div>
 
         <div className="reach-footer-slot">
@@ -103,7 +101,6 @@ export default function ReachCertificateHtmlDocument({ data }: ReachCertificateH
             </div>
           ) : null}
           <footer className="reach-cert-footer">
-
             <p className="reach-footer-line reach-footer-company">{data.footerLines[0]}</p>
             <p className="reach-footer-line">{data.footerLines[1]}</p>
             <p className="reach-footer-line">{data.footerLines[2]}</p>
