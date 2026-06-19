@@ -408,9 +408,15 @@ async function downloadRcHtmlPreviewPdf(params: {
       if (!('kind' in parsed)) {
         return parsed;
       }
+    } else {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error || `Server PDF generation failed (${res.status}).`);
     }
-  } catch {
-    // fall through to client-side render
+  } catch (err) {
+    if (err instanceof Error && !err.message.includes('Failed to fetch')) {
+      throw err;
+    }
+    // Network failure only — fall through to client-side render
   }
 
   const onPage = document.querySelector('[data-reach-cert-root]');

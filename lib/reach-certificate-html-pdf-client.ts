@@ -194,13 +194,10 @@ export async function downloadReachHtmlCertificatePdf(
 
 
   const [{ createRoot }, React, { default: ReachCertificateHtmlDocument }] = await Promise.all([
-
     import('react-dom/client'),
-
     import('react'),
-
     import('@/components/ReachCertificateHtmlDocument'),
-
+    import('@/components/reach-certificate-html.css'),
   ]);
 
 

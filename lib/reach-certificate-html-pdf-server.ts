@@ -8,10 +8,10 @@ import {
 import { buildReachHtmlData, type ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
 import type { ReachCertPdfInput } from '@/lib/reach-certificate-preview';
 import {
-  createReachPrintToken,
   type ReachPrintTokenPayload,
 } from '@/lib/reach-certificate-print-token';
-import { generateReachHtmlPdfWithPuppeteer } from '@/services/reach-certificate-puppeteer-pdf';
+import { renderReachCertificateHtmlDocument } from '@/services/reach-certificate-html-pdf-render';
+import { generateReachHtmlPdfFromHtml } from '@/services/reach-certificate-puppeteer-pdf';
 import { getActiveTemplate } from '@/services/db';
 import { resolvePdfRenderBaseUrl } from '@/lib/reach-pdf-render-url';
 
@@ -136,8 +136,8 @@ export async function loadReachHtmlDataForInput(
 export async function generateReachCertificateHtmlPdf(
   input: LoadedReachCertificateInput
 ): Promise<Buffer> {
-  const token = await createReachPrintToken(toReachPrintTokenPayload(input));
-  const baseUrl = resolvePdfRenderBaseUrl();
-  const printUrl = `${baseUrl}/reach-cert/print?token=${encodeURIComponent(token)}`;
-  return generateReachHtmlPdfWithPuppeteer(printUrl);
+  const { createAdminClient } = await import('@/lib/supabase/admin');
+  const data = await loadReachHtmlDataForInput(createAdminClient(), input);
+  const html = await renderReachCertificateHtmlDocument(data);
+  return generateReachHtmlPdfFromHtml(html);
 }

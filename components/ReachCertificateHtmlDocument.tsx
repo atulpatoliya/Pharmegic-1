@@ -2,10 +2,8 @@
 
 import type { CSSProperties } from 'react';
 import type { ReachCertificateHtmlData } from '@/lib/reach-certificate-html-data';
-import './reach-certificate-html.css';
 
-type ReachCertificateHtmlDocumentProps = {
-  data: ReachCertificateHtmlData;
+type ReachCertificateHtmlDocumentProps = {  data: ReachCertificateHtmlData;
 };
 
 const OR_NAME = 'Pharmegic Healthcare Limited';

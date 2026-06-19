@@ -113,6 +113,49 @@ async function closeBrowserIfNeeded(browser: Browser): Promise<void> {
   }
 }
 
+export async function generateReachHtmlPdfFromHtml(html: string): Promise<Buffer> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+
+  try {
+    await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 1 });
+    await page.setContent(html, { waitUntil: 'load', timeout: 60_000 });
+    await page.waitForSelector('[data-reach-cert-root]', { timeout: 30_000 });
+    await page.waitForSelector('[data-reach-pdf-ready="true"]', { timeout: 30_000 });
+
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      const images = Array.from(document.images);
+      await Promise.all(
+        images.map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+                return;
+              }
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            })
+        )
+      );
+    });
+
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      preferCSSPageSize: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
+
+    return Buffer.from(pdf);
+  } finally {
+    await page.close();
+    await closeBrowserIfNeeded(browser);
+  }
+}
+
+/** @deprecated Prefer generateReachHtmlPdfFromHtml for consistent preview/PDF parity. */
 export async function generateReachHtmlPdfWithPuppeteer(printUrl: string): Promise<Buffer> {
   const browser = await getBrowser();
   const page = await browser.newPage();

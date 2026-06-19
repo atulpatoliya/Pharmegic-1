@@ -9,7 +9,7 @@
   --reach-red: #bf382a;
   --reach-accent: #145e40;
   display: block;
-  font-family: Verdana, Geneva, Tahoma, sans-serif;
+  font-family: 'Noto Sans', Verdana, Geneva, Tahoma, sans-serif;
   font-size: 10pt;
   line-height: 1.35;
   color: #1a1a1a;
@@ -88,7 +88,7 @@
   margin: 12px 0 18px !important;
   padding: 0 !important;
   text-align: center !important;
-  font-family: 'Times New Roman', Times, serif !important;
+  font-family: 'Tinos', 'Times New Roman', Times, serif !important;
   font-size: 22pt !important;
   font-weight: bold !important;
   color: var(--reach-green-dark) !important;
