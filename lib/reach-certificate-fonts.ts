@@ -52,16 +52,51 @@ const REACH_CERTIFICATE_FONTS: ReachCertificateFont[] = [
   { family: 'Arial', file: 'arialbi.ttf', weight: 700, style: 'italic', format: 'truetype' },
 ];
 
+let fontFileIndex: Map<string, string> | null = null;
+
+function getFontFileIndex(): Map<string, string> {
+  if (fontFileIndex) return fontFileIndex;
+
+  fontFileIndex = new Map();
+  if (!fs.existsSync(PUBLIC_FONTS_DIR)) {
+    return fontFileIndex;
+  }
+
+  for (const entry of fs.readdirSync(PUBLIC_FONTS_DIR)) {
+    fontFileIndex.set(entry.toLowerCase(), entry);
+  }
+
+  return fontFileIndex;
+}
+
+/** Resolve font path on case-sensitive hosts (Vercel/Linux). */
+export function resolveReachCertificateFontFile(file: string): string {
+  const index = getFontFileIndex();
+  const actualName = index.get(file.toLowerCase());
+
+  if (!actualName) {
+    throw new Error(
+      `Font file not found: ${file}. Expected in ${PUBLIC_FONTS_DIR}. ` +
+        `Available: ${[...index.values()].join(', ') || 'none'}`
+    );
+  }
+
+  return path.join(PUBLIC_FONTS_DIR, actualName);
+}
+
+/** Public URL with exact on-disk casing for /fonts static serving. */
+export function reachCertificateFontPublicUrl(file: string): string {
+  const index = getFontFileIndex();
+  const actualName = index.get(file.toLowerCase()) ?? file;
+  return `/fonts/${actualName}`;
+}
+
 function fontMimeType(format: FontFormat): string {
   return format === 'woff2' ? 'font/woff2' : 'font/ttf';
 }
 
-function fontFilePath(file: string): string {
-  return path.join(PUBLIC_FONTS_DIR, file);
-}
-
 function toFontDataUrl(font: ReachCertificateFont): string {
-  const buffer = fs.readFileSync(fontFilePath(font.file));
+  const buffer = fs.readFileSync(resolveReachCertificateFontFile(font.file));
   return `data:${fontMimeType(font.format)};base64,${buffer.toString('base64')}`;
 }
 
@@ -85,6 +120,8 @@ export function buildReachCertificateEmbeddedFontCss(): string {
 /** Public URL paths — for browser preview and print pages served by Next.js. */
 export function buildReachCertificatePublicFontCss(): string {
   return REACH_CERTIFICATE_FONTS.map((font) =>
-    buildFontFaceBlock(font, `/fonts/${font.file}`)
+    buildFontFaceBlock(font, reachCertificateFontPublicUrl(font.file))
   ).join('\n');
 }
+
+export const REACH_CERTIFICATE_FONT_FILES = REACH_CERTIFICATE_FONTS.map((font) => font.file);
