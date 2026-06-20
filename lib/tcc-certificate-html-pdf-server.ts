@@ -7,7 +7,7 @@ import {
 } from '@/lib/tcc-certificate-html-data';
 import {
   buildTccApplicationPreviewInput,
-  buildTccCertificatePdfInputFromCert,
+  buildTccCertificatePdfInputFromStoredCert,
 } from '@/lib/tcc-certificate-pdf';
 import { resolvePdfRenderBaseUrl } from '@/lib/reach-pdf-render-url';
 import { renderTccCertificateHtmlDocument } from '@/services/tcc-certificate-html-pdf-render';
@@ -69,6 +69,7 @@ export async function loadTccHtmlDataByCertificateId(
       expires_at,
       issued_at,
       registration_number,
+      tcc_application_id,
       clients (
         company_name,
         uuid_number,
@@ -84,7 +85,7 @@ export async function loadTccHtmlDataByCertificateId(
         ec_number,
         tonnage_band
       ),
-      tcc_applications (
+      tcc_applications!certificates_tcc_application_id_fkey (
         quantity_mt,
         export_date,
         tracking_id,
@@ -102,7 +103,7 @@ export async function loadTccHtmlDataByCertificateId(
 
   if (error || !cert) return null;
 
-  const input = buildTccCertificatePdfInputFromCert(cert);
+  const input = await buildTccCertificatePdfInputFromStoredCert(supabase, cert);
   return loadTccHtmlDataForInput(supabase, {
     ...input,
     issuedDate: cert.issued_at?.split('T')[0] || input.application.export_date || undefined,

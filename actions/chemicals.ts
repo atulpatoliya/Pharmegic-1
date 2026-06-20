@@ -36,12 +36,12 @@ export async function createChemicalAction(prevState: unknown, formData: FormDat
     });
     if (error) throw error;
     revalidatePath('/admin/chemicals');
-    return { success: true, message: 'Chemical added successfully.' };
+    return { success: true, message: 'Substance added successfully.' };
   } catch (err: unknown) {
     const e = err as { code?: string; message?: string };
     return {
       success: false,
-      error: e.code === '23505' ? 'A chemical with this CAS number already exists.' : e.message || 'Failed to create chemical.',
+      error: e.code === '23505' ? 'A substance with this CAS number already exists.' : e.message || 'Failed to create substance.',
     };
   }
 }
@@ -58,7 +58,7 @@ export async function updateChemicalAction(id: string, data: unknown) {
     const { error } = await adminSupabase.from('chemicals').update(parsed.data).eq('id', id);
     if (error) throw error;
     revalidatePath('/admin/chemicals');
-    return { success: true, message: 'Chemical updated successfully.' };
+    return { success: true, message: 'Substance updated successfully.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

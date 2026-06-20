@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { processTccAction } from '@/actions/tcc';
 import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
@@ -13,7 +14,12 @@ import { TableDateRangeFilter, type DateRangeValue } from './ui/TableDateRangeFi
 import { TableNumberRangeFilter, type NumberRangeValue } from './ui/TableNumberRangeFilter';
 import { matchesDateRange, formatDisplayDate } from '@/lib/date-filter';
 import { matchesNumberRange } from '@/lib/number-filter';
-import { getTccApplicationAvailableQuota } from '@/lib/tcc-application-quota';
+import { getTccApplicationAvailableQuota, resolveTccApplicationRegistrationNumber } from '@/lib/tcc-application-quota';
+import {
+  resolveTccApplicationCertificateNumber,
+  resolveTccApplicationIssueDate,
+  resolveTccCertificateRow,
+} from '@/lib/tcc-application-certificate';
 import {
   buildTccCertificatePdfDownloadUrl,
 } from '@/lib/tcc-certificate-download';
@@ -44,6 +50,7 @@ interface CertificateRow {
   certificate_number: string;
   file_url: string | null;
   issued_at: string;
+  registration_number?: string | null;
   mail_sent?: boolean;
   mail_sent_at?: string | null;
   mail_resend_count?: number;
@@ -56,7 +63,7 @@ interface Application {
   client_id: string;
   chemical_id: string;
   quantity_mt: number;
-  registration_number: string;
+  registration_number: string | null;
   export_date: string | null;
   remarks?: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'changes_required' | 'modification_requested';
@@ -76,7 +83,7 @@ interface Application {
   rc_registration_number?: string | null;
   rc_certificate_year?: number | null;
   regulatory_framework?: string | null;
-  client_chemicals?: { available_quantity: number } | null;
+  client_chemicals?: { available_quantity: number; registration_number?: string | null } | null;
   clients: {
     company_name: string;
     email: string;
@@ -108,10 +115,10 @@ const INITIAL_COLUMN_FILTERS = {
   company: '',
   substance: '',
   quantity: { ...EMPTY_NUMBER_RANGE },
-  registrationNumber: '',
   exportDate: { ...EMPTY_DATE_RANGE },
   issueDate: { ...EMPTY_DATE_RANGE },
   approveDate: { ...EMPTY_DATE_RANGE },
+  certificateNumber: '',
 };
 
 function matchesText(haystack: string, needle: string) {
@@ -120,10 +127,7 @@ function matchesText(haystack: string, needle: string) {
 }
 
 function resolveCertificate(app: Application): CertificateRow | null {
-  const c = app.certificates;
-  if (!c) return null;
-  if (Array.isArray(c)) return c[0] ?? null;
-  return c;
+  return resolveTccCertificateRow(app) as CertificateRow | null;
 }
 
 function getApproveDate(app: Application): string | null {
@@ -132,7 +136,11 @@ function getApproveDate(app: Application): string | null {
 }
 
 function getIssueDate(app: Application): string | null {
-  return resolveCertificate(app)?.issued_at ?? null;
+  return resolveTccApplicationIssueDate(app);
+}
+
+function getCertificateNumber(app: Application): string | null {
+  return resolveTccApplicationCertificateNumber(app);
 }
 
 const TCC_EXPORT_COLUMNS: CsvColumn<Application>[] = [
@@ -143,13 +151,13 @@ const TCC_EXPORT_COLUMNS: CsvColumn<Application>[] = [
   { header: 'CAS Number', value: (app) => app.chemicals.cas_number },
   { header: 'EC Number', value: (app) => app.chemicals.ec_number },
   { header: 'Quantity (MT)', value: (app) => app.quantity_mt },
-  { header: 'Registration Number', value: (app) => app.registration_number },
+  { header: 'Registration Number', value: (app) => resolveTccApplicationRegistrationNumber(app) },
   { header: 'Export Date', value: (app) => formatDisplayDate(app.export_date) },
   { header: 'Submitted', value: (app) => formatDisplayDate(app.created_at) },
   { header: 'Issue Date', value: (app) => formatDisplayDate(getIssueDate(app)) },
   { header: 'Approve Date', value: (app) => formatDisplayDate(getApproveDate(app)) },
   { header: 'Status', value: (app) => app.status },
-  { header: 'Certificate No.', value: (app) => resolveCertificate(app)?.certificate_number },
+  { header: 'Certificate No.', value: (app) => getCertificateNumber(app) },
 ];
 
 export default function ApprovalsDashboard({ initialApplications, emailDefaults }: ApprovalsDashboardProps) {
@@ -178,10 +186,10 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
     if (columnFilters.company.trim()) n++;
     if (columnFilters.substance.trim()) n++;
     if (columnFilters.quantity.min || columnFilters.quantity.max) n++;
-    if (columnFilters.registrationNumber.trim()) n++;
     if (columnFilters.exportDate.from || columnFilters.exportDate.to) n++;
     if (columnFilters.issueDate.from || columnFilters.issueDate.to) n++;
     if (columnFilters.approveDate.from || columnFilters.approveDate.to) n++;
+    if (columnFilters.certificateNumber.trim()) n++;
     return n;
   }, [columnFilters]);
 
@@ -201,6 +209,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
         app.chemicals.chemical_name,
         app.chemicals.cas_number,
         app.chemicals.ec_number || '',
+        resolveTccApplicationRegistrationNumber(app) || '',
       ].join(' ');
       if (!matchesText(substanceHaystack, columnFilters.substance)) return false;
 
@@ -213,7 +222,6 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
       ) {
         return false;
       }
-      if (!matchesText(app.registration_number || '', columnFilters.registrationNumber)) return false;
 
       if (
         !matchesDateRange(
@@ -242,6 +250,10 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
           columnFilters.approveDate.to
         )
       ) {
+        return false;
+      }
+
+      if (!matchesText(getCertificateNumber(app) || '', columnFilters.certificateNumber)) {
         return false;
       }
 
@@ -452,7 +464,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                   <TableColumnFilter
                     value={columnFilters.substance}
                     onChange={(v) => updateColumnFilter('substance', v)}
-                    placeholder="Name / CAS…"
+                    placeholder="Name / CAS / Reg no…"
                   />
                 </th>
                 <th className="p-3 min-w-[110px]">
@@ -461,14 +473,6 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                     value={columnFilters.quantity}
                     onChange={(v) => updateColumnFilter('quantity', v)}
                     unit="MT"
-                  />
-                </th>
-                <th className="p-3 min-w-[120px]">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Number</span>
-                  <TableColumnFilter
-                    value={columnFilters.registrationNumber}
-                    onChange={(v) => updateColumnFilter('registrationNumber', v)}
-                    placeholder="Registration no…"
                   />
                 </th>
                 <th className="p-3 min-w-[130px]">
@@ -492,6 +496,14 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                     onChange={(v) => updateColumnFilter('approveDate', v)}
                   />
                 </th>
+                <th className="p-3 min-w-[150px]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Certificate No.</span>
+                  <TableColumnFilter
+                    value={columnFilters.certificateNumber}
+                    onChange={(v) => updateColumnFilter('certificateNumber', v)}
+                    placeholder="TCC-2026-…"
+                  />
+                </th>
                 <th className="p-3 min-w-[120px]">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</span>
                 </th>
@@ -512,6 +524,7 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                   const cert = resolveCertificate(app);
                   const issueDate = getIssueDate(app);
                   const approveDate = getApproveDate(app);
+                  const registrationNumber = resolveTccApplicationRegistrationNumber(app);
 
                   const isSelected = selectedIds.includes(app.id);
 
@@ -535,7 +548,12 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                             <Building className="h-4 w-4" />
                           </div>
                           <div>
-                            <div className="font-bold text-slate-800">{app.clients.company_name}</div>
+                            <Link
+                              href={`/admin/clients/${app.client_id}`}
+                              className="font-bold text-slate-800 hover:text-primary transition-colors hover:underline block"
+                            >
+                              {app.clients.company_name}
+                            </Link>
                             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                               Submitted: {formatDisplayDate(app.created_at)}
                             </div>
@@ -548,14 +566,20 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                           <div>
                             <div className="font-bold text-slate-700">{app.chemicals.chemical_name}</div>
                             <div className="text-xs text-slate-400 font-medium">
-                              CAS: {app.chemicals.cas_number}{' '}<br></br>
+                              CAS: {app.chemicals.cas_number}
+                              <br />
                               {app.chemicals.ec_number ? `EC: ${app.chemicals.ec_number}` : ''}
+                              {registrationNumber ? (
+                                <>
+                                  <br />
+                                  Reg: {registrationNumber}
+                                </>
+                              ) : null}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="p-4 font-extrabold text-slate-800">{app.quantity_mt} MT</td>
-                      <td className="p-4 font-mono text-xs text-slate-600">{app.registration_number}</td>
                       <td className="p-4 text-slate-600 font-medium text-xs">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -567,15 +591,15 @@ export default function ApprovalsDashboard({ initialApplications, emailDefaults 
                           <Calendar className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                           {formatDisplayDate(issueDate)}
                         </div>
-                        {cert?.certificate_number && (
-                          <div className="text-[10px] font-mono text-emerald-600 mt-0.5">{cert.certificate_number}</div>
-                        )}
                       </td>
                       <td className="p-4 text-slate-600 font-medium text-xs">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 text-teal-600 shrink-0" />
                           {formatDisplayDate(approveDate)}
                         </div>
+                      </td>
+                      <td className="p-4 font-mono text-xs text-emerald-700 font-bold">
+                        {getCertificateNumber(app) || '—'}
                       </td>
                       <td className="p-4">
                         <div className="space-y-1">

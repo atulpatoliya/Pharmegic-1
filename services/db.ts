@@ -297,7 +297,7 @@ export async function getTccApplications(
     *,
     clients (company_name, email),
     chemicals (chemical_name, cas_number, ec_number, tonnage_band, validity_date, available_quantity),
-    client_chemicals (available_quantity),
+    client_chemicals (available_quantity, registration_number),
     certificates!certificates_tcc_application_id_fkey (*)
   `);
 

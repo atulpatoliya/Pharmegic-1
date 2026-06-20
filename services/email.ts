@@ -122,7 +122,7 @@ function getTccApplicationNotificationHtml(
   const quotaSection = isEuReach
     ? `<div class="section-title">Tonnage Quota Calculator</div>
       <div class="detail">
-        <p><strong>Selected chemical:</strong> ${escapeEmailHtml(details.chemicalName || '—')}</p>
+        <p><strong>Selected substance:</strong> ${escapeEmailHtml(details.chemicalName || '—')}</p>
         <p><strong>CAS number:</strong> ${escapeEmailHtml(details.casNumber || '—')}</p>
         <p><strong>EC number:</strong> ${escapeEmailHtml(details.ecNumber || '—')}</p>
         <p><strong>Current available:</strong> ${details.currentAvailableMt ?? 0} MT</p>
@@ -145,7 +145,7 @@ function getTccApplicationNotificationHtml(
       <div class="detail">
         <p><strong>Regulatory framework:</strong> ${escapeEmailHtml(frameworkLabel)}</p>
         <p><strong>Client:</strong> ${escapeEmailHtml(details.clientCompanyName)}</p>
-        ${isEuReach ? `<p><strong>Chemical:</strong> ${escapeEmailHtml(details.chemicalName || '—')}</p>` : `<p><strong>Case number:</strong> ${escapeEmailHtml(details.caseNumber || '—')}</p>`}
+        ${isEuReach ? `<p><strong>Substance:</strong> ${escapeEmailHtml(details.chemicalName || '—')}</p>` : `<p><strong>Case number:</strong> ${escapeEmailHtml(details.caseNumber || '—')}</p>`}
         <p><strong>Quantity requested:</strong> ${details.quantityMt} MT</p>
         <p><strong>Expected export date:</strong> ${formatEmailDate(details.exportDate)}</p>
       </div>
@@ -334,7 +334,7 @@ function getCertificateEmailHtml(
       </div>
       <div class="details">
         <div class="detail-row"><span class="label">Issued To</span><span class="value">${escapeEmailHtml(companyName)}</span></div>
-        <div class="detail-row"><span class="label">Chemical Substance</span><span class="value">${escapeEmailHtml(chemicalName)}</span></div>
+        <div class="detail-row"><span class="label">Substance</span><span class="value">${escapeEmailHtml(chemicalName)}</span></div>
         <div class="detail-row"><span class="label">Status</span><span class="value" style="color:#16a34a;">✓ Active &amp; Valid</span></div>
       </div>
       <p style="font-size:13px;color:#64748b;">The PDF certificate is attached to this email. Please store it safely for compliance records. For verification, visit our public verification portal.</p>`;
@@ -433,7 +433,7 @@ function getBulkReachCertificateEmailHtml(
         <thead>
           <tr>
             <th style="padding:10px 12px;text-align:left;background:#ecfdf5;color:#064e3b;font-size:11px;letter-spacing:0.08em;">CERTIFICATE NO.</th>
-            <th style="padding:10px 12px;text-align:left;background:#ecfdf5;color:#064e3b;font-size:11px;letter-spacing:0.08em;">CHEMICAL</th>
+            <th style="padding:10px 12px;text-align:left;background:#ecfdf5;color:#064e3b;font-size:11px;letter-spacing:0.08em;">SUBSTANCE</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -460,7 +460,7 @@ function getReachCertificateEmailHtml(
       </div>
       <div class="details">
         <div class="detail-row"><span class="label">Issued To</span><span class="value">${escapeEmailHtml(companyName)}</span></div>
-        <div class="detail-row"><span class="label">Chemical Substance</span><span class="value">${escapeEmailHtml(chemicalName)}</span></div>
+        <div class="detail-row"><span class="label">Substance</span><span class="value">${escapeEmailHtml(chemicalName)}</span></div>
         <div class="detail-row"><span class="label">Status</span><span class="value" style="color:#16a34a;">✓ Active &amp; Valid</span></div>
       </div>
       <p style="font-size:13px;color:#64748b;">The PDF certificate is attached. This RC certificate is required before applying for a Tonnage Coverage Certificate (TCC).</p>`;

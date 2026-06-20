@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { sendCertificateEmailAction, resendCertificateEmailAction } from '@/actions/tcc';
+import { sendCertificateEmailAction, resendCertificateEmailAction, getTccApplicationChangeHistoryAction } from '@/actions/tcc';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
 import {
   appendMailSentHistory,
@@ -16,6 +16,15 @@ import { Badge } from './ui/Badge';
 import { formatDisplayDate } from '@/lib/date-filter';
 import { getTccApplicationAvailableQuota, resolveTccApplicationCertificateYear, resolveTccApplicationRegistrationNumber, resolveTccApplicationTonnageBand } from '@/lib/tcc-application-quota';
 import {
+  resolveTccApplicationCertificateNumber,
+  resolveTccApplicationIssueDate,
+} from '@/lib/tcc-application-certificate';
+import {
+  formatTccChangeLogAction,
+  parseTccApplicationChangeLogMetadata,
+  type TccApplicationChangeLogEntry,
+} from '@/lib/tcc-application-changes';
+import {
   Building,
   FileText,
   Paperclip,
@@ -26,6 +35,7 @@ import {
   RefreshCw,
   CheckCircle2,
   Pencil,
+  History,
 } from 'lucide-react';
 import {
   TccApplicationAdminEditForm,
@@ -44,6 +54,7 @@ export interface TccViewCertificate {
   certificate_number: string;
   file_url: string | null;
   issued_at: string;
+  registration_number?: string | null;
   mail_sent?: boolean;
   mail_sent_at?: string | null;
   mail_resend_count?: number;
@@ -55,7 +66,7 @@ export interface TccViewApplication {
   id: string;
   tracking_id?: string | null;
   quantity_mt: number;
-  registration_number: string;
+  registration_number: string | null;
   export_date: string | null;
   remarks?: string | null;
   status: string;
@@ -75,7 +86,7 @@ export interface TccViewApplication {
   rc_registration_number?: string | null;
   rc_certificate_year?: number | null;
   regulatory_framework?: string | null;
-  client_chemicals?: { available_quantity: number } | null;
+  client_chemicals?: { available_quantity: number; registration_number?: string | null } | null;
   clients: { company_name: string; email: string };
   chemicals: {
     chemical_name: string;
@@ -102,9 +113,11 @@ function resolveCertificate(app: TccViewApplication): TccViewCertificate | null 
 }
 
 function resolveIssueDate(app: TccViewApplication): string | null {
-  const issuedAt = resolveCertificate(app)?.issued_at;
-  if (issuedAt) return issuedAt;
-  return app.certificate_issue_date ?? null;
+  return resolveTccApplicationIssueDate(app);
+}
+
+function resolveCertificateNumber(app: TccViewApplication): string | null {
+  return resolveTccApplicationCertificateNumber(app);
 }
 
 function formatEmailList(emails: string[]): string {
@@ -163,6 +176,9 @@ export function TccApplicationViewDialog({
   const [displayApp, setDisplayApp] = useState<TccViewApplication | null>(app);
   const [isEditing, setIsEditing] = useState(false);
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [changeHistoryVersion, setChangeHistoryVersion] = useState(0);
+  const [changeHistory, setChangeHistory] = useState<TccApplicationChangeLogEntry[]>([]);
+  const [changeHistoryLoading, setChangeHistoryLoading] = useState(false);
   const [isSending, startSendTransition] = useTransition();
   const [isResending, startResendTransition] = useTransition();
   const [mailState, setMailState] = useState({
@@ -177,7 +193,47 @@ export function TccApplicationViewDialog({
     setDisplayApp(app);
     setIsEditing(false);
     setPreviewVersion(0);
+    setChangeHistoryVersion(0);
   }, [app]);
+
+  useEffect(() => {
+    if (!isOpen || !displayApp?.id) {
+      setChangeHistory([]);
+      return;
+    }
+
+    let cancelled = false;
+    setChangeHistoryLoading(true);
+
+    void getTccApplicationChangeHistoryAction(displayApp.id).then((res) => {
+      if (cancelled) return;
+      if (!res.success || !res.entries) {
+        setChangeHistory([]);
+        setChangeHistoryLoading(false);
+        return;
+      }
+
+      setChangeHistory(
+        res.entries.map((entry) => {
+          const userRow = entry.users as { email?: string } | { email?: string }[] | null;
+          const adminEmail = Array.isArray(userRow) ? userRow[0]?.email : userRow?.email;
+          return {
+            id: entry.id,
+            action: entry.action,
+            description: entry.description,
+            created_at: entry.created_at,
+            adminEmail: adminEmail ?? null,
+            changes: parseTccApplicationChangeLogMetadata(entry.metadata),
+          };
+        })
+      );
+      setChangeHistoryLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, displayApp?.id, changeHistoryVersion]);
 
   const cert = displayApp ? resolveCertificate(displayApp) : null;
 
@@ -317,24 +373,13 @@ export function TccApplicationViewDialog({
               });
               setIsEditing(false);
               setPreviewVersion((v) => v + 1);
+              setChangeHistoryVersion((v) => v + 1);
               onApplicationUpdated?.(appUpdates);
               router.refresh();
             }}
           />
         ) : (
           <>
-        <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4">
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
-            <Building className="h-4 w-4 text-teal-700" />
-            EU Importer Information
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <DetailItem label="Company name">{displayApp.eu_importer_company_name || '—'}</DetailItem>
-            <DetailItem label="Address">{displayApp.eu_importer_address || '—'}</DetailItem>
-            <DetailItem label="Purchase order number">{displayApp.purchase_order_number || '—'}</DetailItem>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Client submission */}
           <div className="space-y-4">
@@ -345,7 +390,7 @@ export function TccApplicationViewDialog({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/80 rounded-xl border border-slate-100 p-4">
               <DetailItem label="Company">{displayApp.clients.company_name}</DetailItem>
               <DetailItem label="Contact email">{displayApp.clients.email}</DetailItem>
-              <DetailItem label="Chemical substance">{displayApp.chemicals.chemical_name}</DetailItem>
+              <DetailItem label="Substance">{displayApp.chemicals.chemical_name}</DetailItem>
               <DetailItem label="CAS number">
                 <span className="font-mono text-xs">{displayApp.chemicals.cas_number}</span>
               </DetailItem>
@@ -359,6 +404,11 @@ export function TccApplicationViewDialog({
               </DetailItem>
               <DetailItem label="Certificate year">
                 {resolveTccApplicationCertificateYear(displayApp) ?? '—'}
+              </DetailItem>
+              <DetailItem label="Certificate no.">
+                <span className="font-mono text-xs text-emerald-700">
+                  {resolveCertificateNumber(displayApp) || '—'}
+                </span>
               </DetailItem>
               <DetailItem label="Issue date">
                 {formatDisplayDate(resolveIssueDate(displayApp))}
@@ -382,6 +432,65 @@ export function TccApplicationViewDialog({
                   <DetailItem label="Remarks / notes">{displayApp.remarks}</DetailItem>
                 </div>
               )}
+            </div>
+
+            {(changeHistoryLoading || changeHistory.length > 0) && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <h4 className="text-xs font-bold text-slate-700 flex items-center gap-2 mb-3">
+                  <History className="h-3.5 w-3.5 text-slate-500" />
+                  Change history
+                </h4>
+                {changeHistoryLoading ? (
+                  <p className="text-xs text-slate-400 font-medium">Loading changes…</p>
+                ) : (
+                  <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                    {changeHistory.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2.5"
+                      >
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <p className="text-xs font-bold text-slate-800">
+                            {formatTccChangeLogAction(entry.action)}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium" suppressHydrationWarning>
+                            {formatDisplayDate(entry.created_at)}
+                          </p>
+                        </div>
+                        {entry.adminEmail && (
+                          <p className="text-[10px] text-slate-500 mt-0.5">{entry.adminEmail}</p>
+                        )}
+                        {entry.changes.length > 0 ? (
+                          <ul className="mt-2 space-y-1">
+                            {entry.changes.map((change) => (
+                              <li key={`${entry.id}-${change.field}`} className="text-xs text-slate-600">
+                                <span className="font-semibold text-slate-700">{change.label}:</span>{' '}
+                                <span className="text-slate-500">{change.from}</span>
+                                <span className="mx-1 text-slate-400">→</span>
+                                <span className="font-semibold text-teal-800">{change.to}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : entry.description ? (
+                          <p className="text-xs text-slate-500 mt-1">{entry.description}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+                <Building className="h-4 w-4 text-teal-700" />
+                EU Importer Information
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <DetailItem label="Company name">{displayApp.eu_importer_company_name || '—'}</DetailItem>
+                <DetailItem label="Address">{displayApp.eu_importer_address || '—'}</DetailItem>
+                <DetailItem label="Purchase order number">{displayApp.purchase_order_number || '—'}</DetailItem>
+              </div>
             </div>
 
             {/* PO attachment */}

@@ -190,7 +190,7 @@ export default function ClientDashboardDetails({
 
   const pageTitle =
     viewMode === 'chemicals'
-      ? `${client.company_name} — Chemical Inventory`
+      ? `${client.company_name} — Substance Inventory`
       : viewMode === 'certificates'
         ? `${client.company_name} — TCC Certificates`
         : viewMode === 'rc-certificates'
@@ -363,7 +363,7 @@ export default function ClientDashboardDetails({
     { header: 'Certificate No.', value: (cert) => cert.certificate_number },
     { header: 'Registration No.', value: (cert) => cert.registration_number },
     {
-      header: 'Chemical',
+      header: 'Substance',
       value: (cert) => cert.chemicals?.chemical_name || cert.chemical?.chemical_name,
     },
     {
@@ -394,9 +394,12 @@ export default function ClientDashboardDetails({
 
   const TCC_CLIENT_EXPORT_COLUMNS: CsvColumn<(typeof tccHistory)[number]>[] = [
     { header: 'Company', value: () => client.company_name },
-    { header: 'Reference', value: (app) => app.tracking_id || app.id },
     {
-      header: 'Chemical',
+      header: 'Certificate No.',
+      value: (app) => resolveTccCertificateNumber(app) || '',
+    },
+    {
+      header: 'Substance',
       value: (app) => app.chemicals?.chemical_name || 'N/A',
     },
     { header: 'Quantity (MT)', value: (app) => app.quantity_mt },
@@ -404,15 +407,6 @@ export default function ClientDashboardDetails({
     { header: 'Submitted', value: (app) => formatDisplayDate(app.created_at) },
     { header: 'Export Date', value: (app) => formatDisplayDate(app.export_date) },
     { header: 'Status', value: (app) => app.status },
-    {
-      header: 'Certificate No.',
-      value: (app) => {
-        const cert = app.certificates;
-        if (!cert) return '';
-        if (Array.isArray(cert)) return cert[0]?.certificate_number || '';
-        return cert.certificate_number || '';
-      },
-    },
   ];
 
   const [isTccViewOpen, setIsTccViewOpen] = useState(false);
@@ -475,8 +469,34 @@ export default function ClientDashboardDetails({
   ];
   const chartYear = new Date().getFullYear();
 
+  const activityYears = useMemo(() => {
+    const approvedApps = tccHistory.filter((t) => t.status === 'approved');
+    const years = new Set<number>();
+    approvedApps.forEach((app) => {
+      const raw = app.export_date || app.updated_at || app.created_at;
+      if (!raw) return;
+      years.add(new Date(raw).getFullYear());
+    });
+    const sorted = Array.from(years).sort((a, b) => a - b);
+    return sorted.length > 0 ? sorted : [chartYear];
+  }, [tccHistory, chartYear]);
+
+  const [selectedChartYears, setSelectedChartYears] = useState<number[]>([]);
+
+  useEffect(() => {
+    setSelectedChartYears((prev) => {
+      if (activityYears.length === 0) return prev;
+      if (prev.length === 0) return activityYears;
+      const kept = prev.filter((y) => activityYears.includes(y));
+      const added = activityYears.filter((y) => !prev.includes(y));
+      const merged = [...kept, ...added].sort((a, b) => a - b);
+      return merged.length > 0 ? merged : activityYears;
+    });
+  }, [activityYears]);
+
   const { chartSeries, chartOptions, chartLegend } = useMemo(() => {
     const approvedApps = tccHistory.filter((t) => t.status === 'approved');
+    const yearsToShow = selectedChartYears.length > 0 ? selectedChartYears : activityYears;
 
     const chemicalEntries: { id: string; name: string }[] = [];
     const seen = new Set<string>();
@@ -500,19 +520,32 @@ export default function ClientDashboardDetails({
       return raw ? new Date(raw) : null;
     };
 
-    const series = chemicalEntries.map(({ id, name }, idx) => ({
-      name,
-      color: CHART_COLORS[idx % CHART_COLORS.length],
-      data: MONTH_LABELS.map((_, monthIdx) =>
-        approvedApps
-          .filter((app) => app.chemical_id === id)
-          .filter((app) => {
-            const d = getActivityDate(app);
-            return d && d.getFullYear() === chartYear && d.getMonth() === monthIdx;
-          })
-          .reduce((sum, app) => sum + Number(app.quantity_mt || 0), 0)
-      ),
-    }));
+    const multiYear = yearsToShow.length > 1;
+    const series: { name: string; color: string; data: number[] }[] = [];
+    let colorIdx = 0;
+
+    for (const year of yearsToShow) {
+      for (const { id, name } of chemicalEntries) {
+        const data = MONTH_LABELS.map((_, monthIdx) =>
+          approvedApps
+            .filter((app) => app.chemical_id === id)
+            .filter((app) => {
+              const d = getActivityDate(app);
+              return d && d.getFullYear() === year && d.getMonth() === monthIdx;
+            })
+            .reduce((sum, app) => sum + Number(app.quantity_mt || 0), 0)
+        );
+        const total = data.reduce((a, b) => a + b, 0);
+        if (total <= 0) continue;
+
+        series.push({
+          name: multiYear ? `${name} (${year})` : name,
+          color: CHART_COLORS[colorIdx % CHART_COLORS.length],
+          data,
+        });
+        colorIdx += 1;
+      }
+    }
 
     const legend = series.map((s, idx) => ({
       name: s.name,
@@ -563,7 +596,7 @@ export default function ClientDashboardDetails({
       chartOptions: options,
       chartLegend: legend,
     };
-  }, [tccHistory, clientChemicals, chartYear]);
+  }, [tccHistory, clientChemicals, activityYears, selectedChartYears]);
 
   // -------------------------------------------------------------
   // Handlers
@@ -1317,8 +1350,15 @@ export default function ClientDashboardDetails({
   const resolveChemical = (row: { chemicals?: { chemical_name?: string } | null }) =>
     row.chemicals?.chemical_name || 'N/A';
 
-  const resolveCertificate = (row: { certificates?: { id?: string; certificate_number?: string; file_url?: string; issued_at?: string; status?: string } | null }) =>
-    row.certificates ?? null;
+  const resolveCertificate = (row: { certificates?: { id?: string; certificate_number?: string; file_url?: string; issued_at?: string; status?: string } | { id?: string; certificate_number?: string; file_url?: string; issued_at?: string; status?: string }[] | null }) => {
+    const cert = row.certificates;
+    if (!cert) return null;
+    if (Array.isArray(cert)) return cert[0] ?? null;
+    return cert;
+  };
+
+  const resolveTccCertificateNumber = (row: { certificates?: { certificate_number?: string } | { certificate_number?: string }[] | null }) =>
+    resolveCertificate(row)?.certificate_number || null;
 
   const buildViewApplication = (app: Record<string, unknown>): TccViewApplication => {
     const chem = app.chemicals as {
@@ -1515,7 +1555,7 @@ export default function ClientDashboardDetails({
 
     const headers = [
       'Year',
-      'Chemical Name',
+      'Substance Name',
       'CAS Number',
       'EC Number',
       'Tonnage Band',
@@ -1557,7 +1597,7 @@ export default function ClientDashboardDetails({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${client.company_name.replace(/\s+/g, '_')}_Chemicals.csv`);
+    link.setAttribute('download', `${client.company_name.replace(/\s+/g, '_')}_Substances.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1609,12 +1649,36 @@ export default function ClientDashboardDetails({
             <div>
               <h3 className="text-sm font-semibold text-slate-600">Monthly TCC Activity</h3>
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                Chemical-wise approved export lines (MT per month)
+                Substance-wise approved export lines (MT per month)
               </p>
             </div>
-            <span className="px-2 py-1 bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 rounded">
-              Year {chartYear}
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {activityYears.map((year) => {
+                const selected = selectedChartYears.includes(year);
+                return (
+                  <button
+                    key={year}
+                    type="button"
+                    onClick={() =>
+                      setSelectedChartYears((prev) => {
+                        if (selected) {
+                          const next = prev.filter((y) => y !== year);
+                          return next.length > 0 ? next : [year];
+                        }
+                        return [...prev, year].sort((a, b) => a - b);
+                      })
+                    }
+                    className={`px-2 py-1 text-xs font-semibold rounded border transition-colors ${
+                      selected
+                        ? 'bg-teal-50 border-teal-200 text-teal-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    {year}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {chartLegend.length > 0 && (
@@ -1647,7 +1711,7 @@ export default function ClientDashboardDetails({
               <ApexChart options={chartOptions} series={chartSeries} type="line" height="100%" width="100%" />
             ) : isMounted ? (
               <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-slate-400 font-medium">
-                Assign chemicals to this client to see activity chart.
+                Assign substances to this client to see activity chart.
               </div>
             ) : null}
           </div>
@@ -1815,7 +1879,7 @@ export default function ClientDashboardDetails({
               {rcHistoryRows.length === 0 ? (
                 <tr>
                   <td colSpan={currentUserRole !== 'CLIENT' ? 8 : 7} className="px-4 py-8 text-center text-slate-400">
-                    No certificate history for this chemical.
+                    No certificate history for this substance.
                   </td>
                 </tr>
               ) : (
@@ -2002,8 +2066,8 @@ export default function ClientDashboardDetails({
                     className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
                   />
                 </th>
-                <th className="px-6 py-4">Reference</th>
-                <th className="px-6 py-4">Chemical Item</th>
+                <th className="px-6 py-4">Certificate Number</th>
+                <th className="px-6 py-4">Substance</th>
                 <th className="px-6 py-4 text-right">Quantity (MT)</th>
                 <th className="px-6 py-4">Submitted</th>
                 <th className="px-6 py-4">Status</th>
@@ -2037,12 +2101,12 @@ export default function ClientDashboardDetails({
                           type="checkbox"
                           checked={isTccSelected}
                           onChange={() => toggleTccSelection(app.id)}
-                          aria-label={`Select ${app.tracking_id || app.id}`}
+                          aria-label={`Select ${resolveTccCertificateNumber(app) || resolveChemical(app)}`}
                           className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
                         />
                       </td>
-                      <td className="px-6 py-4 font-bold text-slate-800 tracking-wide text-xs">
-                        {app.tracking_id || app.id.slice(0, 8).toUpperCase()}
+                      <td className="px-6 py-4 font-mono text-xs font-bold text-emerald-700">
+                        {resolveTccCertificateNumber(app) || '—'}
                       </td>
                       <td className="px-6 py-4 text-slate-600 font-medium">{resolveChemical(app)}</td>
                       <td className="px-6 py-4 text-right font-medium text-slate-700">
@@ -2299,14 +2363,14 @@ export default function ClientDashboardDetails({
             {assignChemModalMode === 'issue' ? (
               <>
                 Issue the first RC certificate for{' '}
-                <span className="font-bold text-slate-800">{assignChemData.chemical_name || 'this chemical'}</span>.
+                <span className="font-bold text-slate-800">{assignChemData.chemical_name || 'this substance'}</span>.
                 Fill registration number and confirm dates, then save.
               </>
             ) : (
               <>
-                Add a chemical to{' '}
+                Add a substance to{' '}
                 <span className="font-bold text-slate-800">{client.company_name}</span> and issue an RC certificate for
-                the selected year. Existing year entries are preserved — duplicate chemical + year is not allowed.
+                the selected year. Existing year entries are preserved — duplicate substance + year is not allowed.
               </>
             )}
           </p>
@@ -2468,11 +2532,11 @@ export default function ClientDashboardDetails({
                   <span className="font-semibold">Previous year:</span>{' '}
                   {String(Number(assignChemData.certificate_year) - 1)}
                 </p>
-                <p className="mt-1">Chemical details are copied from the latest certificate.</p>
+                <p className="mt-1">Substance details are copied from the latest certificate.</p>
               </div>
             )}
             <div>
-              <FormLabel required className="text-sm normal-case mb-1 block">Chemical Name</FormLabel>
+              <FormLabel required className="text-sm normal-case mb-1 block">Substance Name</FormLabel>
               <Input
                 placeholder="e.g. Methanol"
                 value={assignChemData.chemical_name}

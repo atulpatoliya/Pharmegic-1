@@ -39,7 +39,7 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/clients', label: 'Clients', icon: Users },
     { href: '/admin/rc-certificates', label: 'RC Certificate', icon: FileText },
-    { href: '/admin/chemicals', label: 'Chemical Inventory', icon: Database },
+    { href: '/admin/chemicals', label: 'Substance Inventory', icon: Database },
     { href: '/admin/approvals', label: 'TCC Approvals', icon: CheckSquare },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
   ].filter((link) => !(hideChemicalInventory && link.href === '/admin/chemicals'));
@@ -86,7 +86,7 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
           },
           {
             href: `/admin/clients/${clientProfileId}/chemicals`,
-            label: 'Chemical Inventory',
+            label: 'Substance Inventory',
             icon: Database,
             isSub: true,
           },

@@ -256,7 +256,7 @@ export function findReachCertificateYearConflict(
   for (const existing of siblings) {
     const existingYear = getReachCertificateYear(existing.issued_at);
     if (existingYear === year) {
-      return `Certificate already exists for selected Chemical and Year (${chemicalName} — ${year}).`;
+      return `Certificate already exists for selected Substance and Year (${chemicalName} — ${year}).`;
     }
   }
 

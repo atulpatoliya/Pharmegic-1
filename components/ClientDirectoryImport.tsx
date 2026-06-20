@@ -137,7 +137,7 @@ export function ClientDirectoryImport() {
         <div className="space-y-5">
           <p className="text-sm text-slate-600">
             Upload a CSV or Excel file to import clients and substances. Use the Pharmegic export
-            format (Client / Authorized Chemical rows) or the sample template below.
+            format (Client / Authorized Substance rows) or the sample template below.
           </p>
 
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 space-y-2">
@@ -153,10 +153,10 @@ export function ClientDirectoryImport() {
               <li>First Name, Last Name, Email</li>
               <li>Optional: Phone, Position / Role</li>
             </ul>
-            <p className="font-semibold text-slate-700 pt-2">Substance rows (Record Type: Authorized Chemical)</p>
+            <p className="font-semibold text-slate-700 pt-2">Substance rows (Record Type: Authorized Substance)</p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Company Name (must match an existing or new client)</li>
-              <li>Chemical Name</li>
+              <li>Substance Name</li>
               <li>CAS Number</li>
             </ul>
             <p className="text-xs text-slate-500">

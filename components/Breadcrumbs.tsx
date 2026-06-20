@@ -9,7 +9,7 @@ import React, { useEffect, useState } from 'react';
 const routeMaps: Record<string, string> = {
   admin: 'Admin Portal',
   clients: 'Client Management',
-  chemicals: 'Chemical Inventory',
+  chemicals: 'Substance Inventory',
   templates: 'Document Templates',
   approvals: 'TCC Approvals',
   client: 'Client Portal',

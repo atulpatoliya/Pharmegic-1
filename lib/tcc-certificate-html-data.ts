@@ -72,8 +72,14 @@ export const TCC_CERTIFICATE_FOOTER_LINES = [
   'js@pharmegichealthcarelimited.com | : +37 05 2074005 | www.pharmegichealthcare.com',
 ] as const;
 
-export const TCC_LEGAL_PARAGRAPH =
-  'According to "Guidance on REACH Registration (Version 3.0)" published by ECHA, it is necessary that the "non-Community manufacturer" provides his Only Representative with up-to-date information on the list of EU importers which should be covered by the registration of the Only Representative and the quantities imported into the EU. We hereby issue this volume tracking and tonnage coverage certificate to show the enforcement authorities of member states that the imported product delivered to the EU entity below is covered by the registration of Pharmegic Healthcare and is thus REACH compliant. The EU importer below will be regarded as downstream users and thus be exempt from REACH registration. However, the EU importer remains responsible for his import from other non-EU suppliers.';
+export const TCC_LEGAL_PARAGRAPH_1 =
+  'According to “Guidance on REACH Registration (Version 3.0)” published by ECHA, it is necessary that the “non-Community manufacturer” provides his Only Representative with up-to-date information on the list of EU importers which should be covered by the registration of the Only Representative and the quantities imported into the EU.';
+
+export const TCC_LEGAL_PARAGRAPH_2 =
+  'We hereby issue this volume tracking and tonnage coverage certificate to show the enforcement authorities of member states that the imported product delivered to the EU entity below is covered by the registration of Pharmegic Healthcare and is thus REACH compliant. The EU importer below will be regarded as downstream users and thus be exempt from REACH registration. However, the EU importer remains responsible for his import from other non-EU suppliers.';
+
+/** @deprecated Use TCC_LEGAL_PARAGRAPH_1 and TCC_LEGAL_PARAGRAPH_2 */
+export const TCC_LEGAL_PARAGRAPH = `${TCC_LEGAL_PARAGRAPH_1} ${TCC_LEGAL_PARAGRAPH_2}`;
 
 const DEFAULT_ACCENT = '#145E40';
 const DEFAULT_LOGO = '/pharmegic-logo.png';

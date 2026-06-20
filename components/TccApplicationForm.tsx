@@ -225,7 +225,7 @@ export default function TccApplicationForm({
     setError(null);
 
     if (isEuReach && !chemicalId) {
-      setError('Please select an authorized chemical substance.');
+      setError('Please select an authorized substance.');
       return;
     }
 
@@ -412,7 +412,7 @@ export default function TccApplicationForm({
           <div>
             <p className="font-bold">REACH Compliance Certificate Required</p>
             <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-              No substances are eligible for TCC application. Each chemical must have an active REACH Compliance Certificate issued by your administrator (valid for 1 year).
+              No substances are eligible for TCC application. Each substance must have an active REACH Compliance Certificate issued by your administrator (valid for 1 year).
             </p>
           </div>
         </div>
@@ -426,7 +426,7 @@ export default function TccApplicationForm({
                 <FileText className="h-5 w-5" />
                 <CardTitle>Application Form</CardTitle>
               </div>
-              <CardDescription>Enter correct regulatory and chemical data.</CardDescription>
+              <CardDescription>Enter correct regulatory and substance data.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-5">
@@ -472,7 +472,7 @@ export default function TccApplicationForm({
 
                 {showChemicalField && (
                 <div className="space-y-2">
-                  <FormLabel required={isEuReach}>Chemical Substance</FormLabel>
+                  <FormLabel required={isEuReach}>Substance</FormLabel>
                   <Select
                     value={chemicalId}
                     onChange={(e) => handleChemicalChange(e.target.value)}
@@ -640,7 +640,7 @@ export default function TccApplicationForm({
               {selectedSubstance ? (
                 <>
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Selected Chemical</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Selected Substance</span>
                     <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                       <FlaskConical className="h-4 w-4 text-emerald-600 shrink-0" />
                       {selectedSubstance.chemical_name}
@@ -749,7 +749,7 @@ export default function TccApplicationForm({
               ) : (
                 <div className="text-center py-8 text-slate-400 font-semibold text-xs flex flex-col items-center justify-center gap-2">
                   <AlertCircle className="h-8 w-8 text-slate-300" />
-                  Select an authorized chemical substance to view the dynamic quota deduction simulation.
+                  Select an authorized substance to view the dynamic quota deduction simulation.
                 </div>
               )}
             </CardContent>

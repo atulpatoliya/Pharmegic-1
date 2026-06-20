@@ -96,6 +96,66 @@ export async function resolveTccCertificatePdfBuffer(
   return file.buffer;
 }
 
+export async function resolveTccPdfChemicalTonnageBand(
+  supabase: SupabaseClient,
+  params: {
+    clientId: string;
+    chemicalId: string;
+    exportDate?: string | null;
+    reachCertificateId?: string | null;
+    chemical: TccPdfChemical;
+  }
+): Promise<TccPdfChemical> {
+  const { data: reachCerts } = await supabase
+    .from('certificates')
+    .select(REACH_QUOTA_CERT_SELECT)
+    .eq('client_id', params.clientId)
+    .eq('chemical_id', params.chemicalId)
+    .eq('type', REACH_CERTIFICATE_TYPE)
+    .neq('status', 'revoked');
+
+  const reachCert =
+    (params.reachCertificateId
+      ? (reachCerts || []).find((c) => c.id === params.reachCertificateId)
+      : null) ||
+    (params.exportDate
+      ? findReachCertificateForExportDate(reachCerts || [], params.chemicalId, params.exportDate)
+      : null);
+
+  return {
+    ...params.chemical,
+    tonnage_band: reachCert?.tonnage_band || params.chemical.tonnage_band || null,
+  };
+}
+
+export async function buildTccCertificatePdfInputFromStoredCert(
+  supabase: SupabaseClient,
+  cert: {
+    certificate_number: string;
+    expires_at?: string | null;
+    registration_number?: string | null;
+    tcc_application_id?: string | null;
+    clients: TccPdfClient | TccPdfClient[];
+    chemicals?: TccPdfChemical | TccPdfChemical[] | null;
+    tcc_applications?:
+      | (TccPdfApplication & { chemicals?: TccPdfChemical | TccPdfChemical[] | null })
+      | (TccPdfApplication & { chemicals?: TccPdfChemical | TccPdfChemical[] | null })[]
+      | null;
+  }
+): Promise<TccCertPdfInput> {
+  if (cert.tcc_application_id) {
+    const preview = await buildTccApplicationPreviewInput(supabase, cert.tcc_application_id);
+    return {
+      ...preview,
+      certificateNumber: cert.certificate_number,
+      registrationNumber: cert.registration_number?.trim() || preview.registrationNumber,
+      validUntilDate: cert.expires_at?.split('T')[0] || preview.validUntilDate,
+    };
+  }
+
+  return buildTccCertificatePdfInputFromCert(cert);
+}
+
 export function buildTccCertificatePdfInputFromCert(cert: {
   certificate_number: string;
   expires_at?: string | null;
@@ -207,10 +267,13 @@ export async function buildTccApplicationPreviewInput(
       ? findReachCertificateForExportDate(reachCerts || [], app.chemical_id, app.export_date)
       : null);
 
-  const chemical: TccPdfChemical = {
-    ...chemicalRaw,
-    tonnage_band: reachCert?.tonnage_band || chemicalRaw.tonnage_band,
-  };
+  const chemical = await resolveTccPdfChemicalTonnageBand(supabase, {
+    clientId: app.client_id,
+    chemicalId: app.chemical_id,
+    exportDate: app.export_date,
+    reachCertificateId: app.reach_certificate_id,
+    chemical: chemicalRaw,
+  });
 
   const issueDateRaw = app.certificate_issue_date
     ? String(app.certificate_issue_date).split('T')[0]

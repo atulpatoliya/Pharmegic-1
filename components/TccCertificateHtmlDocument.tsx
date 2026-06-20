@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { TccCertificateHtmlData } from '@/lib/tcc-certificate-html-data';
-import { TCC_LEGAL_PARAGRAPH } from '@/lib/tcc-certificate-html-data';
+import { TCC_LEGAL_PARAGRAPH_1, TCC_LEGAL_PARAGRAPH_2 } from '@/lib/tcc-certificate-html-data';
 import { REACH_CERT_A4_CSS_VARS } from '@/lib/reach-certificate-a4';
 
 type TccCertificateHtmlDocumentProps = {
@@ -12,10 +12,16 @@ const OR_NAME = 'PHARMEGIC HEALTHCARE LIMITED';
 function TccCertPageShell({
   data,
   page,
+  showSeal,
+  showContinuedNote,
+  showEndMark,
   children,
 }: {
   data: TccCertificateHtmlData;
   page: 1 | 2;
+  showSeal?: boolean;
+  showContinuedNote?: boolean;
+  showEndMark?: boolean;
   children: ReactNode;
 }) {
   const style = {
@@ -26,22 +32,33 @@ function TccCertPageShell({
   return (
     <div className={`tcc-cert-page tcc-cert-page-${page}`} style={style} data-tcc-cert-root>
       <div className="tcc-cert-frame">
-        <div className="tcc-cert-body">{children}</div>
-        {page === 2 ? (
-          <div className="tcc-footer-slot">
-            {data.signatureUrl ? (
-              <div className="tcc-seal-wrap">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={data.signatureUrl} alt="Certificate seal" className="tcc-seal-image" />
-              </div>
+        <div className="tcc-cert-body">
+          <header className="tcc-cert-header">
+            {data.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={data.logoUrl} alt="Pharmegic Healthcare" className="tcc-brand-logo" />
             ) : null}
-            <footer className="tcc-cert-footer">
-              <p className="tcc-footer-line tcc-footer-company">{data.footerLines[0]}</p>
-              <p className="tcc-footer-line">{data.footerLines[1]}</p>
-              <p className="tcc-footer-line">{data.footerLines[2]}</p>
-            </footer>
-          </div>
-        ) : null}
+          </header>
+          {children}
+          {showSeal && data.signatureUrl ? (
+            <div className="tcc-seal-wrap">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={data.signatureUrl} alt="Certificate seal" className="tcc-seal-image" />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="tcc-footer-slot">
+          {showContinuedNote ? (
+            <p className="tcc-continued-note">Certificate Continued on next page</p>
+          ) : null}
+          {showEndMark ? <p className="tcc-end-mark">End of Certificate</p> : null}
+          <footer className="tcc-cert-footer">
+            <p className="tcc-footer-line tcc-footer-company">{data.footerLines[0]}</p>
+            <p className="tcc-footer-line">{data.footerLines[1]}</p>
+            <p className="tcc-footer-line">{data.footerLines[2]}</p>
+          </footer>
+        </div>
       </div>
     </div>
   );
@@ -51,14 +68,7 @@ function TccCertPageShell({
 export default function TccCertificateHtmlDocument({ data }: TccCertificateHtmlDocumentProps) {
   return (
     <div className="tcc-cert-document">
-      <TccCertPageShell data={data} page={1}>
-        <header className="tcc-cert-header">
-          {data.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={data.logoUrl} alt="Pharmegic Healthcare" className="tcc-brand-logo" />
-          ) : null}
-        </header>
-
+      <TccCertPageShell data={data} page={1} showContinuedNote>
         <h1 className="tcc-cert-title">EU REACH TONNAGE COVERAGE CERTIFICATE</h1>
 
         <p className="tcc-cert-intro">
@@ -111,24 +121,33 @@ export default function TccCertificateHtmlDocument({ data }: TccCertificateHtmlD
           </span>
         </div>
 
-        <p className="tcc-legal-text">{TCC_LEGAL_PARAGRAPH}</p>
-
-        <p className="tcc-continued-note">Certificate Continued on next page</p>
+        <div className="tcc-legal-box">
+          <p className="tcc-legal-text">{TCC_LEGAL_PARAGRAPH_1}</p>
+          <p className="tcc-legal-text">{TCC_LEGAL_PARAGRAPH_2}</p>
+        </div>
       </TccCertPageShell>
 
-      <TccCertPageShell data={data} page={2}>
+      <TccCertPageShell data={data} page={2} showSeal showEndMark>
         <div className="tcc-party-columns">
           <div className="tcc-party-box">
-            <h3 className="tcc-party-title">Exporter Information</h3>
-            <p className="tcc-party-name">{data.companyName}</p>
-            <p className="tcc-party-address">{data.exporterFullAddress}</p>
+            <div className="tcc-party-header">
+              <h3 className="tcc-party-title">Exporter Information</h3>
+            </div>
+            <div className="tcc-party-content">
+              <p className="tcc-party-name">{data.companyName}</p>
+              <p className="tcc-party-address">{data.exporterFullAddress}</p>
+            </div>
           </div>
           <div className="tcc-party-box">
-            <h3 className="tcc-party-title">EU Importer Information</h3>
-            <p className="tcc-party-name">{data.euImporterName}</p>
-            <p className="tcc-party-address">{data.euImporterAddr1}</p>
-            <p className="tcc-party-address">{data.euImporterAddr2}</p>
-            <p className="tcc-party-address">{data.euImporterAddr3}</p>
+            <div className="tcc-party-header">
+              <h3 className="tcc-party-title">EU Importer Information</h3>
+            </div>
+            <div className="tcc-party-content">
+              <p className="tcc-party-name">{data.euImporterName}</p>
+              <p className="tcc-party-address">{data.euImporterAddr1}</p>
+              <p className="tcc-party-address">{data.euImporterAddr2}</p>
+              <p className="tcc-party-address">{data.euImporterAddr3}</p>
+            </div>
           </div>
         </div>
 
@@ -152,43 +171,32 @@ export default function TccCertificateHtmlDocument({ data }: TccCertificateHtmlD
               <th>Registration Number</th>
               <td>{data.registrationNumber}</td>
             </tr>
+            <tr>
+              <th>Volume Covered</th>
+              <td className="tcc-import-emphasis">{data.volumeMt}</td>
+            </tr>
+            <tr>
+              <th>Invoice No.</th>
+              <td>{data.invoiceNo}</td>
+            </tr>
+            <tr>
+              <th>PO. No.</th>
+              <td>{data.poNo}</td>
+            </tr>
+            <tr>
+              <th>Date of Issue</th>
+              <td>{data.exportDateDisplay}</td>
+            </tr>
+            <tr>
+              <th>Valid Upto</th>
+              <td className="tcc-import-valid">{data.validUntilDateDisplay}</td>
+            </tr>
+            <tr>
+              <th>Certificate Number</th>
+              <td>{data.certificateNumber}</td>
+            </tr>
           </tbody>
         </table>
-
-        <div className="tcc-shipment-row">
-          <div className="tcc-shipment-item">
-            <span className="tcc-shipment-label">Volume Covered</span>
-            <span className="tcc-shipment-value">{data.volumeMt}</span>
-          </div>
-          <div className="tcc-shipment-item">
-            <span className="tcc-shipment-label">Invoice No.</span>
-            <span className="tcc-shipment-value">{data.invoiceNo}</span>
-          </div>
-          <div className="tcc-shipment-item">
-            <span className="tcc-shipment-label">P.O. No.</span>
-            <span className="tcc-shipment-value">{data.poNo}</span>
-          </div>
-        </div>
-
-        <div className="tcc-date-section">
-          <div className="tcc-date-box">
-            <div className="tcc-date-label">DATE OF ISSUE</div>
-            <div className="tcc-date-value">{data.exportDateDisplay}</div>
-          </div>
-          <div className="tcc-date-box right">
-            <div className="tcc-date-box-inner">
-              <div className="tcc-date-label">VALID UPTO</div>
-              <div className="tcc-date-value red">{data.validUntilDateDisplay}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="tcc-cert-number-box">
-          <span className="tcc-cert-number-label">Certificate Number</span>
-          <span className="tcc-cert-number-value">{data.certificateNumber}</span>
-        </div>
-
-        <p className="tcc-end-mark">End of Certificate</p>
       </TccCertPageShell>
     </div>
   );

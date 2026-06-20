@@ -254,7 +254,7 @@ function rowToSubstance(
   rowNumber: number
 ): ParsedSubstanceImportRow | null {
   const recordType = pick(row, headerMap, ['Record Type', 'record type']).toLowerCase();
-  if (recordType && recordType !== 'authorized chemical') return null;
+  if (recordType && recordType !== 'authorized chemical' && recordType !== 'authorized substance') return null;
 
   const companyName = pick(row, headerMap, [
     'Company Name',
@@ -384,7 +384,8 @@ export function parseSpreadsheetBuffer(
         recordType !== 'contact' &&
         recordType !== 'secondary person contact' &&
         recordType !== 'secondary contact' &&
-        recordType !== 'authorized chemical'
+        recordType !== 'authorized chemical' &&
+        recordType !== 'authorized substance'
       ) {
         return;
       }
@@ -414,7 +415,7 @@ export function parseSpreadsheetBuffer(
     if (companyName && casNumber) {
       skippedRows.push({
         rowNumber,
-        reason: 'Missing substance fields (Chemical Name and valid CAS are required).',
+        reason: 'Missing substance fields (Substance Name and valid CAS are required).',
       });
       return;
     }
@@ -457,7 +458,7 @@ export function buildReachBooleanColumns(registrations: unknown): {
   };
 }
 
-const IMPORT_RECORD_TYPE_ORDER = ['Client', 'Contact', 'Authorized Chemical'] as const;
+const IMPORT_RECORD_TYPE_ORDER = ['Client', 'Contact', 'Authorized Substance'] as const;
 
 type ImportCompatibleRow = Record<string, string | number | boolean | null | undefined>;
 
@@ -482,8 +483,8 @@ export function mergeImportCompatibleRows(groups: {
       IMPORT_RECORD_TYPE_ORDER.indexOf(b['Record Type'] as (typeof IMPORT_RECORD_TYPE_ORDER)[number]);
     if (typeCompare !== 0) return typeCompare;
 
-    return String(a['Chemical Name'] ?? a['Email'] ?? a['First Name'] ?? '').localeCompare(
-      String(b['Chemical Name'] ?? b['Email'] ?? b['First Name'] ?? ''),
+    return String(a['Substance Name'] ?? a['Chemical Name'] ?? a['Email'] ?? a['First Name'] ?? '').localeCompare(
+      String(b['Substance Name'] ?? b['Chemical Name'] ?? b['Email'] ?? b['First Name'] ?? ''),
       undefined,
       { sensitivity: 'base' }
     );
@@ -516,7 +517,7 @@ export function mergeImportCompatibleRows(groups: {
     'First Name',
     'Last Name',
     'Position / Role',
-    'Chemical Name',
+    'Substance Name',
     'CAS Number',
     'EC Number',
     'Tonnage Band',
@@ -572,9 +573,9 @@ export function buildClientImportTemplateBuffer(): ArrayBuffer {
       'Position / Role': 'Compliance Officer',
     },
     {
-      'Record Type': 'Authorized Chemical',
+      'Record Type': 'Authorized Substance',
       'Company Name': 'Example Pharma Ltd',
-      'Chemical Name': 'Ethylenediamine',
+      'Substance Name': 'Ethylenediamine',
       'CAS Number': '107-15-3',
       'EC Number': '203-468-6',
       'Tonnage Band': 'None',

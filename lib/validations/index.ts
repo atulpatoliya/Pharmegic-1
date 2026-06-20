@@ -19,7 +19,7 @@ export const loginSchema = z.object({
 // CHEMICAL SCHEMAS
 // ============================================================================
 export const chemicalSchema = z.object({
-  chemical_name: z.string().min(2, { message: 'Chemical name is required' }),
+  chemical_name: z.string().min(2, { message: 'Substance name is required' }),
   cas_number: z.string().min(1, { message: 'CAS number is required' }),
   ec_number: z.string().min(1, { message: 'EC number is required' }),
   tonnage_band: z.string().min(1, { message: 'Tonnage band is required' }),
@@ -81,7 +81,7 @@ export const clientWizardEditSchema = z.object({
 // ASSIGN CHEMICAL TO CLIENT
 // ============================================================================
 export const assignChemicalSchema = z.object({
-  chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
+  chemical_id: z.string().uuid({ message: 'Please select a substance' }),
   available_quantity: z.coerce.number().min(0.01, { message: 'Quantity must be greater than 0' }),
   validity_date: z.string().min(1, { message: 'Validity date is required' }),
   status: z.enum(['active', 'expired', 'suspended']).default('active'),
@@ -110,7 +110,7 @@ const tccApplicationCommonSchema = {
 
 export const tccEuApplicationSchema = z.object({
   ...tccApplicationCommonSchema,
-  chemical_id: z.string().uuid({ message: 'Please select a chemical' }),
+  chemical_id: z.string().uuid({ message: 'Please select a substance' }),
   registration_number: z
     .preprocess((val) => (val == null || val === '' ? undefined : String(val)), z.string().optional()),
   remarks: z

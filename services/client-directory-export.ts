@@ -117,7 +117,7 @@ export async function buildClientDirectoryExportBuffer(
     );
     return {
       'Company Name': clientNameById.get(row.client_id) ?? '',
-      'Chemical Name': chemical?.chemical_name ?? '',
+      'Substance Name': chemical?.chemical_name ?? '',
       'CAS Number': chemical?.cas_number ?? '',
       'EC Number': chemical?.ec_number ?? '',
       'Tonnage Band': formatTonnageBandForExport(tonnageBand),
@@ -132,7 +132,7 @@ export async function buildClientDirectoryExportBuffer(
   const allRows = mergeImportCompatibleRows([
     { recordType: 'Client', rows: clientRows },
     { recordType: 'Contact', rows: contactRows },
-    { recordType: 'Authorized Chemical', rows: authorizedChemicalRows },
+    { recordType: 'Authorized Substance', rows: authorizedChemicalRows },
   ]);
 
   const sheets: ExcelSheet[] = [{ name: IMPORT_TEMPLATE_SHEET_NAME, rows: allRows }];

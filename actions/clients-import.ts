@@ -87,7 +87,7 @@ export async function importClientsDirectoryAction(input: {
       return {
         success: false as const,
         error:
-          'No valid rows found. Add Client rows (Company Name + Email) and/or Authorized Chemical rows (Company Name + Chemical Name + CAS).',
+          'No valid rows found. Add Client rows (Company Name + Email) and/or Authorized Substance rows (Company Name + Substance Name + CAS).',
         skippedRows: parsed.skippedRows,
       };
     }

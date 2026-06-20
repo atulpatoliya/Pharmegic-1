@@ -116,7 +116,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Search by certificate number, chemical substance, CAS number..."
+              placeholder="Search by certificate number, substance, CAS number..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 bg-slate-50 border-slate-200 focus:bg-white transition-all"
@@ -145,7 +145,7 @@ export default function CertificatesList({ initialCertificates }: CertificatesLi
               <tr className="bg-slate-50/75 border-b border-slate-100">
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Certificate Number</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Chemical Substance</th>
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Substance</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Authorized Weight</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Issuance Date</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Validity Expiry</th>

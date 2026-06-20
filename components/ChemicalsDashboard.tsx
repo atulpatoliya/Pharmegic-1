@@ -244,12 +244,12 @@ export default function ChemicalsDashboard({
 
       const res = await createChemicalAction(null, payload);
       if (res.success) {
-        toast.success(res.message || 'Chemical added to compliance database.');
+        toast.success(res.message || 'Substance added to compliance database.');
         setIsCreateOpen(false);
         router.refresh();
       } else {
-        setFormError(res.error || 'Failed to create chemical.');
-        toast.error(res.error || 'Failed to create chemical.');
+        setFormError(res.error || 'Failed to create substance.');
+        toast.error(res.error || 'Failed to create substance.');
       }
     });
   };
@@ -292,12 +292,12 @@ export default function ChemicalsDashboard({
       });
 
       if (res.success) {
-        toast.success(res.message || 'Chemical substance updated.');
+        toast.success(res.message || 'Substance updated.');
         setIsEditOpen(false);
         router.refresh();
       } else {
-        setFormError(res.error || 'Failed to update chemical.');
-        toast.error(res.error || 'Failed to update chemical.');
+        setFormError(res.error || 'Failed to update substance.');
+        toast.error(res.error || 'Failed to update substance.');
       }
     });
   };
@@ -367,7 +367,7 @@ export default function ChemicalsDashboard({
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Chemical Registry</h1>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Substance Registry</h1>
           <p className="text-sm text-slate-500 font-medium">
             Manage tonnage limits, substance identification numbers, and export metrics of the compliance registry.
           </p>
@@ -696,10 +696,10 @@ export default function ChemicalsDashboard({
       )}
 
       {/* 1. Create Chemical Modal */}
-      <Dialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Register Chemical Substance">
+      <Dialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Register Substance">
         <form onSubmit={handleCreateChemical} className="space-y-4">
           <Input
-            label="Chemical Substance Name"
+            label="Substance Name"
             placeholder="e.g. Dimethylformamide (DMF)"
             value={formData.chemical_name}
             onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
@@ -790,7 +790,7 @@ export default function ChemicalsDashboard({
       <Dialog isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title={`Edit Substance: ${selectedChemical?.chemical_name}`}>
         <form onSubmit={handleUpdateChemical} className="space-y-4">
           <Input
-            label="Chemical Substance Name"
+            label="Substance Name"
             value={formData.chemical_name}
             onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
             required

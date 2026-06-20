@@ -43,6 +43,10 @@ html, body {
 [data-tcc-cert-root] .tcc-shipment-label {
   font-family: 'Arial', Helvetica, sans-serif !important;
 }
+[data-tcc-cert-root] .tcc-cert-footer,
+[data-tcc-cert-root] .tcc-footer-line {
+  font-family: 'Verdana', Geneva, Tahoma, sans-serif !important;
+}
 [data-tcc-cert-root].tcc-cert-page {
   page-break-after: always;
   margin: 0 !important;

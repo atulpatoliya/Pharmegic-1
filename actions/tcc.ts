@@ -2,10 +2,9 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSession } from '@/lib/auth/session';
-import { buildTccCertificateStoredFile } from '@/lib/tcc-pdf-data';
 import {
   resolveTccCertificateDownloadFile,
-  buildTccCertificatePdfInputFromCert,
+  buildTccCertificatePdfInputFromStoredCert,
 } from '@/lib/tcc-certificate-pdf';
 import { sendCertificateEmail as sendCertEmail } from '@/services/email';
 import { buildCertificateRecipients } from '@/lib/certificate-email-recipients';
@@ -36,6 +35,8 @@ import {
 } from '@/lib/regulatory-registrations';
 import { canClientEditTccApplication } from '@/lib/tcc-application';
 import { formatErrorMessage } from '@/lib/format-error';
+import { upsertTccCertificateForApplication } from '@/lib/tcc-certificate-issuance';
+import { buildTccApplicationFieldChanges } from '@/lib/tcc-application-changes';
 import type { z } from 'zod';
 
 type TccEuApplicationInput = z.infer<typeof tccEuApplicationSchema>;
@@ -122,7 +123,7 @@ async function validateClientTccSubmission(
     .maybeSingle();
 
   if (!authChem) {
-    return { ok: false as const, error: 'This chemical is not authorized for your company. Contact your administrator.' };
+    return { ok: false as const, error: 'This substance is not authorized for your company. Contact your administrator.' };
   }
 
   const [{ data: reachCerts }, { data: approvedForChem }] = await Promise.all([
@@ -287,7 +288,7 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
       .eq('id', euData.chemical_id)
       .single();
 
-    if (!chemical) return { success: false, error: 'Chemical not found.' };
+    if (!chemical) return { success: false, error: 'Substance not found.' };
 
     let authChemId: string;
     let reachCertId: string | null = null;
@@ -546,6 +547,7 @@ const TCC_CERTIFICATE_RELATION_SELECT = `
   registration_number,
   client_id,
   type,
+  tcc_application_id,
   clients (
     company_name,
     uuid_number,
@@ -653,7 +655,7 @@ async function regenerateTccCertificateFile(
     throw new Error('Certificate not found for regeneration.');
   }
 
-  const input = buildTccCertificatePdfInputFromCert(cert as never);
+  const input = await buildTccCertificatePdfInputFromStoredCert(adminSupabase, cert as never);
   const certFile = await resolveTccCertificateDownloadFile(adminSupabase, input);
 
   await ensureCertificatesBucket(adminSupabase);
@@ -703,19 +705,57 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
   const applicationId = result.data.application_id;
 
   try {
-    const { data: existing, error: loadError } = await adminSupabase
+    const { data: existingApp, error: loadError } = await adminSupabase
       .from('tcc_applications')
-      .select('id, client_id, chemical_id, client_chemical_id, status, quantity_mt')
+      .select(
+        'id, client_id, chemical_id, client_chemical_id, status, quantity_mt, export_date, eu_importer_company_name, eu_importer_address, purchase_order_number, invoice_number, certificate_issue_date, registration_number, remarks'
+      )
       .eq('id', applicationId)
       .maybeSingle();
 
     if (loadError) throw loadError;
-    if (!existing) {
+    if (!existingApp) {
       return { success: false, error: 'Application not found.' };
     }
 
+    const existing = existingApp;
     const newQuantity = result.data.quantity_mt;
     const quantityChanged = Number(existing.quantity_mt) !== newQuantity;
+
+    let certId = result.data.certificate_id?.trim() || null;
+    if (!certId) {
+      const { data: cert } = await adminSupabase
+        .from('certificates')
+        .select('id, issued_at')
+        .eq('tcc_application_id', applicationId)
+        .eq('type', 'TCC')
+        .maybeSingle();
+      certId = cert?.id ?? null;
+    }
+
+    let beforeIssueDate = existingApp.certificate_issue_date;
+    if (certId) {
+      const { data: certRow } = await adminSupabase
+        .from('certificates')
+        .select('issued_at')
+        .eq('id', certId)
+        .maybeSingle();
+      if (certRow?.issued_at) {
+        beforeIssueDate = certRow.issued_at.split('T')[0];
+      }
+    }
+
+    const beforeSnapshot = {
+      eu_importer_company_name: existingApp.eu_importer_company_name,
+      eu_importer_address: existingApp.eu_importer_address,
+      purchase_order_number: existingApp.purchase_order_number,
+      invoice_number: existingApp.invoice_number,
+      quantity_mt: existingApp.quantity_mt,
+      export_date: existingApp.export_date,
+      certificate_issue_date: beforeIssueDate,
+      registration_number: existingApp.registration_number,
+      remarks: existingApp.remarks,
+    };
 
     const { data: chem } = await adminSupabase
       .from('chemicals')
@@ -723,13 +763,7 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
       .eq('id', existing.chemical_id)
       .single();
 
-    const { data: existingApp } = await adminSupabase
-      .from('tcc_applications')
-      .select('export_date')
-      .eq('id', applicationId)
-      .single();
-
-    const exportDate = result.data.export_date || existingApp?.export_date;
+    const exportDate = result.data.export_date || existingApp.export_date;
 
     if (exportDate) {
       const [{ data: reachCerts }, { data: approvedForChem }] = await Promise.all([
@@ -824,8 +858,6 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
       );
     }
 
-    let certId = result.data.certificate_id ?? null;
-
     if (result.data.issue_date && certId) {
       const issueDate = new Date(`${result.data.issue_date}T12:00:00`);
       const expiresAt = new Date(issueDate);
@@ -858,13 +890,30 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
       await regenerateTccCertificateFile(adminSupabase, certId);
     }
 
+    const afterSnapshot = {
+      eu_importer_company_name: result.data.eu_importer_company_name.trim(),
+      eu_importer_address: result.data.eu_importer_address.trim(),
+      purchase_order_number: result.data.purchase_order_number.trim(),
+      invoice_number: result.data.invoice_number?.trim() || null,
+      quantity_mt: newQuantity,
+      export_date: result.data.export_date,
+      certificate_issue_date: issueDateValue || result.data.issue_date?.trim() || null,
+      registration_number: result.data.registration_number?.trim() || null,
+      remarks: result.data.remarks?.trim() || null,
+    };
+    const fieldChanges = buildTccApplicationFieldChanges(beforeSnapshot, afterSnapshot);
+
     await adminSupabase.from('activity_logs').insert({
       client_id: existing.client_id,
       user_id: session.userId,
       action: 'TCC_ADMIN_EDIT',
       entity_type: 'tcc_applications',
       entity_id: applicationId,
-      description: 'Application data updated by administrator',
+      description:
+        fieldChanges.length > 0
+          ? `${fieldChanges.length} field${fieldChanges.length === 1 ? '' : 's'} updated`
+          : 'Application data updated by administrator',
+      metadata: fieldChanges.length > 0 ? { changes: fieldChanges } : null,
     });
 
     revalidatePath('/admin/approvals');
@@ -884,6 +933,29 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
   } catch (err: unknown) {
     return { success: false, error: tccSaveErrorMessage(err) };
   }
+}
+
+export async function getTccApplicationChangeHistoryAction(applicationId: string) {
+  const session = await getSession();
+  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
+    return { success: false, error: 'Unauthorized.' };
+  }
+
+  const adminSupabase = createAdminClient();
+  const { data, error } = await adminSupabase
+    .from('activity_logs')
+    .select('id, action, description, metadata, created_at, users(email)')
+    .eq('entity_type', 'tcc_applications')
+    .eq('entity_id', applicationId)
+    .in('action', ['TCC_ADMIN_EDIT', 'TCC_APPROVED', 'TCC_CHANGES_REQUIRED', 'TCC_REJECTED'])
+    .order('created_at', { ascending: false })
+    .limit(40);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, entries: data || [] };
 }
 
 // ============================================================================
@@ -1015,6 +1087,8 @@ export async function processTccAction(
       }
     }
 
+    const approvalIssueDateIso = new Date().toISOString().split('T')[0];
+
     // 2. Update application status
     const { error: updateError } = await adminSupabase
       .from('tcc_applications')
@@ -1023,6 +1097,7 @@ export async function processTccAction(
         rejection_reason: rejectionReason || null,
         approved_by: session.userId,
         updated_at: new Date().toISOString(),
+        ...(status === 'approved' ? { certificate_issue_date: approvalIssueDateIso } : {}),
       })
       .eq('id', applicationId);
 
@@ -1096,66 +1171,14 @@ export async function processTccAction(
         notes: `TCC approved — ${app.chemicals.chemical_name}`,
       });
 
-      // 5. Generate unique certificate number
-      const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const certNumber = `TCC-${new Date().getFullYear()}-${randStr}`;
-
-      const issueDateRaw = app.certificate_issue_date
-        ? String(app.certificate_issue_date).split('T')[0]
-        : null;
-      const issueDate = issueDateRaw
-        ? new Date(`${issueDateRaw}T12:00:00`)
-        : new Date();
-      const expiryDate = new Date(issueDate);
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-
-      const certFile = await buildTccCertificateStoredFile({
-        certNumber,
-        client: app.clients,
-        chemical: app.chemicals,
-        application: app,
-        registrationNumber: matchedReachCert?.registration_number || null,
-        validUntilDate: expiryDate.toISOString().split('T')[0],
-        deliveryChallanNo: app.tracking_id,
-        issuedDate: issueDateRaw || issueDate.toISOString().split('T')[0],
-      });
-
-      // 8. Upload to Supabase Storage
-      await ensureCertificatesBucket(adminSupabase);
-      const { error: uploadError } = await adminSupabase.storage
-        .from(CERTIFICATES_BUCKET)
-        .upload(certFile.fileName, certFile.buffer, {
-          contentType: certFile.contentType,
-          upsert: true,
-        });
-
-      if (uploadError) throw new Error(`Certificate upload failed: ${uploadError.message}`);
-
-      const {
-        data: { publicUrl },
-      } = adminSupabase.storage.from(CERTIFICATES_BUCKET).getPublicUrl(certFile.fileName);
-
-      // 9. Register certificate in DB (NO email sent here)
-      const { data: cert, error: certError } = await adminSupabase
-        .from('certificates')
-        .insert({
-          client_id: app.client_id,
-          chemical_id: app.chemical_id,
-          tcc_application_id: applicationId,
-          certificate_number: certNumber,
-          registration_number: matchedReachCert?.registration_number || null,
-          type: 'TCC',
-          file_url: publicUrl,
-          issued_at: issueDate.toISOString(),
-          expires_at: expiryDate.toISOString(),
-          status: 'active',
-          mail_sent: false,
-          mail_resend_count: 0,
-        })
-        .select()
-        .single();
-
-      if (certError) throw certError;
+      const { certId, certNumber, created: certCreated } = await upsertTccCertificateForApplication(
+        adminSupabase,
+        {
+          application: app,
+          issueDateIso: approvalIssueDateIso,
+          registrationNumber: matchedReachCert?.registration_number || null,
+        }
+      );
 
       // 10. Activity log
       await adminSupabase.from('activity_logs').insert({
@@ -1164,31 +1187,39 @@ export async function processTccAction(
         action: 'TCC_APPROVED',
         entity_type: 'tcc_applications',
         entity_id: applicationId,
-        description: `TCC approved — Certificate ${certNumber} generated`,
+        description: certCreated
+          ? `TCC approved — Certificate ${certNumber} generated`
+          : `TCC re-approved — Certificate ${certNumber} updated`,
       });
 
-      // 11. Notify client
-      const { data: clientUser } = await adminSupabase
-        .from('users')
-        .select('id')
-        .eq('client_id', app.client_id)
-        .maybeSingle();
-      if (clientUser) {
-        await notifyUser(
-          adminSupabase,
-          clientUser.id,
-          'TCC Certificate Issued',
-          `Your certificate ${certNumber} has been issued for ${app.chemicals.chemical_name}.`,
-          '/client/certificates'
-        );
+      if (certCreated) {
+        const { data: clientUser } = await adminSupabase
+          .from('users')
+          .select('id')
+          .eq('client_id', app.client_id)
+          .maybeSingle();
+        if (clientUser) {
+          await notifyUser(
+            adminSupabase,
+            clientUser.id,
+            'TCC Certificate Issued',
+            `Your certificate ${certNumber} has been issued for ${app.chemicals.chemical_name}.`,
+            '/client/certificates'
+          );
+        }
       }
 
       revalidatePath('/admin/approvals');
       revalidatePath('/admin', 'layout');
       revalidatePath('/client', 'layout');
 
-      // Return certificate ID so frontend can redirect to preview
-      return { success: true, message: 'Application approved. Certificate generated.', certificateId: cert.id };
+      return {
+        success: true,
+        message: certCreated
+          ? 'Application approved. Certificate generated.'
+          : 'Application approved. Certificate updated.',
+        certificateId: certId,
+      };
     } else {
       // Rejected or Changes Required
       const { data: clientUser } = await adminSupabase
@@ -1278,7 +1309,7 @@ export async function sendCertificateEmailAction(certificateId: string) {
       senderEmail: settings?.smtp_from,
     });
 
-    const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
+    const pdfInput = await buildTccCertificatePdfInputFromStoredCert(adminSupabase, cert as never);
     const certFile = await resolveTccCertificateDownloadFile(adminSupabase, pdfInput);
 
     // Send email
@@ -1377,7 +1408,7 @@ export async function resendCertificateEmailAction(certificateId: string) {
       senderEmail: settings?.smtp_from,
     });
 
-    const pdfInput = buildTccCertificatePdfInputFromCert(cert as never);
+    const pdfInput = await buildTccCertificatePdfInputFromStoredCert(adminSupabase, cert as never);
     const certFile = await resolveTccCertificateDownloadFile(adminSupabase, pdfInput);
 
     await sendCertEmail({

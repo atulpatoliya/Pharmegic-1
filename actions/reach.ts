@@ -110,7 +110,7 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
       error: 'This substance is not actively assigned to the client. Assign it first.',
     };
   }
-  if (!chemical) return { success: false as const, error: 'Chemical not found.' };
+  if (!chemical) return { success: false as const, error: 'Substance not found.' };
 
   const { data: existingReachCertsRaw } = await adminSupabase
     .from('certificates')

@@ -12,7 +12,7 @@ const RC_PREVIEW_SAMPLE = {
     uuid_number: 'ECHA-00000000-0000-4000-8000-000000000002',
   },
   chemical: {
-    chemical_name: 'Example Chemical Substance',
+    chemical_name: 'Example Substance',
     cas_number: '000-00-0',
     ec_number: '000-000-0',
     tonnage_band: '10–100 tpa',

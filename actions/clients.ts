@@ -411,7 +411,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized.' };
 
-  if (!data.chemical_name?.trim()) return { success: false, error: 'Chemical name is required.' };
+  if (!data.chemical_name?.trim()) return { success: false, error: 'Substance name is required.' };
 
   const casNumber = data.cas_number?.trim();
   if (!casNumber) return { success: false, error: 'CAS number is required.' };
@@ -453,7 +453,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
 
       if (targetErr) throw targetErr;
       if (!targetChem) {
-        return { success: false, error: 'Assigned chemical not found on this client.' };
+        return { success: false, error: 'Assigned substance not found on this client.' };
       }
 
       chemicalId = targetChem.id;
@@ -504,7 +504,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     }
 
     if (!chemicalId) {
-      return { success: false, error: 'Failed to resolve chemical.' };
+      return { success: false, error: 'Failed to resolve substance.' };
     }
 
     const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
@@ -823,7 +823,7 @@ export async function editClientChemicalAction(clientId: string, chemicalId: str
   if (!session) return { success: false, error: 'Unauthorized.' };
 
   if (!data.chemical_name?.trim()) {
-    return { success: false, error: 'Chemical name is required.' };
+    return { success: false, error: 'Substance name is required.' };
   }
 
   if (!data.ec_number?.trim()) {

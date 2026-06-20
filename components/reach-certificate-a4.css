@@ -16,8 +16,10 @@
 }
 
 [data-reach-cert-print-area] > [data-reach-cert-root].reach-cert-page,
-[data-reach-cert-print-area] > .reach-cert-page {
+[data-reach-cert-print-area] > .reach-cert-page,
+[data-reach-cert-print-area] .tcc-cert-document > [data-tcc-cert-root].tcc-cert-page {
   flex-shrink: 0;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
 /* DOCX preview — force Word pages to A4 dimensions */

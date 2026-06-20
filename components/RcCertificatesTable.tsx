@@ -407,7 +407,7 @@ export default function RcCertificatesTable({
     }
 
     cols.push(
-      { header: 'Chemical', value: (row) => (row.chemicals || row.chemical)?.chemical_name || '' },
+      { header: 'Substance', value: (row) => (row.chemicals || row.chemical)?.chemical_name || '' },
       { header: 'CAS Number', value: (row) => (row.chemicals || row.chemical)?.cas_number || '' },
       { header: 'EC Number', value: (row) => (row.chemicals || row.chemical)?.ec_number || '' },
       {
@@ -480,7 +480,7 @@ export default function RcCertificatesTable({
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100 align-top">
                 <th className="px-4 py-3 min-w-[220px]">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chemical Info</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Substance Info</span>
                   {!hideFilters && (
                     <TableColumnFilter
                       value={columnFilters.substance}
@@ -563,9 +563,11 @@ export default function RcCertificatesTable({
                             <span className="font-bold text-slate-800 text-sm leading-snug">
                               {group.chemicalName}
                             </span>
-                            <span className="text-[11px] text-slate-400 font-mono tracking-wide">
-                              CAS: {group.casNumber} | EC: {group.ecNumber} | Reg: {group.registrationNumber}
-                            </span>
+                            <div className="flex flex-col gap-0.5 text-[11px] text-slate-400 font-mono tracking-wide">
+                              <span>CAS: {group.casNumber}</span>
+                              <span>EC: {group.ecNumber}</span>
+                              <span>Reg: {group.registrationNumber}</span>
+                            </div>
                             {!hideCompanyColumn && (
                               <div className="mt-2 flex items-center gap-1.5">
                                 <Building className="h-3 w-3 text-slate-400 shrink-0" />
@@ -767,9 +769,11 @@ export default function RcCertificatesTable({
                               <span className="font-bold text-slate-800 text-sm leading-snug">
                                 {group.chemicalName}
                               </span>
-                              <span className="text-[11px] text-slate-400 font-mono tracking-wide">
-                                CAS: {group.casNumber} | EC: {group.ecNumber} | Reg: {group.registrationNumber}
-                              </span>
+                              <div className="flex flex-col gap-0.5 text-[11px] text-slate-400 font-mono tracking-wide">
+                                <span>CAS: {group.casNumber}</span>
+                                <span>EC: {group.ecNumber}</span>
+                                <span>Reg: {group.registrationNumber}</span>
+                              </div>
                               {!hideCompanyColumn && (
                                 <div className="mt-2 flex items-center gap-1.5">
                                   <Building className="h-3 w-3 text-slate-400 shrink-0" />

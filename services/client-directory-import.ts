@@ -531,7 +531,7 @@ async function importSubstanceRow(
     return {
       ...base,
       status: 'failed',
-      reason: 'Failed to create or resolve chemical.',
+      reason: 'Failed to create or resolve substance.',
     };
   }
 

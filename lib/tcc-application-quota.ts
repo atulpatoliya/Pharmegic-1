@@ -70,12 +70,35 @@ export function resolveTccApplicationTonnageBand(app: TccApplicationQuotaInput):
   return resolveTonnageBand(app.chemicals);
 }
 
-/** Registration number from the matched RC certificate; falls back to application value. */
+/** Registration number from RC cert, application, issued TCC cert, or client substance link. */
 export function resolveTccApplicationRegistrationNumber(
-  app: TccApplicationQuotaInput & { registration_number?: string | null }
+  app: TccApplicationQuotaInput & {
+    registration_number?: string | null;
+    certificates?:
+      | { registration_number?: string | null }
+      | { registration_number?: string | null }[]
+      | null;
+    client_chemicals?:
+      | { registration_number?: string | null }
+      | { registration_number?: string | null }[]
+      | null;
+  }
 ): string | null {
   if (app.rc_registration_number?.trim()) return app.rc_registration_number.trim();
   if (app.registration_number?.trim()) return app.registration_number.trim();
+
+  const cert = app.certificates;
+  if (cert) {
+    const certRow = Array.isArray(cert) ? cert[0] : cert;
+    if (certRow?.registration_number?.trim()) return certRow.registration_number.trim();
+  }
+
+  const clientChem = app.client_chemicals;
+  if (clientChem) {
+    const linkRow = Array.isArray(clientChem) ? clientChem[0] : clientChem;
+    if (linkRow?.registration_number?.trim()) return linkRow.registration_number.trim();
+  }
+
   return null;
 }
 
