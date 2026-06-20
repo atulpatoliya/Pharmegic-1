@@ -131,3 +131,76 @@ export async function loadClientProfileData(clientId: string) {
 }
 
 export type ClientProfileViewMode = 'overview' | 'chemicals' | 'certificates' | 'rc-certificates';
+
+export async function loadClientPortalData(clientId: string) {
+  const adminSupabase = createAdminClient();
+
+  const [
+    { data: client, error: clientError },
+    { data: user },
+    { data: clientChemicals },
+    { data: contacts },
+    { data: tccHistoryRaw },
+    { data: certificates },
+    { data: activityLogs },
+  ] = await Promise.all([
+    adminSupabase.from('clients').select('*').eq('id', clientId).single(),
+    adminSupabase.from('users').select('*').eq('client_id', clientId).maybeSingle(),
+    adminSupabase.from('client_chemicals').select('*, chemicals(*)').eq('client_id', clientId),
+    adminSupabase
+      .from('client_contacts')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false }),
+    adminSupabase
+      .from('tcc_applications')
+      .select('*, chemicals(*), certificates!certificates_tcc_application_id_fkey(*)')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false }),
+    adminSupabase
+      .from('certificates')
+      .select(
+        '*, chemicals(chemical_name, cas_number, ec_number, tonnage_band), tcc_applications!certificates_tcc_application_id_fkey(*, chemicals(*))'
+      )
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false }),
+    adminSupabase
+      .from('activity_logs')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+  ]);
+
+  if (clientError || !client) {
+    return null;
+  }
+
+  const tccHistory = (tccHistoryRaw || []).map(
+    (row: { chemicals?: unknown; certificates?: unknown }) => ({
+      ...row,
+      chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+      certificates: Array.isArray(row.certificates) ? row.certificates[0] ?? null : row.certificates,
+    })
+  );
+
+  const normalizedCertificates = (certificates || []).map(
+    (row: { chemicals?: unknown; tcc_applications?: unknown }) => ({
+      ...row,
+      chemicals: Array.isArray(row.chemicals) ? row.chemicals[0] : row.chemicals,
+      tcc_applications: Array.isArray(row.tcc_applications)
+        ? row.tcc_applications[0] ?? null
+        : row.tcc_applications,
+    })
+  );
+
+  return {
+    client,
+    user,
+    clientChemicals: clientChemicals || [],
+    contacts: contacts || [],
+    tccHistory,
+    certificates: normalizedCertificates,
+    activityLogs: activityLogs || [],
+  };
+}

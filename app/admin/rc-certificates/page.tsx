@@ -14,9 +14,14 @@ export default async function AdminRcCertificatesPage() {
 
   const adminSupabase = createAdminClient();
 
-  const { data: certificates, error } = await adminSupabase
-    .from('certificates')
-    .select(`
+  const [
+    { data: certificates, error },
+    { data: tccHistoryRaw, error: tccError },
+    { data: clientChemicalsRaw, error: clientChemError },
+  ] = await Promise.all([
+    adminSupabase
+      .from('certificates')
+      .select(`
       id,
       client_id,
       chemical_id,
@@ -42,18 +47,16 @@ export default async function AdminRcCertificatesPage() {
         tonnage_band
       )
     `)
-    .eq('type', REACH_CERTIFICATE_TYPE)
-    .order('issued_at', { ascending: false });
-
-  const { data: tccHistoryRaw, error: tccError } = await adminSupabase
-    .from('tcc_applications')
-    .select('*, chemicals(*), certificates!certificates_tcc_application_id_fkey(*), client_chemicals(available_quantity)')
-    .eq('status', 'approved')
-    .order('created_at', { ascending: false });
-
-  const { data: clientChemicalsRaw, error: clientChemError } = await adminSupabase
-    .from('client_chemicals')
-    .select(`
+      .eq('type', REACH_CERTIFICATE_TYPE)
+      .order('issued_at', { ascending: false }),
+    adminSupabase
+      .from('tcc_applications')
+      .select('*, chemicals(*), certificates!certificates_tcc_application_id_fkey(*), client_chemicals(available_quantity)')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false }),
+    adminSupabase
+      .from('client_chemicals')
+      .select(`
       *,
       chemicals (*),
       clients (
@@ -62,7 +65,8 @@ export default async function AdminRcCertificatesPage() {
         email
       )
     `)
-    .neq('status', 'trashed');
+      .neq('status', 'trashed'),
+  ]);
 
   if (error) {
     console.error('[RC CERTIFICATES PAGE]', error);

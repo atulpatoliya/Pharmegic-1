@@ -70,17 +70,3 @@ export async function resolveReachCertificatePreview(
 
   throw new Error('Certificate preview is temporarily unavailable. Please try again.');
 }
-
-/** Returns PDF buffer when possible; throws only when preview cannot be produced at all. */
-export async function resolveReachCertificatePdfBuffer(
-  supabase: SupabaseClient,
-  input: ReachCertPdfInput & LoadedReachCertificateInput
-): Promise<Buffer> {
-  const result = await resolveReachCertificatePreview(supabase, input);
-  if (result.mode !== 'pdf') {
-    throw new Error(
-      'PDF generation is not available on this server. Ensure Puppeteer/Chromium is installed.'
-    );
-  }
-  return result.buffer;
-}

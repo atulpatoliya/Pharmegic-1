@@ -104,11 +104,6 @@ export async function updateTccSmtpSettingsAction(smtpData: SmtpFormPayload) {
   }
 }
 
-/** @deprecated Use updateTccSmtpSettingsAction */
-export async function updateSmtpSettingsAction(smtpData: SmtpFormPayload) {
-  return updateTccSmtpSettingsAction(smtpData);
-}
-
 // ============================================================================
 // UPDATE RC (REACH) SMTP SETTINGS
 // ============================================================================

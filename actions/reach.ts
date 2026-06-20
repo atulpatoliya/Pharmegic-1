@@ -751,57 +751,6 @@ export async function issueReachCertificateWithDetailsAction(
   }
 }
 
-// ============================================================================
-// ISSUE RC CERTIFICATE (Admin — renew from substance table)
-// ============================================================================
-export async function issueReachCertificateAction(clientId: string, chemicalId: string) {
-  const session = await requireAdmin();
-  if (!session) return { success: false, error: 'Unauthorized.' };
-
-  const endOfYear = getLastDateOfYear();
-  const today = getTodayDateString();
-  const adminSupabase = createAdminClient();
-
-  const { data: prevCert } = await adminSupabase
-    .from('certificates')
-    .select('registration_number, tonnage_band')
-    .eq('client_id', clientId)
-    .eq('chemical_id', chemicalId)
-    .eq('type', REACH_CERTIFICATE_TYPE)
-    .order('issued_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!prevCert?.registration_number) {
-    return {
-      success: false,
-      error: 'Registration number not found. Re-assign the substance with registration details.',
-    };
-  }
-
-  try {
-    const result = await createReachCertificate({
-      clientId,
-      chemicalId,
-      userId: session.userId,
-      registrationNumber: prevCert.registration_number,
-      issuedDate: today,
-      validatedDate: endOfYear,
-      tonnageBand: prevCert.tonnage_band,
-    });
-
-    if (!result.success) return result;
-    return {
-      success: true,
-      message: result.message,
-      certificateId: result.certificateId,
-    };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
-  }
-}
-
 async function fetchReachCertificateMailContext(certificateId: string) {
   const adminSupabase = createAdminClient();
 

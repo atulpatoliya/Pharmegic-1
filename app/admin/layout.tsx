@@ -1,8 +1,9 @@
+import { Suspense } from 'react';
 import Sidebar from '@/components/Sidebar';
-import TopNavbar from '@/components/TopNavbar';
 import { getSession } from '@/lib/auth/session';
 import { redirectToLoginPage, redirectToRoleHome } from '@/lib/auth/redirects';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { AdminTopBar } from '@/components/layout/AdminTopBar';
+import { TopNavbarSkeleton } from '@/components/layout/TopNavbarSkeleton';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -15,31 +16,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirectToRoleHome(session.role);
   }
 
-  const adminSupabase = createAdminClient();
-  const [{ count: notificationCount }, { data: notifications }] = await Promise.all([
-    adminSupabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', session.userId)
-      .eq('read', false),
-    adminSupabase
-      .from('notifications')
-      .select('id, title, message, link, read, created_at')
-      .eq('user_id', session.userId)
-      .order('created_at', { ascending: false })
-      .limit(40),
-  ]);
-
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50" suppressHydrationWarning>
       <Sidebar role={session.role} />
       <div className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
-        <TopNavbar
-          userEmail={session.email}
-          role={session.role}
-          notificationCount={notificationCount || 0}
-          notifications={(notifications || []) as any}
-        />
+        <Suspense fallback={<TopNavbarSkeleton />}>
+          <AdminTopBar session={session} />
+        </Suspense>
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8">
           {children}
         </main>

@@ -54,7 +54,6 @@ import {
   getRcCertificateYearRange,
 } from '@/lib/reach-certificate';
 import { buildRcChemicalSummaries, buildRcHistoryRows, type RcChemicalSummaryRow } from '@/lib/rc-chemical-summary';
-import RcCertificatesTable from '@/components/RcCertificatesTable';
 import { canManageAdminRecords } from '@/lib/auth/roles';
 import {
   deleteReachCertificateAction,
@@ -77,7 +76,7 @@ import { formatDisplayDate } from '@/lib/date-filter';
 import type { CsvColumn } from '@/lib/export-csv';
 import { processTccAction } from '@/actions/tcc';
 import { canClientEditTccApplication } from '@/lib/tcc-application';
-import { TccApplicationViewDialog, type TccEmailDefaults, type TccViewApplication } from '@/components/TccApplicationViewDialog';
+import type { TccEmailDefaults, TccViewApplication } from '@/components/TccApplicationViewDialog';
 import { toast } from '@/store/toast';
 import Link from 'next/link';
 import { 
@@ -90,6 +89,19 @@ import { useLayoutStore } from '@/store/layout';
 import dynamic from 'next/dynamic';
 
 const ApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
+
+const RcCertificatesTable = dynamic(() => import('@/components/RcCertificatesTable'), {
+  ssr: false,
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-slate-100" />,
+});
+
+const TccApplicationViewDialog = dynamic(
+  () =>
+    import('@/components/TccApplicationViewDialog').then((mod) => ({
+      default: mod.TccApplicationViewDialog,
+    })),
+  { ssr: false }
+);
 
 interface ClientDashboardDetailsProps {
   client: any;
@@ -2679,6 +2691,7 @@ export default function ClientDashboardDetails({
         </div>
       </Dialog>
 
+      {isTccViewOpen && (
       <TccApplicationViewDialog
         app={viewTccApp}
         isOpen={isTccViewOpen}
@@ -2694,6 +2707,7 @@ export default function ClientDashboardDetails({
         onRequestChanges={() => handleTccViewThenAction('changes_required')}
         emailDefaults={emailDefaults}
       />
+      )}
 
       <Dialog
         isOpen={isTccActionOpen}

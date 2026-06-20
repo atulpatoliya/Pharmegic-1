@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -58,7 +59,7 @@ async function reconcileSessionWithDatabase(
   };
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+export const getSession = cache(async (): Promise<SessionPayload | null> => {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(SESSION_COOKIE)?.value;
@@ -79,7 +80,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   } catch {
     return null;
   }
-}
+});
 
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies();

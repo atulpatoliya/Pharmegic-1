@@ -86,11 +86,6 @@ export function isLibreOfficeInstalled(): boolean {
   return false;
 }
 
-/** Sync hint only — use resolveReachPdfConversionStatus() for an accurate live check. */
-export function isReachPdfConversionAvailable(): boolean {
-  return isLibreOfficeInstalled();
-}
-
 async function convertWithLibreOfficeCli(docxPath: string, outDir: string): Promise<string> {
   let lastError: Error | null = null;
   for (const bin of LIBREOFFICE_PATHS) {
@@ -182,9 +177,3 @@ export async function convertReachDocxToPdf(docxBuffer: Buffer): Promise<Buffer>
 }
 
 export { EU_REACH_TEMPLATE };
-export const BUNDLED_RC_PREVIEW_PDF = EU_REACH_TEMPLATE.bundledPreviewPdf;
-
-export async function generateReachCertificateFromTemplate(data: ReachCertificateDocxData): Promise<Buffer> {
-  const docxBuffer = generateReachCertificateDocx(data);
-  return convertReachDocxToPdf(docxBuffer);
-}

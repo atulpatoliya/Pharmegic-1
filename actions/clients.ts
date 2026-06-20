@@ -7,7 +7,7 @@ import { formatErrorMessage } from '@/lib/format-error';
 import { normalizeDateInput, normalizeOptionalDateInput } from '@/lib/parse-flexible-date';
 import { getTonnageBandMaxQuota, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuotaForReachPeriod, computeAssignableQuota } from '@/lib/quota';
 import { createReachCertificate, deleteAllReachCertificatesForClientChemical } from '@/actions/reach';
-import { clientWizardSchema, clientWizardEditSchema, assignChemicalSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
+import { clientWizardSchema, clientWizardEditSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================================
@@ -367,35 +367,6 @@ export async function toggleClientLoginAction(clientId: string, disable: boolean
 }
 
 // ============================================================================
-// ARCHIVE CLIENT
-// ============================================================================
-export async function archiveClientAction(clientId: string) {
-  const session = await requireAdmin();
-  if (!session) return { success: false, error: 'Unauthorized.' };
-
-  const adminSupabase = createAdminClient();
-  try {
-    const { error } = await adminSupabase.from('clients').update({ status: 'inactive' }).eq('id', clientId);
-    if (error) throw error;
-
-    await adminSupabase.from('activity_logs').insert({
-      client_id: clientId,
-      user_id: session.userId,
-      action: 'CLIENT_ARCHIVED',
-      entity_type: 'clients',
-      entity_id: clientId,
-      description: 'Client archived by admin',
-    });
-
-    revalidatePath('/admin/clients');
-    return { success: true, message: 'Client archived successfully.' };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
-  }
-}
-
-// ============================================================================
 // DELETE CLIENT
 // ============================================================================
 export async function deleteClientAction(clientId: string) {
@@ -427,48 +398,6 @@ export async function deleteClientAction(clientId: string) {
       success: true,
       message: `${client.company_name} and all associated compliance data deleted permanently.`,
     };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
-  }
-}
-
-// ============================================================================
-// ASSIGN CHEMICAL TO CLIENT
-// ============================================================================
-export async function assignChemicalToClientAction(clientId: string, data: unknown) {
-  const session = await requireAdmin();
-  if (!session) return { success: false, error: 'Unauthorized.' };
-
-  const parsed = assignChemicalSchema.safeParse(data);
-  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
-
-  const adminSupabase = createAdminClient();
-  try {
-    const { error } = await adminSupabase
-      .from('client_chemicals')
-      .upsert({
-        client_id: clientId,
-        chemical_id: parsed.data.chemical_id,
-        available_quantity: parsed.data.available_quantity,
-        validity_date: parsed.data.validity_date,
-        status: parsed.data.status,
-        assigned_by: session.userId,
-      }, { onConflict: 'client_id,chemical_id' });
-
-    if (error) throw error;
-
-    await adminSupabase.from('activity_logs').insert({
-      client_id: clientId,
-      user_id: session.userId,
-      action: 'CHEMICAL_ASSIGNED',
-      entity_type: 'client_chemicals',
-      entity_id: clientId,
-      description: `Chemical assigned to client`,
-    });
-
-    revalidatePath(`/admin/clients/${clientId}`);
-    return { success: true, message: 'Substance assigned successfully.' };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };

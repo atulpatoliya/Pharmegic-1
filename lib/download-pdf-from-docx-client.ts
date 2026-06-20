@@ -508,7 +508,3 @@ export async function downloadCertificatePdf(params: {
 
   throw new Error('Certificate type is required for PDF download.');
 }
-
-export async function downloadPdfFromDocxUrl(docxUrl: string, fileName: string): Promise<void> {
-  await downloadPdfFromDocxSources([docxUrl], fileName);
-}

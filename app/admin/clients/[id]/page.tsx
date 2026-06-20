@@ -1,4 +1,4 @@
-import ClientDashboardDetails from './ClientDashboardDetails';
+import ClientDashboardDetails from '@/components/ClientDashboardDetailsLazy';
 import { loadClientProfileData } from './load-client-data';
 
 export const revalidate = 0;

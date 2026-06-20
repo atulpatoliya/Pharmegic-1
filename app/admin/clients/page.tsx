@@ -11,17 +11,17 @@ export default async function ClientsPage() {
 
   // Load initial clients (limit 1000 for full visibility in registry)
   const { clients } = await getClients(supabase, '', 'all', 1000, 0);
-  const substanceCounts = await getActiveSubstanceCountsByClient(
-    supabase,
-    clients.map((client) => client.id)
-  );
+  const [substanceCounts, chemicals] = await Promise.all([
+    getActiveSubstanceCountsByClient(
+      supabase,
+      clients.map((client) => client.id)
+    ),
+    getChemicals(supabase, '', 'active'),
+  ]);
   const clientsWithSubstanceCounts = clients.map((client) => ({
     ...client,
     substance_count: substanceCounts[client.id] || 0,
   }));
-
-  // Load active chemicals for substance allocation
-  const chemicals = await getChemicals(supabase, '', 'active');
 
   return (
     <ClientsDashboard

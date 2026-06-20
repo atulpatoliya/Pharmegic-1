@@ -23,32 +23,6 @@ export type ReachCertificateStoredFile = {
   format: 'pdf' | 'docx';
 };
 
-export async function generateReachPdfForClientChemical(
-  client: ReachPdfSource,
-  chemical: ReachPdfChemical,
-  options: {
-    registrationNumber: string;
-    issuedDate: string;
-    validatedDate: string;
-    tonnageBand?: string | null;
-    clientId?: string;
-    chemicalId?: string;
-  }
-): Promise<Buffer> {
-  const input: LoadedReachCertificateInput = {
-    certificateNumber: `RC-preview-${options.chemicalId?.slice(0, 8) || 'draft'}`,
-    registrationNumber: options.registrationNumber,
-    issuedDate: options.issuedDate,
-    validatedDate: options.validatedDate,
-    client,
-    chemical,
-    tonnageBand: options.tonnageBand,
-    clientId: options.clientId,
-    chemicalId: options.chemicalId,
-  };
-  return generateReachCertificateHtmlPdf(input);
-}
-
 /** Build certificate file for storage — Puppeteer HTML PDF when available, else DOCX fallback. */
 export async function buildReachCertificateStoredFile(
   client: ReachPdfSource,

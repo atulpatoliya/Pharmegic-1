@@ -194,47 +194,6 @@ function extractBoStoragePath(publicUrl: string | null | undefined): string | nu
   return null;
 }
 
-export async function purgeNotificationOnlyTccApplications(): Promise<{ deleted: number }> {
-  const session = await getSession();
-  if (!session || (session.role !== 'MASTER_ADMIN' && session.role !== 'SUPER_ADMIN')) {
-    return { deleted: 0 };
-  }
-
-  const adminSupabase = createAdminClient();
-
-  const { data: apps, error } = await adminSupabase
-    .from('tcc_applications')
-    .select('id, bo_attachment_url, regulatory_framework')
-    .in('regulatory_framework', ['uk_reach', 'turkey_kkdik']);
-
-  if (error || !apps?.length) {
-    return { deleted: 0 };
-  }
-
-  const storagePaths = apps
-    .map((app) => extractBoStoragePath(app.bo_attachment_url))
-    .filter((path): path is string => Boolean(path));
-
-  if (storagePaths.length > 0) {
-    await adminSupabase.storage.from(CERTIFICATES_BUCKET).remove(storagePaths);
-  }
-
-  const { error: deleteError } = await adminSupabase
-    .from('tcc_applications')
-    .delete()
-    .in('regulatory_framework', ['uk_reach', 'turkey_kkdik']);
-
-  if (deleteError) {
-    throw deleteError;
-  }
-
-  revalidatePath('/admin/approvals');
-  revalidatePath('/admin');
-  revalidatePath('/client');
-
-  return { deleted: apps.length };
-}
-
 // ============================================================================
 // APPLY FOR TCC (Client Action)
 // ============================================================================
