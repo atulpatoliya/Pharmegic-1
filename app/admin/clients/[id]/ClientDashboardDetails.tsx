@@ -56,6 +56,10 @@ import {
 import { buildRcChemicalSummaries, buildRcHistoryRows, type RcChemicalSummaryRow } from '@/lib/rc-chemical-summary';
 import { canManageAdminRecords } from '@/lib/auth/roles';
 import {
+  clientHasEuReachRegistration,
+  normalizeRegulatoryRegistrations,
+} from '@/lib/regulatory-registrations';
+import {
   deleteReachCertificateAction,
   renewReachCertificateAction,
   updateReachCertificateAction,
@@ -418,6 +422,10 @@ export default function ClientDashboardDetails({
   const [tccActionError, setTccActionError] = useState<string | null>(null);
   const canReviewTcc = currentUserRole !== 'CLIENT';
   const canManageRc = canManageAdminRecords(currentUserRole);
+  const hasEuReach = clientHasEuReachRegistration(client.regulatory_registrations);
+  const hasAnyRegulatoryRegistration =
+    normalizeRegulatoryRegistrations(client.regulatory_registrations).length > 0;
+  const canIssueRc = canManageRc && hasEuReach;
   const canDeleteClient = canManageRc;
 
   type ModalErrorKey =
@@ -1722,6 +1730,15 @@ export default function ClientDashboardDetails({
       {/* 3. RC Certificates — Chemical Summary */}
       {showChemicalsSection && (
       <>
+      {!hasEuReach && canManageRc && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">EU REACH not enabled</p>
+          <p className="mt-1 text-xs text-amber-800">
+            This client is not registered for EU REACH. EU REACH (RC) and TCC certificates can only be
+            issued when EU REACH is enabled on the client profile.
+          </p>
+        </div>
+      )}
       <RcCertificatesTable
         certificates={rcCertificates as any}
         clientChemicals={clientChemicals}
@@ -1737,7 +1754,7 @@ export default function ClientDashboardDetails({
         description="Manage issue/expiry dates & remaining quota per year | Expired certificates retain quantity for TCC applications using old date."
         extraActions={
           <>
-            {canManageRc && selectedRcCertIds.length > 0 && (
+            {canIssueRc && selectedRcCertIds.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -1750,7 +1767,7 @@ export default function ClientDashboardDetails({
                 Send Mail ({selectedRcCertIds.length})
               </Button>
             )}
-            {canManageRc && (
+            {canIssueRc && (
               <Button size="sm" className="h-8 bg-teal-700 hover:bg-teal-800 ml-2 font-bold" onClick={openAssignChemModal}>
                 + Assign Sub. (New RC)
               </Button>
@@ -1758,10 +1775,10 @@ export default function ClientDashboardDetails({
           </>
         }
         exportFilename={`${client.company_name.replace(/\s+/g, '_')}_rc_certificates`}
-        onEdit={canManageRc ? openEditRcCertModal : undefined}
-        onRenew={canManageRc ? openRenewRcModal : undefined}
+        onEdit={canIssueRc ? openEditRcCertModal : undefined}
+        onRenew={canIssueRc ? openRenewRcModal : undefined}
         onDelete={
-          canManageRc
+          canIssueRc
             ? (cert) => {
                 const isPending = !cert.id;
                 if (isPending) {
@@ -2034,7 +2051,7 @@ export default function ClientDashboardDetails({
               selectedIds={selectedTccAppIds}
               getRowId={(app) => app.id}
             />
-            {currentUserRole === 'CLIENT' ? (
+            {currentUserRole === 'CLIENT' && hasAnyRegulatoryRegistration ? (
               <Button
                 type="button"
                 size="sm"
@@ -2043,7 +2060,7 @@ export default function ClientDashboardDetails({
               >
                 + Apply for TCC
               </Button>
-            ) : (
+            ) : currentUserRole === 'CLIENT' ? null : (
               <Link href="/admin/approvals">
                 <Button size="sm" variant="outline" className="h-8 border-slate-300">
                   Review Applications
@@ -2251,7 +2268,7 @@ export default function ClientDashboardDetails({
                   <div key={n.id} className="p-3 bg-slate-50 border border-slate-100 rounded-lg flex justify-between gap-2">
                     <div>
                       <p className="text-xs font-bold text-slate-700">{n.author_email} <span className="text-slate-400 font-normal" suppressHydrationWarning>on {new Date(n.created_at).toLocaleDateString()}</span></p>
-                      <p className="text-sm text-slate-800 mt-1 whitespace-pre-wrap">{n.note}</p>
+                      <p className="text-sm text-red-600 font-medium mt-1 whitespace-pre-wrap">{n.note}</p>
                     </div>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-rose-500" onClick={() => handleDeleteNote(n.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
@@ -2761,7 +2778,7 @@ export default function ClientDashboardDetails({
         isOpen={isTccViewOpen}
         onClose={() => setIsTccViewOpen(false)}
         allowReview={canReviewTcc}
-        allowAdminEdit={canManageRc}
+        allowAdminEdit={canManageRc && hasEuReach}
         onApplicationUpdated={(updates) => {
           setViewTccApp((prev) => (prev ? { ...prev, ...updates } : prev));
         }}

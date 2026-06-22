@@ -17,15 +17,21 @@ import {
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import { useEffect } from 'react';
+import {
+  clientHasEuReachRegistration,
+  normalizeRegulatoryRegistrations,
+  type RegulatoryRegistration,
+} from '@/lib/regulatory-registrations';
 
 interface SidebarProps {
   role: 'SUPER_ADMIN' | 'MASTER_ADMIN' | 'CLIENT';
   companyName?: string;
+  regulatoryRegistrations?: RegulatoryRegistration[];
 }
 
 const CLIENT_PROFILE_PATH = /^\/admin\/clients\/(?!new(?:\/|$))([^/]+)/;
 
-export default function Sidebar({ role, companyName }: SidebarProps) {
+export default function Sidebar({ role, companyName, regulatoryRegistrations = [] }: SidebarProps) {
   const pathname = usePathname();
   const { isSidebarOpen, setSidebarOpen, customBreadcrumb } = useLayoutStore();
 
@@ -66,10 +72,18 @@ export default function Sidebar({ role, companyName }: SidebarProps) {
     ? adminLinks.filter((link) => !clientProfileHiddenHrefs.has(link.href))
     : adminLinks;
 
+  const clientRegistrations = normalizeRegulatoryRegistrations(regulatoryRegistrations);
+  const clientHasEuReach = clientHasEuReachRegistration(clientRegistrations);
+  const clientHasAnyRegistration = clientRegistrations.length > 0;
+
   const clientLinks = [
     { href: '/client', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/client/apply', label: 'Apply for TCC', icon: FileSignature },
-    { href: '/client/certificates', label: 'My Certificates', icon: Award },
+    ...(clientHasAnyRegistration
+      ? [{ href: '/client/apply', label: 'Apply for TCC', icon: FileSignature }]
+      : []),
+    ...(clientHasEuReach
+      ? [{ href: '/client/certificates', label: 'My Certificates', icon: Award }]
+      : []),
   ];
 
   const links =

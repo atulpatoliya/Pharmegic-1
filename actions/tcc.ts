@@ -27,7 +27,9 @@ import {
 } from '@/lib/quota';
 import { findReachCertificateForExportDate, REACH_CERTIFICATE_TYPE } from '@/lib/reach-certificate';
 import {
+  clientHasEuReachRegistration,
   clientHasRegulatoryRegistration,
+  EU_REACH_CERTIFICATE_REQUIRED_MESSAGE,
   getRegulatoryRegistrationLabel,
   isEuReachFramework,
   isNotificationOnlyFramework,
@@ -253,6 +255,10 @@ export async function applyForTccAction(prevState: unknown, formData: FormData) 
 
     const isEuReach = isEuReachFramework(framework);
 
+    if (isEuReach && !clientHasEuReachRegistration(client.regulatory_registrations)) {
+      return { success: false, error: EU_REACH_CERTIFICATE_REQUIRED_MESSAGE };
+    }
+
     if (!isEuReach) {
       const notificationData = result.data as TccNotificationApplicationInput;
       const frameworkLabel = getRegulatoryRegistrationLabel(framework);
@@ -440,6 +446,13 @@ export async function updateTccApplicationAction(prevState: unknown, formData: F
         success: false,
         error: 'Selected regulatory framework is not enabled for your company profile.',
       };
+    }
+
+    if (
+      isEuReachFramework(result.data.regulatory_framework) &&
+      !clientHasEuReachRegistration(client.regulatory_registrations)
+    ) {
+      return { success: false, error: EU_REACH_CERTIFICATE_REQUIRED_MESSAGE };
     }
 
     if (isNotificationOnlyFramework(result.data.regulatory_framework)) {
@@ -718,6 +731,16 @@ export async function adminUpdateTccApplicationAction(prevState: unknown, formDa
       return { success: false, error: 'Application not found.' };
     }
 
+    const { data: clientProfile } = await adminSupabase
+      .from('clients')
+      .select('regulatory_registrations')
+      .eq('id', existingApp.client_id)
+      .single();
+
+    if (!clientHasEuReachRegistration(clientProfile?.regulatory_registrations)) {
+      return { success: false, error: EU_REACH_CERTIFICATE_REQUIRED_MESSAGE };
+    }
+
     const existing = existingApp;
     const newQuantity = result.data.quantity_mt;
     const quantityChanged = Number(existing.quantity_mt) !== newQuantity;
@@ -979,7 +1002,7 @@ export async function processTccAction(
       .from('tcc_applications')
       .select(`
         *,
-        clients (id, company_name, legal_name, email, phone, primary_contact_first_name, primary_contact_last_name, uuid_number, address, city, state, postal_code, country),
+        clients (id, company_name, legal_name, email, phone, primary_contact_first_name, primary_contact_last_name, uuid_number, address, city, state, postal_code, country, regulatory_registrations),
         chemicals (id, chemical_name, cas_number, ec_number, tonnage_band, available_quantity, exported_quantity)
       `)
       .eq('id', applicationId)
@@ -1010,6 +1033,11 @@ export async function processTccAction(
         message:
           'UK REACH / Turkey KKDIK notification request removed. These submissions are email-only and are not approved in this portal.',
       };
+    }
+
+    const clientRecord = Array.isArray(app.clients) ? app.clients[0] : app.clients;
+    if (!clientHasEuReachRegistration(clientRecord?.regulatory_registrations)) {
+      return { success: false, error: EU_REACH_CERTIFICATE_REQUIRED_MESSAGE };
     }
 
     let matchedReachCert: {

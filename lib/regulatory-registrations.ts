@@ -54,3 +54,12 @@ export function clientHasRegulatoryRegistration(
 ): boolean {
   return normalizeRegulatoryRegistrations(registrations).includes(framework);
 }
+
+export function clientHasEuReachRegistration(
+  registrations: string[] | null | undefined
+): boolean {
+  return clientHasRegulatoryRegistration(registrations, REGULATORY_REGISTRATIONS.EU_REACH);
+}
+
+export const EU_REACH_CERTIFICATE_REQUIRED_MESSAGE =
+  'EU REACH must be enabled on this client profile to issue EU REACH (RC) or TCC certificates.';

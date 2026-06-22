@@ -7,6 +7,10 @@ import { formatErrorMessage } from '@/lib/format-error';
 import { normalizeDateInput, normalizeOptionalDateInput } from '@/lib/parse-flexible-date';
 import { getTonnageBandMaxQuota, sumApprovedExports, sumApprovedExportsInReachWindow, getRemainingQuotaForReachPeriod, computeAssignableQuota } from '@/lib/quota';
 import { createReachCertificate, deleteAllReachCertificatesForClientChemical } from '@/actions/reach';
+import {
+  clientHasEuReachRegistration,
+  EU_REACH_CERTIFICATE_REQUIRED_MESSAGE,
+} from '@/lib/regulatory-registrations';
 import { clientWizardSchema, clientWizardEditSchema, internalNoteSchema, changeEmailSchema, changePasswordSchema } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 
@@ -442,6 +446,20 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
   let existingLink: { id: string; status: string } | null = null;
 
   try {
+    const { data: clientProfile, error: clientProfileError } = await adminSupabase
+      .from('clients')
+      .select('regulatory_registrations')
+      .eq('id', clientId)
+      .single();
+
+    if (clientProfileError || !clientProfile) {
+      return { success: false, error: 'Client not found.' };
+    }
+
+    if (!clientHasEuReachRegistration(clientProfile.regulatory_registrations)) {
+      return { success: false, error: EU_REACH_CERTIFICATE_REQUIRED_MESSAGE };
+    }
+
     const targetChemicalId = data.target_chemical_id?.trim() || null;
 
     if (targetChemicalId) {
@@ -507,8 +525,8 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       return { success: false, error: 'Failed to resolve substance.' };
     }
 
-    const calcQuota = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
-    let assignable = calcQuota;
+    const bandMax = getTonnageBandMaxQuota(data.tonnage_band);
+    let assignable = 0;
 
     const { data: linkRow } = await adminSupabase
       .from('client_chemicals')
@@ -522,7 +540,7 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
 
     if (!existingLink || existingLink.status === 'trashed') {
       const exportedMt = await getClientYearExportedMt(adminSupabase, clientId, chemicalId);
-      const quotaResult = computeAssignableQuota(calcQuota, exportedMt);
+      const quotaResult = computeAssignableQuota(bandMax, exportedMt);
       if (quotaResult.error) {
         return { success: false, error: quotaResult.error };
       }
@@ -530,8 +548,10 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
     }
 
     if (existingLink && existingLink.status !== 'trashed') {
-      const bandMax = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
-      const allocatedQty = data.available_quantity ? Number(data.available_quantity) : bandMax;
+      const allocatedBandMax = getTonnageBandMaxQuota(data.tonnage_band);
+      const allocatedQty = data.available_quantity
+        ? Number(data.available_quantity)
+        : (allocatedBandMax ?? 0);
       const rcResult = await createReachCertificate({
         clientId,
         chemicalId,
@@ -643,8 +663,10 @@ export async function addNewChemicalToClientAction(clientId: string, data: any) 
       description: `Added and assigned new substance: ${data.chemical_name}`,
     });
 
-    const bandMaxNew = getTonnageBandMaxQuota(data.tonnage_band) ?? 0;
-    const allocatedQtyNew = data.available_quantity ? Number(data.available_quantity) : bandMaxNew;
+    const bandMaxNew = getTonnageBandMaxQuota(data.tonnage_band);
+    const allocatedQtyNew = data.available_quantity
+      ? Number(data.available_quantity)
+      : (bandMaxNew ?? 0);
     const rcResult = await createReachCertificate({
       clientId,
       chemicalId,

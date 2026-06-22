@@ -212,9 +212,13 @@ export function getRemainingQuota(
 }
 
 export function computeAssignableQuota(
-  bandMax: number,
+  bandMax: number | null | undefined,
   exportedMt: number
 ): { assignable: number; error?: string } {
+  if (bandMax == null) {
+    return { assignable: 0 };
+  }
+
   const remaining = bandMax - Number(exportedMt || 0);
   if (remaining <= 0) {
     return {

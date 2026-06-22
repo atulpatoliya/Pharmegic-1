@@ -24,6 +24,10 @@ import {
   getTodayDateString,
 } from '@/lib/reach-certificate';
 import { normalizeDateInput } from '@/lib/parse-flexible-date';
+import {
+  clientHasEuReachRegistration,
+  EU_REACH_CERTIFICATE_REQUIRED_MESSAGE,
+} from '@/lib/regulatory-registrations';
 
 function normalizeReachCertificateDates(
   issuedDate: string,
@@ -86,7 +90,9 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   const [{ data: client }, { data: clientChem }, { data: chemical }] = await Promise.all([
     adminSupabase
       .from('clients')
-      .select('id, company_name, email, uuid_number, address, city, state, postal_code, country')
+      .select(
+        'id, company_name, email, uuid_number, address, city, state, postal_code, country, regulatory_registrations'
+      )
       .eq('id', clientId)
       .single(),
     adminSupabase
@@ -104,6 +110,9 @@ export async function createReachCertificate(input: CreateReachCertificateInput)
   ]);
 
   if (!client) return { success: false as const, error: 'Client not found.' };
+  if (!clientHasEuReachRegistration(client.regulatory_registrations)) {
+    return { success: false as const, error: EU_REACH_CERTIFICATE_REQUIRED_MESSAGE };
+  }
   if (!clientChem) {
     return {
       success: false as const,
@@ -716,11 +725,11 @@ export async function issueReachCertificateWithDetailsAction(
   if (!session) return { success: false as const, error: 'Unauthorized.' };
 
   try {
-    const bandMax = getTonnageBandMaxQuota(input.tonnageBand) ?? 0;
+    const bandMax = getTonnageBandMaxQuota(input.tonnageBand);
     const allocated =
       input.allocatedQuantity != null && input.allocatedQuantity > 0
         ? input.allocatedQuantity
-        : bandMax;
+        : (bandMax ?? 0);
 
     const result = await createReachCertificate({
       clientId,

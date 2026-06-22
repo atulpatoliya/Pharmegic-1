@@ -474,9 +474,9 @@ async function issueReachCertificateForImportedSubstance(
   const alreadyIssued = await hasActiveReachCertificate(adminSupabase, clientId, chemicalId);
   if (alreadyIssued) return { ok: true, issued: false };
 
-  const bandMax = getTonnageBandMaxQuota(substance.tonnage_band) ?? 0;
+  const bandMax = getTonnageBandMaxQuota(substance.tonnage_band);
   const allocated =
-    substance.available_quantity > 0 ? substance.available_quantity : bandMax;
+    substance.available_quantity > 0 ? substance.available_quantity : (bandMax ?? 0);
 
   const rcResult = await createReachCertificate({
     clientId,

@@ -2,6 +2,7 @@ import { getSession } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import CertificatesList from '@/components/CertificatesList';
 import { redirect } from 'next/navigation';
+import { clientHasEuReachRegistration } from '@/lib/regulatory-registrations';
 
 export const revalidate = 0;
 
@@ -19,6 +20,16 @@ export default async function CertificatesPage() {
   }
 
   const adminSupabase = createAdminClient();
+  const { data: client } = await adminSupabase
+    .from('clients')
+    .select('regulatory_registrations')
+    .eq('id', clientId)
+    .single();
+
+  if (!clientHasEuReachRegistration(client?.regulatory_registrations)) {
+    redirect('/client');
+  }
+
   const { data: certificatesRaw } = await adminSupabase
     .from('certificates')
     .select(

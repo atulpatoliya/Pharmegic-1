@@ -5,6 +5,7 @@ import { redirectToLoginPage, redirectToRoleHome } from '@/lib/auth/redirects';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ClientTopBar } from '@/components/layout/ClientTopBar';
 import { TopNavbarSkeleton } from '@/components/layout/TopNavbarSkeleton';
+import { normalizeRegulatoryRegistrations } from '@/lib/regulatory-registrations';
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -17,19 +18,27 @@ export default async function ClientLayout({ children }: { children: React.React
   }
 
   let companyName = 'Partner Client';
+  let regulatoryRegistrations: string[] = [];
   if (session.clientId) {
     const adminSupabase = createAdminClient();
     const { data } = await adminSupabase
       .from('clients')
-      .select('company_name')
+      .select('company_name, regulatory_registrations')
       .eq('id', session.clientId)
       .single();
     if (data?.company_name) companyName = data.company_name;
+    if (Array.isArray(data?.regulatory_registrations)) {
+      regulatoryRegistrations = data.regulatory_registrations;
+    }
   }
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50" suppressHydrationWarning>
-      <Sidebar role={session.role} companyName={companyName} />
+      <Sidebar
+        role={session.role}
+        companyName={companyName}
+        regulatoryRegistrations={normalizeRegulatoryRegistrations(regulatoryRegistrations)}
+      />
       <div className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
         <Suspense fallback={<TopNavbarSkeleton />}>
           <ClientTopBar session={session} />
