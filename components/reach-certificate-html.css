@@ -5,7 +5,6 @@
   --reach-green-mid: #1b5e3a;
   --reach-green-light: #8ac33f;
   --reach-green-pale: #e2efda;
-  --reach-table-row-odd: #eaf2e3;
   --reach-table-border: #cfdbc8;
   --reach-red: #bf382a;
   --reach-accent: #145e40;
@@ -229,7 +228,7 @@
 }
 
 [data-reach-cert-root] .reach-substance-table tr:nth-child(odd) td {
-  background: var(--reach-table-row-odd) !important;
+  background: var(--reach-green-pale) !important;
   color: #111 !important;
 }
 
@@ -374,7 +373,7 @@
 [data-reach-cert-root] .reach-seal-wrap {
   display: flex !important;
   justify-content: center;
-  margin: 10px 0 10px !important;
+  margin: 0 0 10px !important;
   padding: 0 !important;
 }
 

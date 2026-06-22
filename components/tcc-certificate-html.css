@@ -5,7 +5,6 @@
   --reach-green-mid: #1b5e3a;
   --reach-green-light: #8ac33f;
   --reach-green-pale: #e2efda;
-  --reach-table-row-odd: #eaf2e3;
   --reach-table-border: #cfdbc8;
   --reach-red: #bf382a;
   --reach-accent: #145e40;
@@ -230,7 +229,7 @@
 }
 
 [data-tcc-cert-root] .tcc-substance-table tr:nth-child(odd) td {
-  background: var(--reach-table-row-odd) !important;
+  background: var(--reach-green-pale) !important;
   color: #000 !important;
 }
 
@@ -262,14 +261,14 @@
 }
 
 [data-tcc-cert-root] .tcc-import-table td {
-  background: var(--reach-table-row-odd) !important;
+  background: var(--reach-green-pale) !important;
   color: #000 !important;
   font-family: 'Verdana', Geneva, Tahoma, sans-serif !important;
 }
 
 [data-tcc-cert-root] .tcc-import-table tr:nth-child(odd) td,
 [data-tcc-cert-root] .tcc-import-table tr:nth-child(even) td {
-  background: var(--reach-table-row-odd) !important;
+  background: var(--reach-green-pale) !important;
 }
 
 [data-tcc-cert-root] .tcc-import-table .tcc-import-emphasis {
